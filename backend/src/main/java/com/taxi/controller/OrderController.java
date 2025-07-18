@@ -1,0 +1,122 @@
+package com.taxi.controller;
+
+import com.taxi.common.Result;
+import com.taxi.dto.CreateOrderRequest;
+import com.taxi.entity.Order;
+import com.taxi.entity.Driver;
+import com.taxi.mapper.OrderMapper;
+import com.taxi.mapper.DriverMapper;
+import com.taxi.service.OrderService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/orders")
+@CrossOrigin(origins = "*")
+public class OrderController {
+
+    @Autowired
+    private OrderService orderService;
+
+    @Autowired
+    private OrderMapper orderMapper;
+
+    @Autowired
+    private DriverMapper driverMapper;
+
+    @PostMapping("/create")
+    public Result<String> createOrder(@RequestBody CreateOrderRequest request) {
+        System.out.println("=== 订单创建请求到达控制器 ===");
+        System.out.println("请求参数: " + request);
+        
+        try {
+            Order order = new Order();
+            order.setOrderNumber(generateOrderNumber());
+            order.setPassengerId(request.getPassengerId());
+            order.setPickupAddress(request.getPickupAddress());
+            order.setPickupLatitude(request.getPickupLatitude());
+            order.setPickupLongitude(request.getPickupLongitude());
+            
+            order.setDestinationAddress(request.getDestinationAddress());
+            order.setDestinationLatitude(request.getDestinationLatitude());
+            order.setDestinationLongitude(request.getDestinationLongitude());
+            
+            order.setOrderType("REAL_TIME");
+            order.setCreatedAt(LocalDateTime.now());
+            order.setUpdatedAt(LocalDateTime.now());
+
+            System.out.println("准备调用 orderService.createOrder");
+            orderService.createOrder(order);
+            System.out.println("orderService.createOrder 调用成功");
+            
+            return Result.success(order.getOrderNumber());
+        } catch (Exception e) {
+            System.err.println("订单创建异常: " + e.getMessage());
+            e.printStackTrace();
+            return Result.error("创建订单失败: " + e.getMessage());
+        }
+    }
+
+    /** 司机接单 */
+    @PostMapping("/{orderId}/accept")
+    public Result<String> acceptOrder(@PathVariable Long orderId, @RequestParam Long driverId) {
+        try {
+            // 查询订单
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            
+            if (!"PENDING".equals(order.getStatus())) {
+                return Result.error("订单状态不允许接单，当前状态: " + order.getStatus());
+            }
+            
+            // 查询司机
+            Driver driver = driverMapper.selectById(driverId);
+            if (driver == null) {
+                return Result.error("司机不存在");
+            }
+            
+            if (!driver.getIsOnline()) {
+                return Result.error("司机不在线");
+            }
+            
+            // 检查司机是否已有进行中的订单
+            List<Order> driverOrders = orderMapper.selectByDriverId(driverId);
+            boolean hasActiveOrder = driverOrders.stream()
+                .anyMatch(o -> "ASSIGNED".equals(o.getStatus()) || "PICKUP".equals(o.getStatus()) || "IN_PROGRESS".equals(o.getStatus()));
+            
+            if (hasActiveOrder) {
+                return Result.error("司机正在处理其他订单");
+            }
+            
+            // 分配订单给司机
+            order.setDriverId(driverId);
+            order.setStatus("ASSIGNED");
+            orderMapper.updateById(order);
+            
+            return Result.success("接单成功");
+        } catch (Exception e) {
+            return Result.error("接单失败: " + e.getMessage());
+        }
+    }
+
+    /** 获取待接单的订单列表 */
+    @GetMapping("/pending")
+    public Result<List<Order>> getPendingOrders() {
+        try {
+            List<Order> orders = orderMapper.selectByStatus("PENDING");
+            return Result.success(orders);
+        } catch (Exception e) {
+            return Result.error("获取订单列表失败: " + e.getMessage());
+        }
+    }
+
+    private String generateOrderNumber() {
+        return "ORDER" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8);
+    }
+} 

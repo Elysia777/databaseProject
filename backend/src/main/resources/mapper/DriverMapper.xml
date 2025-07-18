@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.taxi.mapper.DriverMapper">
+
+    <resultMap id="BaseResultMap" type="com.taxi.entity.Driver">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="BIGINT"/>
+        <result column="driver_license" property="driverLicense" jdbcType="VARCHAR"/>
+        <result column="driver_license_expiry" property="driverLicenseExpiry" jdbcType="DATE"/>
+        <result column="professional_license" property="professionalLicense" jdbcType="VARCHAR"/>
+        <result column="professional_license_expiry" property="professionalLicenseExpiry" jdbcType="DATE"/>
+        <result column="driving_years" property="drivingYears" jdbcType="INTEGER"/>
+        <result column="total_mileage" property="totalMileage" jdbcType="DECIMAL"/>
+        <result column="rating" property="rating" jdbcType="DECIMAL"/>
+        <result column="total_orders" property="totalOrders" jdbcType="INTEGER"/>
+        <result column="completed_orders" property="completedOrders" jdbcType="INTEGER"/>
+        <result column="cancelled_orders" property="cancelledOrders" jdbcType="INTEGER"/>
+        <result column="is_online" property="isOnline" jdbcType="BOOLEAN"/>
+        <result column="current_latitude" property="currentLatitude" jdbcType="DECIMAL"/>
+        <result column="current_longitude" property="currentLongitude" jdbcType="DECIMAL"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, user_id, driver_license, driver_license_expiry, professional_license, professional_license_expiry,
+        driving_years, total_mileage, rating, total_orders, completed_orders, cancelled_orders, is_online,
+        current_latitude, current_longitude, created_at, updated_at
+    </sql>
+
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectByLicenseNumber" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE driver_license = #{licenseNumber}
+    </select>
+
+    <select id="selectOnlineDrivers" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE is_online = true
+        ORDER BY rating DESC
+    </select>
+
+    <insert id="insert" parameterType="com.taxi.entity.Driver" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO drivers (
+            user_id, driver_license, driver_license_expiry, professional_license, professional_license_expiry,
+            driving_years, total_mileage, rating, total_orders, completed_orders, cancelled_orders, is_online,
+            current_latitude, current_longitude, created_at, updated_at
+        ) VALUES (
+            #{userId}, #{driverLicense}, #{driverLicenseExpiry}, #{professionalLicense}, #{professionalLicenseExpiry},
+            #{drivingYears}, #{totalMileage}, #{rating}, #{totalOrders}, #{completedOrders}, #{cancelledOrders}, #{isOnline},
+            #{currentLatitude}, #{currentLongitude}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.taxi.entity.Driver">
+        UPDATE drivers
+        SET user_id = #{userId},
+            driver_license = #{driverLicense},
+            driver_license_expiry = #{driverLicenseExpiry},
+            professional_license = #{professionalLicense},
+            professional_license_expiry = #{professionalLicenseExpiry},
+            driving_years = #{drivingYears},
+            total_mileage = #{totalMileage},
+            rating = #{rating},
+            total_orders = #{totalOrders},
+            completed_orders = #{completedOrders},
+            cancelled_orders = #{cancelledOrders},
+            is_online = #{isOnline},
+            current_latitude = #{currentLatitude},
+            current_longitude = #{currentLongitude},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM drivers WHERE id = #{id}
+    </delete>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectByRating" parameterType="java.math.BigDecimal" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE rating >= #{minRating}
+        ORDER BY rating DESC
+    </select>
+
+    <select id="selectOnlineAndFreeDrivers" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM drivers
+        WHERE is_online = true
+        ORDER BY rating DESC
+    </select>
+
+</mapper> 
