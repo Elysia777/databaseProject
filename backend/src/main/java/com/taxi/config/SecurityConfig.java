@@ -29,6 +29,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/ws/**").permitAll()  // 明确允许WebSocket端点
+                .requestMatchers("/api/**").permitAll()  // 允许API端点
                 .anyRequest().permitAll()  // 暂时允许所有请求
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

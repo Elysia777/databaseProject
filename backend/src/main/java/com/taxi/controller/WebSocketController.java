@@ -25,7 +25,18 @@ public class WebSocketController {
     @MessageMapping("/driver/connect")
     public void handleDriverConnect(@Payload Map<String, Object> message, SimpMessageHeaderAccessor headerAccessor) {
         try {
-            String driverId = (String) message.get("driverId");
+            System.out.println("=== 收到司机WebSocket连接请求 ===");
+            System.out.println("原始消息: " + message);
+            
+            // 处理司机ID，支持字符串和数字类型
+            Object driverIdObj = message.get("driverId");
+            String driverId = driverIdObj != null ? driverIdObj.toString() : null;
+            
+            if (driverId == null || driverId.isEmpty()) {
+                System.err.println("司机ID为空，连接失败");
+                return;
+            }
+            
             System.out.println("司机 " + driverId + " 已连接WebSocket");
             
             // 将司机ID存储到session中
@@ -33,14 +44,52 @@ public class WebSocketController {
             headerAccessor.getSessionAttributes().put("userType", "DRIVER");
             
             // 发送连接成功消息
+            Map<String, Object> response = Map.of(
+                "status", "connected", 
+                "message", "WebSocket连接成功，司机ID: " + driverId,
+                "timestamp", System.currentTimeMillis()
+            );
+            
+            System.out.println("准备发送连接确认消息到: /user/" + driverId + "/queue/connection");
+            System.out.println("消息内容: " + response);
+            
             messagingTemplate.convertAndSendToUser(
                 driverId, 
                 "/queue/connection", 
-                Map.of("status", "connected", "message", "WebSocket连接成功")
+                response
             );
+            
+            System.out.println("已向司机 " + driverId + " 发送连接成功消息");
+            
+            // 同时发送广播消息测试
+            Map<String, Object> broadcastMsg = Map.of(
+                "type", "BROADCAST_TEST",
+                "message", "这是一条广播测试消息",
+                "driverId", driverId,
+                "timestamp", System.currentTimeMillis()
+            );
+            
+            messagingTemplate.convertAndSend("/topic/test", broadcastMsg);
+            System.out.println("已发送广播测试消息");
+            
+            // 发送一条测试消息到订单队列
+            Map<String, Object> testOrder = Map.of(
+                "type", "TEST_MESSAGE",
+                "message", "这是一条测试消息，确认WebSocket连接正常",
+                "timestamp", System.currentTimeMillis()
+            );
+            
+            messagingTemplate.convertAndSendToUser(
+                driverId, 
+                "/queue/orders", 
+                testOrder
+            );
+            
+            System.out.println("已向司机 " + driverId + " 发送测试消息");
             
         } catch (Exception e) {
             System.err.println("处理司机WebSocket连接失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -90,6 +139,45 @@ public class WebSocketController {
         } catch (Exception e) {
             System.err.println("处理司机位置更新失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 处理测试消息
+     */
+    @MessageMapping("/test")
+    public void handleTestMessage(@Payload Map<String, Object> message) {
+        System.out.println("=== 收到测试消息 ===");
+        System.out.println("消息内容: " + message);
+        
+        // 获取司机ID
+        Object driverIdObj = message.get("driverId");
+        String driverId = driverIdObj != null ? driverIdObj.toString() : "1";
+        
+        // 广播测试消息
+        messagingTemplate.convertAndSend("/topic/test", Map.of(
+            "type", "TEST_RESPONSE",
+            "message", "服务器收到测试消息: " + message,
+            "timestamp", System.currentTimeMillis()
+        ));
+        
+        // 同时发送用户专用测试消息
+        Map<String, Object> userTestMsg = Map.of(
+            "type", "USER_TEST_MESSAGE",
+            "message", "这是发送给用户专用队列的测试消息",
+            "driverId", driverId,
+            "timestamp", System.currentTimeMillis()
+        );
+        
+        System.out.println("发送用户专用测试消息到: /user/" + driverId + "/queue/orders");
+        System.out.println("消息内容: " + userTestMsg);
+        
+        messagingTemplate.convertAndSendToUser(
+            driverId,
+            "/queue/orders",
+            userTestMsg
+        );
+        
+        System.out.println("用户专用测试消息发送完成");
     }
 
     /**

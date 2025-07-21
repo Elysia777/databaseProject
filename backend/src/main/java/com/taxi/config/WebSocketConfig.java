@@ -17,7 +17,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // 启用简单的消息代理，并设置消息代理的前缀
-        config.enableSimpleBroker("/topic", "/queue");
+        config.enableSimpleBroker("/topic", "/queue", "/user");
         // 设置客户端向服务器发送消息的前缀
         config.setApplicationDestinationPrefixes("/app");
         // 设置用户专用队列前缀

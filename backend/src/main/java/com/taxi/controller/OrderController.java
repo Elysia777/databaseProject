@@ -105,6 +105,54 @@ public class OrderController {
         }
     }
 
+    /** 获取所有订单列表 */
+    @GetMapping
+    public Result<List<Order>> getAllOrders() {
+        try {
+            List<Order> orders = orderMapper.selectAll();
+            return Result.success(orders);
+        } catch (Exception e) {
+            return Result.error("获取订单列表失败: " + e.getMessage());
+        }
+    }
+
+    /** 根据ID获取订单详情 */
+    @GetMapping("/{orderId}")
+    public Result<Order> getOrderById(@PathVariable Long orderId) {
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            return Result.success(order);
+        } catch (Exception e) {
+            return Result.error("获取订单详情失败: " + e.getMessage());
+        }
+    }
+
+    /** 取消订单 */
+    @PostMapping("/{orderId}/cancel")
+    public Result<String> cancelOrder(@PathVariable Long orderId) {
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            
+            if ("COMPLETED".equals(order.getStatus()) || "CANCELLED".equals(order.getStatus())) {
+                return Result.error("订单已完成或已取消，无法取消");
+            }
+            
+            order.setStatus("CANCELLED");
+            order.setUpdatedAt(LocalDateTime.now());
+            orderMapper.updateById(order);
+            
+            return Result.success("订单取消成功");
+        } catch (Exception e) {
+            return Result.error("取消订单失败: " + e.getMessage());
+        }
+    }
+
     /** 获取待接单的订单列表 */
     @GetMapping("/pending")
     public Result<List<Order>> getPendingOrders() {

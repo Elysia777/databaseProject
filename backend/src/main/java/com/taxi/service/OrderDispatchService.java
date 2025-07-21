@@ -5,6 +5,7 @@ import com.taxi.entity.Driver;
 import com.taxi.mapper.OrderMapper;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -39,6 +40,12 @@ public class OrderDispatchService {
     
     @Autowired
     private PendingOrderService pendingOrderService;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private org.springframework.scheduling.TaskScheduler taskScheduler;
 
     // 搜索半径（公里）
     private static final double SEARCH_RADIUS_KM = 5.0;
@@ -48,6 +55,16 @@ public class OrderDispatchService {
     
     // 订单锁过期时间（秒）
     private static final int ORDER_LOCK_EXPIRE_SECONDS = 30;
+    
+    // Redis key前缀
+    private static final String ORDER_NOTIFIED_DRIVERS_KEY = "order_notified_drivers:"; // 订单已通知的司机列表
+    private static final String DRIVER_REJECT_COUNT_KEY = "driver_reject_count:"; // 司机拒单次数
+    private static final String ORDER_RETRY_INFO_KEY = "order_retry_info:"; // 订单重试信息
+    
+    // 重试配置
+    private static final int[] RETRY_INTERVALS = {30, 60, 120, 300}; // 重试间隔：30秒、1分钟、2分钟、5分钟
+    private static final double[] RETRY_RADIUS_MULTIPLIERS = {1.0, 1.5, 2.0, 3.0}; // 搜索半径倍数
+    private static final int[] RETRY_MAX_DRIVERS = {3, 5, 8, 10}; // 每轮最大通知司机数
 
     /**
      * 为新订单寻找并通知附近的司机
@@ -76,6 +93,9 @@ public class OrderDispatchService {
             
             // 3. 将订单加入持久化待分配队列（确保后续上线的司机也能看到）
             pendingOrderService.addPendingOrder(orderId);
+            
+            // 4. 初始化订单重试信息
+            initOrderRetryInfo(orderId);
             
             // 4. 从Redis查找附近的在线司机
             List<Driver> nearbyDrivers = driverRedisService.getNearbyOnlineDrivers(
@@ -198,6 +218,12 @@ public class OrderDispatchService {
      */
     private void notifyDriver(Driver driver, Order order) {
         try {
+            // 检查是否已经通知过这个司机
+            if (hasNotifiedDriver(order.getId(), driver.getId())) {
+                System.out.println("订单 " + order.getId() + " 已经通知过司机 " + driver.getId() + "，跳过重复通知");
+                return;
+            }
+            
             // 计算距离
             double distance = calculateDistance(
                 order.getPickupLatitude().doubleValue(),
@@ -222,6 +248,9 @@ public class OrderDispatchService {
             
             // 发送到司机通知队列
             rabbitTemplate.convertAndSend("driver_notification_queue", rabbitMessage);
+            
+            // 3. 记录已通知的司机
+            recordDriverNotification(order.getId(), driver.getId());
             
             System.out.println("已通过WebSocket和RabbitMQ通知司机 " + driver.getId() + " 新订单 " + order.getId());
             
@@ -384,6 +413,142 @@ public class OrderDispatchService {
     }
 
     /**
+     * 检查是否已经通知过某个司机
+     */
+    private boolean hasNotifiedDriver(Long orderId, Long driverId) {
+        try {
+            String key = ORDER_NOTIFIED_DRIVERS_KEY + orderId;
+            return redisTemplate.opsForSet().isMember(key, driverId.toString());
+        } catch (Exception e) {
+            System.err.println("检查司机通知记录失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 记录已通知的司机
+     */
+    private void recordDriverNotification(Long orderId, Long driverId) {
+        try {
+            String key = ORDER_NOTIFIED_DRIVERS_KEY + orderId;
+            redisTemplate.opsForSet().add(key, driverId.toString());
+            // 设置过期时间为2小时
+            redisTemplate.expire(key, 2, java.util.concurrent.TimeUnit.HOURS);
+        } catch (Exception e) {
+            System.err.println("记录司机通知失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 司机拒单处理
+     */
+    public void handleDriverRejectOrder(Long orderId, Long driverId, String reason) {
+        System.out.println("司机 " + driverId + " 拒绝订单 " + orderId + ", 原因: " + reason);
+        
+        try {
+            // 1. 记录司机拒单次数
+            String rejectKey = DRIVER_REJECT_COUNT_KEY + driverId;
+            redisTemplate.opsForValue().increment(rejectKey);
+            redisTemplate.expire(rejectKey, 24, java.util.concurrent.TimeUnit.HOURS);
+            
+            // 2. 检查订单状态
+            Order order = orderMapper.selectById(orderId);
+            if (order == null || !"PENDING".equals(order.getStatus())) {
+                System.out.println("订单状态已变更，无需重新分配");
+                return;
+            }
+            
+            // 3. 重新分配给其他司机
+            redistributeOrder(orderId);
+            
+        } catch (Exception e) {
+            System.err.println("处理司机拒单失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 重新分配订单给其他司机
+     */
+    private void redistributeOrder(Long orderId) {
+        System.out.println("=== 重新分配订单 " + orderId + " ===");
+        
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null || !"PENDING".equals(order.getStatus())) {
+                return;
+            }
+            
+            // 1. 获取附近的在线司机
+            List<Driver> nearbyDrivers = driverRedisService.getNearbyOnlineDrivers(
+                order.getPickupLatitude(), 
+                order.getPickupLongitude(), 
+                SEARCH_RADIUS_KM
+            );
+            
+            if (nearbyDrivers.isEmpty()) {
+                System.out.println("没有找到附近的司机，尝试扩大搜索范围");
+                retryDispatchWithLargerRadius(orderId);
+                return;
+            }
+            
+            // 2. 过滤掉已经通知过的司机
+            List<Driver> availableDrivers = new java.util.ArrayList<>();
+            for (Driver driver : nearbyDrivers) {
+                if (!hasNotifiedDriver(orderId, driver.getId())) {
+                    availableDrivers.add(driver);
+                }
+            }
+            
+            if (availableDrivers.isEmpty()) {
+                System.out.println("所有附近司机都已通知过，尝试扩大搜索范围");
+                retryDispatchWithLargerRadius(orderId);
+                return;
+            }
+            
+            // 3. 通知新的司机
+            int notifyCount = Math.min(availableDrivers.size(), MAX_NOTIFY_DRIVERS);
+            for (int i = 0; i < notifyCount; i++) {
+                Driver driver = availableDrivers.get(i);
+                notifyDriver(driver, order);
+            }
+            
+            System.out.println("重新分配订单 " + orderId + "，通知了 " + notifyCount + " 个新司机");
+            
+        } catch (Exception e) {
+            System.err.println("重新分配订单失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 清理订单通知记录（订单完成或取消时调用）
+     */
+    public void cleanOrderNotificationRecord(Long orderId) {
+        try {
+            String key = ORDER_NOTIFIED_DRIVERS_KEY + orderId;
+            redisTemplate.delete(key);
+            System.out.println("已清理订单 " + orderId + " 的通知记录");
+        } catch (Exception e) {
+            System.err.println("清理订单通知记录失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取司机拒单次数
+     */
+    public int getDriverRejectCount(Long driverId) {
+        try {
+            String key = DRIVER_REJECT_COUNT_KEY + driverId;
+            Object count = redisTemplate.opsForValue().get(key);
+            return count != null ? Integer.parseInt(count.toString()) : 0;
+        } catch (Exception e) {
+            System.err.println("获取司机拒单次数失败: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
      * 计算两点间距离（米）
      */
     private double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
@@ -394,5 +559,194 @@ public class OrderDispatchService {
         double s = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin(a/2), 2) +
                 Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b/2), 2)));
         return s * 6378137.0; // 地球半径
+    }
+
+    // ==================== 订单重试机制 ====================
+
+    /**
+     * 初始化订单重试信息
+     */
+    private void initOrderRetryInfo(Long orderId) {
+        try {
+            String key = ORDER_RETRY_INFO_KEY + orderId;
+            Map<String, Object> retryInfo = new HashMap<>();
+            retryInfo.put("orderId", orderId);
+            retryInfo.put("retryCount", 0);
+            retryInfo.put("createTime", System.currentTimeMillis());
+            retryInfo.put("lastRetryTime", System.currentTimeMillis());
+            
+            redisTemplate.opsForHash().putAll(key, retryInfo);
+            redisTemplate.expire(key, 2, java.util.concurrent.TimeUnit.HOURS);
+            
+            // 安排第一次重试
+            scheduleOrderRetry(orderId, 0);
+            
+            System.out.println("订单 " + orderId + " 重试机制已初始化");
+            
+        } catch (Exception e) {
+            System.err.println("初始化订单重试信息失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 安排订单重试
+     */
+    private void scheduleOrderRetry(Long orderId, int retryRound) {
+        if (retryRound >= RETRY_INTERVALS.length) {
+            System.out.println("订单 " + orderId + " 已达到最大重试次数，停止重试");
+            return;
+        }
+        
+        try {
+            int delaySeconds = RETRY_INTERVALS[retryRound];
+            
+            // 使用TaskScheduler安排延迟任务
+            taskScheduler.schedule(() -> {
+                executeOrderRetry(orderId, retryRound);
+            }, new java.util.Date(System.currentTimeMillis() + delaySeconds * 1000L));
+            
+            System.out.println("订单 " + orderId + " 已安排第 " + (retryRound + 1) + " 轮重试，" + delaySeconds + " 秒后执行");
+            
+        } catch (Exception e) {
+            System.err.println("安排订单重试失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 执行订单重试
+     */
+    private void executeOrderRetry(Long orderId, int retryRound) {
+        System.out.println("=== 执行订单 " + orderId + " 第 " + (retryRound + 1) + " 轮重试 ===");
+        
+        try {
+            // 1. 检查订单状态
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                System.out.println("订单不存在，停止重试");
+                return;
+            }
+            
+            if (!"PENDING".equals(order.getStatus())) {
+                System.out.println("订单状态已变更为 " + order.getStatus() + "，停止重试");
+                cleanOrderRetryInfo(orderId);
+                return;
+            }
+            
+            // 2. 更新重试信息
+            updateRetryInfo(orderId, retryRound);
+            
+            // 3. 根据重试轮次调整策略
+            double searchRadius = SEARCH_RADIUS_KM * RETRY_RADIUS_MULTIPLIERS[retryRound];
+            int maxDrivers = RETRY_MAX_DRIVERS[retryRound];
+            
+            System.out.println("第 " + (retryRound + 1) + " 轮重试策略: 搜索半径=" + searchRadius + "km, 最大通知司机数=" + maxDrivers);
+            
+            // 4. 查找附近司机
+            List<Driver> nearbyDrivers = driverRedisService.getNearbyOnlineDrivers(
+                order.getPickupLatitude(), 
+                order.getPickupLongitude(), 
+                searchRadius
+            );
+            
+            if (nearbyDrivers.isEmpty()) {
+                System.out.println("第 " + (retryRound + 1) + " 轮重试未找到司机，安排下一轮重试");
+                scheduleOrderRetry(orderId, retryRound + 1);
+                return;
+            }
+            
+            // 5. 过滤掉已通知过的司机
+            List<Driver> availableDrivers = new java.util.ArrayList<>();
+            for (Driver driver : nearbyDrivers) {
+                if (!hasNotifiedDriver(orderId, driver.getId())) {
+                    availableDrivers.add(driver);
+                }
+            }
+            
+            if (availableDrivers.isEmpty()) {
+                System.out.println("第 " + (retryRound + 1) + " 轮重试: 所有司机都已通知过，安排下一轮重试");
+                scheduleOrderRetry(orderId, retryRound + 1);
+                return;
+            }
+            
+            // 6. 通知新司机
+            int notifyCount = Math.min(availableDrivers.size(), maxDrivers);
+            for (int i = 0; i < notifyCount; i++) {
+                Driver driver = availableDrivers.get(i);
+                notifyDriver(driver, order);
+            }
+            
+            System.out.println("第 " + (retryRound + 1) + " 轮重试完成，通知了 " + notifyCount + " 个新司机");
+            
+            // 7. 安排下一轮重试
+            scheduleOrderRetry(orderId, retryRound + 1);
+            
+        } catch (Exception e) {
+            System.err.println("执行订单重试失败: " + e.getMessage());
+            e.printStackTrace();
+            
+            // 出错时也要安排下一轮重试
+            scheduleOrderRetry(orderId, retryRound + 1);
+        }
+    }
+
+    /**
+     * 更新重试信息
+     */
+    private void updateRetryInfo(Long orderId, int retryRound) {
+        try {
+            String key = ORDER_RETRY_INFO_KEY + orderId;
+            redisTemplate.opsForHash().put(key, "retryCount", retryRound + 1);
+            redisTemplate.opsForHash().put(key, "lastRetryTime", System.currentTimeMillis());
+        } catch (Exception e) {
+            System.err.println("更新重试信息失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 清理订单重试信息（订单完成或取消时调用）
+     */
+    public void cleanOrderRetryInfo(Long orderId) {
+        try {
+            String key = ORDER_RETRY_INFO_KEY + orderId;
+            redisTemplate.delete(key);
+            System.out.println("已清理订单 " + orderId + " 的重试信息");
+        } catch (Exception e) {
+            System.err.println("清理订单重试信息失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取订单重试信息
+     */
+    public Map<Object, Object> getOrderRetryInfo(Long orderId) {
+        try {
+            String key = ORDER_RETRY_INFO_KEY + orderId;
+            return redisTemplate.opsForHash().entries(key);
+        } catch (Exception e) {
+            System.err.println("获取订单重试信息失败: " + e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * 手动触发订单重试（管理员功能）
+     */
+    public void manualRetryOrder(Long orderId) {
+        System.out.println("=== 手动触发订单 " + orderId + " 重试 ===");
+        
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null || !"PENDING".equals(order.getStatus())) {
+                System.out.println("订单状态不符合重试条件");
+                return;
+            }
+            
+            // 立即执行重试，使用最大搜索范围
+            executeOrderRetry(orderId, RETRY_INTERVALS.length - 1);
+            
+        } catch (Exception e) {
+            System.err.println("手动重试订单失败: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }

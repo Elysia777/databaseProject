@@ -122,6 +122,49 @@ public class DriverController {
     }
 
     /**
+     * 司机接单
+     */
+    @PostMapping("/{driverId}/accept-order/{orderId}")
+    public Result<String> acceptOrder(@PathVariable Long driverId, @PathVariable Long orderId) {
+        try {
+            System.out.println("司机 " + driverId + " 尝试接单 " + orderId);
+            
+            boolean success = orderDispatchService.acceptOrder(orderId, driverId);
+            
+            if (success) {
+                System.out.println("司机 " + driverId + " 接单 " + orderId + " 成功");
+                return Result.success("接单成功");
+            } else {
+                System.out.println("司机 " + driverId + " 接单 " + orderId + " 失败");
+                return Result.error("接单失败，订单可能已被其他司机接单");
+            }
+        } catch (Exception e) {
+            System.err.println("接单异常: " + e.getMessage());
+            return Result.error("接单失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 司机拒单
+     */
+    @PostMapping("/{driverId}/reject-order/{orderId}")
+    public Result<String> rejectOrder(@PathVariable Long driverId, @PathVariable Long orderId, 
+                                     @RequestParam(defaultValue = "司机拒单") String reason) {
+        try {
+            System.out.println("司机 " + driverId + " 拒绝订单 " + orderId + ", 原因: " + reason);
+            
+            // 调用订单分发服务处理拒单
+            orderDispatchService.handleDriverRejectOrder(orderId, driverId, reason);
+            
+            System.out.println("司机 " + driverId + " 拒单 " + orderId + " 处理完成");
+            return Result.success("拒单成功");
+        } catch (Exception e) {
+            System.err.println("拒单异常: " + e.getMessage());
+            return Result.error("拒单失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 司机位置上报（模拟TCP长连接每3-5秒上报一次）
      */
     @PostMapping("/{driverId}/location")
@@ -256,23 +299,6 @@ public class DriverController {
     }
 
     /**
-     * 司机接单
-     */
-    @PostMapping("/{driverId}/accept-order/{orderId}")
-    public Result<String> acceptOrder(@PathVariable Long driverId, @PathVariable Long orderId) {
-        try {
-            boolean success = orderDispatchService.acceptOrder(orderId, driverId);
-            if (success) {
-                return Result.success("接单成功");
-            } else {
-                return Result.error("接单失败，订单可能已被其他司机接受");
-            }
-        } catch (Exception e) {
-            return Result.error("接单失败: " + e.getMessage());
-        }
-    }
-
-    /**
      * 司机完成订单
      */
     @PostMapping("/{driverId}/complete-order/{orderId}")
@@ -282,27 +308,6 @@ public class DriverController {
             return Result.success("订单完成");
         } catch (Exception e) {
             return Result.error("完成订单失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 司机拒单（参照真实业务场景）
-     */
-    @PostMapping("/{driverId}/reject-order/{orderId}")
-    public Result<String> rejectOrder(@PathVariable Long driverId, 
-                                     @PathVariable Long orderId,
-                                     @RequestParam(required = false) String reason) {
-        try {
-            // 通过OrderPushSDK处理拒单
-            // 这里需要注入OrderPushSDK，暂时通过OrderDispatchService处理
-            System.out.println("司机 " + driverId + " 拒绝订单 " + orderId + ", 原因: " + reason);
-            
-            // 记录拒单信息，用于评估司机接单效率
-            // orderPushSDK.handleDriverRejectOrder(driverId, orderId, reason);
-            
-            return Result.success("拒单成功");
-        } catch (Exception e) {
-            return Result.error("拒单失败: " + e.getMessage());
         }
     }
 

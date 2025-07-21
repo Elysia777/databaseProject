@@ -34,10 +34,18 @@ public class WebSocketNotificationService {
             notification.put("estimatedFare", order.getEstimatedFare());
             notification.put("timestamp", System.currentTimeMillis());
             
+            String driverIdStr = driverId.toString();
+            String destination = "/queue/orders";
+            
+            System.out.println("准备通过WebSocket通知司机:");
+            System.out.println("  司机ID: " + driverIdStr);
+            System.out.println("  目标队列: /user/" + driverIdStr + destination);
+            System.out.println("  通知内容: " + notification);
+            
             // 发送给特定司机
             messagingTemplate.convertAndSendToUser(
-                driverId.toString(), 
-                "/queue/orders", 
+                driverIdStr, 
+                destination, 
                 notification
             );
             
