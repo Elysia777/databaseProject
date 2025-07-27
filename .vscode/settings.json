@@ -1,2 +1,24 @@
 {
+  "vue.server.hybridMode": false,
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "typescript.suggest.autoImports": false,
+  "typescript.validate.enable": true,
+  "files.associations": {
+    "*.vue": "vue"
+  },
+  "emmet.includeLanguages": {
+    "vue-html": "html",
+    "vue": "html"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "vetur.validation.template": false,
+  "vetur.validation.script": false,
+  "vetur.validation.style": false,
+  "vue.codeActions.enabled": false,
+  "typescript.suggest.completeFunctionCalls": false,
+  "typescript.inlayHints.parameterNames.enabled": "none",
+  "typescript.inlayHints.variableTypes.enabled": false,
+  "typescript.inlayHints.functionLikeReturnTypes.enabled": false
 }

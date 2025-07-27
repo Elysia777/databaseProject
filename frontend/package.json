@@ -19,7 +19,9 @@
     "vue-echarts": "^6.6.1",
     "dayjs": "^1.11.9",
     "lodash-es": "^4.17.21",
-    "@amap/amap-jsapi-loader": "^1.0.1"
+    "@amap/amap-jsapi-loader": "^1.0.1",
+    "sockjs-client": "^1.6.1",
+    "@stomp/stompjs": "^7.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",

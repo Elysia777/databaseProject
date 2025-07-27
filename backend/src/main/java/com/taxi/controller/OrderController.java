@@ -7,6 +7,8 @@ import com.taxi.entity.Driver;
 import com.taxi.mapper.OrderMapper;
 import com.taxi.mapper.DriverMapper;
 import com.taxi.service.OrderService;
+import com.taxi.service.DriverRedisService;
+import com.taxi.service.WebSocketNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +29,12 @@ public class OrderController {
 
     @Autowired
     private DriverMapper driverMapper;
+
+    @Autowired
+    private DriverRedisService driverRedisService;
+
+    @Autowired
+    private WebSocketNotificationService webSocketNotificationService;
 
     @PostMapping("/create")
     public Result<String> createOrder(@RequestBody CreateOrderRequest request) {
@@ -116,6 +124,12 @@ public class OrderController {
         }
     }
 
+    /** 获取所有订单列表 - 兼容 /all 路径 */
+    @GetMapping("/all")
+    public Result<List<Order>> getAllOrdersCompat() {
+        return getAllOrders();
+    }
+
     /** 根据ID获取订单详情 */
     @GetMapping("/{orderId}")
     public Result<Order> getOrderById(@PathVariable Long orderId) {
@@ -150,6 +164,118 @@ public class OrderController {
             return Result.success("订单取消成功");
         } catch (Exception e) {
             return Result.error("取消订单失败: " + e.getMessage());
+        }
+    }
+
+    /** 司机确认到达上车点 */
+    @PostMapping("/{orderId}/pickup")
+    public Result<String> confirmPickup(@PathVariable Long orderId) {
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            
+            if (!"ASSIGNED".equals(order.getStatus())) {
+                return Result.error("订单状态不正确，当前状态: " + order.getStatus());
+            }
+            
+            order.setStatus("PICKUP");
+            order.setPickupTime(LocalDateTime.now());
+            order.setUpdatedAt(LocalDateTime.now());
+            orderMapper.updateById(order);
+            
+            // 推送确认到达状态给乘客
+            if (order.getPassengerId() != null) {
+                webSocketNotificationService.notifyPassengerOrderStatusChange(
+                    order.getPassengerId(), 
+                    orderId, 
+                    "PICKUP", 
+                    "司机已到达上车点，请准备上车"
+                );
+            }
+            
+            return Result.success("确认到达成功");
+        } catch (Exception e) {
+            return Result.error("确认到达失败: " + e.getMessage());
+        }
+    }
+
+    /** 司机开始行程 */
+    @PostMapping("/{orderId}/start")
+    public Result<String> startTrip(@PathVariable Long orderId) {
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            
+            if (!"PICKUP".equals(order.getStatus())) {
+                return Result.error("订单状态不正确，当前状态: " + order.getStatus());
+            }
+            
+            order.setStatus("IN_PROGRESS");
+            order.setUpdatedAt(LocalDateTime.now());
+            orderMapper.updateById(order);
+            
+            // 推送行程开始状态给乘客
+            if (order.getPassengerId() != null) {
+                webSocketNotificationService.notifyPassengerOrderStatusChange(
+                    order.getPassengerId(), 
+                    orderId, 
+                    "IN_PROGRESS", 
+                    "行程已开始，请系好安全带"
+                );
+            }
+            
+            return Result.success("行程开始成功");
+        } catch (Exception e) {
+            return Result.error("开始行程失败: " + e.getMessage());
+        }
+    }
+
+    /** 司机完成订单 */
+    @PostMapping("/{orderId}/complete")
+    public Result<String> completeTrip(@PathVariable Long orderId) {
+        try {
+            Order order = orderMapper.selectById(orderId);
+            if (order == null) {
+                return Result.error("订单不存在");
+            }
+            
+            if (!"IN_PROGRESS".equals(order.getStatus())) {
+                return Result.error("订单状态不正确，当前状态: " + order.getStatus());
+            }
+            
+            order.setStatus("COMPLETED");
+            order.setCompletionTime(LocalDateTime.now());
+            order.setUpdatedAt(LocalDateTime.now());
+            
+            // 计算实际费用（这里简化处理，使用预估费用）
+            if (order.getActualFare() == null) {
+                order.setActualFare(order.getEstimatedFare());
+            }
+            
+            orderMapper.updateById(order);
+            
+            // 标记司机为空闲状态
+            if (order.getDriverId() != null) {
+                driverRedisService.markDriverFree(order.getDriverId());
+            }
+            
+            // 推送订单完成状态给乘客
+            if (order.getPassengerId() != null) {
+                webSocketNotificationService.notifyPassengerOrderStatusChange(
+                    order.getPassengerId(), 
+                    orderId, 
+                    "COMPLETED", 
+                    "行程已完成，感谢您的使用"
+                );
+            }
+            
+            return Result.success("订单完成成功");
+        } catch (Exception e) {
+            return Result.error("完成订单失败: " + e.getMessage());
         }
     }
 

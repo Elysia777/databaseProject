@@ -2,7 +2,10 @@ package com.taxi.service;
 
 import com.taxi.entity.Order;
 import com.taxi.entity.Driver;
+import com.taxi.entity.User;
 import com.taxi.mapper.OrderMapper;
+import com.taxi.mapper.DriverMapper;
+import com.taxi.mapper.UserMapper;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -25,6 +28,12 @@ public class OrderDispatchService {
 
     @Autowired
     private OrderMapper orderMapper;
+    
+    @Autowired
+    private DriverMapper driverMapper;
+    
+    @Autowired
+    private UserMapper userMapper;
     
     @Autowired
     private DriverRedisService driverRedisService;
@@ -170,8 +179,19 @@ public class OrderDispatchService {
             
             System.out.println("订单接单成功 - 订单: " + order.getOrderNumber() + ", 司机: " + driverId);
             
-            // 7. 通知乘客订单已被接受
-            notifyPassengerOrderAccepted(order);
+            // 7. 通知乘客订单已被接受（包含司机详细信息）
+            Driver driver = driverMapper.selectById(driverId);
+            if (driver != null) {
+                // 获取司机的用户信息
+                User driverUser = userMapper.selectById(driver.getUserId());
+                webSocketNotificationService.notifyPassengerOrderAssigned(order.getPassengerId(), order, driver, driverUser);
+                
+                // 设置司机当前执行的订单
+                driverRedisService.setDriverCurrentOrder(driverId, order.getId());
+            } else {
+                // 备用通知方式
+                notifyPassengerOrderAccepted(order);
+            }
             
             // 8. 发送接单成功消息到队列（用于其他业务处理）
             sendOrderAssignedMessage(order, driverId);

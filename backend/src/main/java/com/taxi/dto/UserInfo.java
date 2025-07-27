@@ -24,4 +24,10 @@ public class UserInfo {
 
     /** JWT Token */
     private String token;
+    
+    /** 乘客ID（当用户类型为PASSENGER时） */
+    private Long passengerId;
+    
+    /** 司机ID（当用户类型为DRIVER时） */
+    private Long driverId;
 }

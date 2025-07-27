@@ -142,6 +142,19 @@ public class UserServiceImpl implements UserService {
         BeanUtils.copyProperties(user, userInfo);
         userInfo.setToken(jwtUtil.generateToken(user.getId(), user.getUsername(), user.getUserType()));
         
+        // 根据用户类型设置对应的ID
+        if ("PASSENGER".equals(user.getUserType())) {
+            Passenger passenger = passengerMapper.selectByUserId(user.getId());
+            if (passenger != null) {
+                userInfo.setPassengerId(passenger.getId());
+            }
+        } else if ("DRIVER".equals(user.getUserType())) {
+            Driver driver = driverMapper.selectByUserId(user.getId());
+            if (driver != null) {
+                userInfo.setDriverId(driver.getId());
+            }
+        }
+        
         return userInfo;
     }
 

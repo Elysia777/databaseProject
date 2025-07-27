@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网约车乘客端</title>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=8b011259082e987043911232b625e2ca&plugin=AMap.PlaceSearch,AMap.Autocomplete,AMap.Driving,AMap.Geolocation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            width: 350px;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #4ECDC4;
+        }
+
+        .section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #4ECDC4;
+        }
+
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            display: none;
+        }
+
+        .search-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-item:hover {
+            background: #f0f0f0;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .price {
+            font-size: 18px;
+            font-weight: bold;
+            color: #FF6B6B;
+        }
+
+        .status-indicator {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .status-waiting {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .status-assigned {
+            background: #17a2b8;
+        }
+
+        .status-pickup {
+            background: #fd7e14;
+        }
+
+        .status-in-progress {
+            background: #20c997;
+        }
+
+        .status-completed {
+            background: #28a745;
+        }
+
+        .driver-info {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .driver-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #4ECDC4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .driver-details {
+            flex: 1;
+        }
+
+        .driver-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .driver-car {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .location-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 2px solid #4ECDC4;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #4ECDC4;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .location-btn:hover {
+            background: #4ECDC4;
+            color: white;
+        }
+
+        .floating-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+        }
+
+        .route-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .route-distance {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .route-time {
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            
+            .control-panel {
+                width: 100%;
+                height: 40%;
+                order: 2;
+            }
+            
+            .map-container {
+                height: 60%;
+                order: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 地图容器 -->
+        <div class="map-container">
+            <div id="map"></div>
+            
+            <!-- 定位按钮 -->
+            <div class="location-btn" onclick="locateMe()" title="定位到我的位置">
+                📍
+            </div>
+
+            <!-- 浮动路线信息面板 -->
+            <div class="floating-panel" id="routePanel">
+                <div class="route-info">
+                    <div>
+                        <div class="route-distance" id="routeDistance">--</div>
+                        <div class="route-time" id="routeTime">预计时间: --</div>
+                    </div>
+                    <div class="price" id="estimatedPrice">¥ --</div>
+                </div>
+                <button class="btn btn-success" onclick="confirmOrder()">确认下单</button>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="control-panel">
+            <div class="header">
+                <h1>🚗 网约车</h1>
+                <p>您的专属出行伙伴</p>
+            </div>
+
+            <div class="content">
+                <!-- 乘客信息 -->
+                <div class="section">
+                    <h3>👤 乘客信息</h3>
+                    <div class="form-group">
+                        <label>乘客ID:</label>
+                        <input type="number" id="passengerId" value="1" class="form-input">
+                    </div>
+                </div>
+
+                <!-- 行程规划 -->
+                <div class="section">
+                    <h3>📍 行程规划</h3>
+                    <div class="form-group">
+                        <label>出发地:</label>
+                        <input type="text" id="startLocation" class="form-input" placeholder="点击地图选择出发地或当前位置" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>目的地:</label>
+                        <input type="text" id="endLocation" class="form-input" placeholder="搜索目的地">
+                        <div class="search-results" id="searchResults"></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="planRoute()">规划路线</button>
+                </div>
+
+                <!-- 订单信息 -->
+                <div class="section" id="orderSection" style="display: none;">
+                    <h3>📋 订单信息</h3>
+                    <div class="status-indicator" id="orderStatus">等待接单</div>
+                    <div class="info-box">
+                        <div class="info-item">
+                            <span>距离:</span>
+                            <span id="orderDistance">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span>预估时间:</span>
+                            <span id="orderTime">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span>预估费用:</span>
+                            <span class="price" id="orderPrice">¥ --</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-danger" onclick="cancelOrder()" id="cancelBtn">取消订单</button>
+                </div>
+
+                <!-- 司机信息 -->
+                <div class="driver-info" id="driverInfo">
+                    <div style="display: flex; align-items: center;">
+                        <div class="driver-avatar" id="driverAvatar">司</div>
+                        <div class="driver-details">
+                            <div class="driver-name" id="driverName">--</div>
+                            <div class="driver-car" id="driverCar">--</div>
+                        </div>
+                    </div>
+                    <div class="info-item" style="margin-top: 10px;">
+                        <span>预计到达:</span>
+                        <span id="driverETA">--</span>
+                    </div>
+                </div>
+
+                <!-- 实时状态 -->
+                <div class="section" id="statusSection" style="display: none;">
+                    <h3>📱 实时状态</h3>
+                    <div id="statusMessages"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let map;
+        let geolocation;
+        let placeSearch;
+        let driving;
+        let currentPosition = null;
+        let startMarker = null;
+        let endMarker = null;
+        let driverMarker = null;
+        let routePolyline = null;
+        let currentOrder = null;
+        let websocket = null;
+        let stompClient = null;
+
+        // API配置
+        const API_BASE_URL = 'http://localhost:8080';
+
+        // 初始化地图
+        function initMap() {
+            map = new AMap.Map('map', {
+                zoom: 15,
+                center: [116.397428, 39.90923], // 北京天安门
+                mapStyle: 'amap://styles/normal'
+            });
+
+            // 初始化定位
+            geolocation = new AMap.Geolocation({
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0,
+                convert: true,
+                showButton: false,
+                showMarker: false,
+                showCircle: false
+            });
+
+            // 初始化搜索
+            placeSearch = new AMap.PlaceSearch({
+                pageSize: 10,
+                pageIndex: 1,
+                city: '全国'
+            });
+
+            // 初始化路线规划
+            driving = new AMap.Driving({
+                map: map,
+                showTraffic: true,
+                hideMarkers: false
+            });
+
+            // 地图点击事件
+            map.on('click', function(e) {
+                setStartLocation(e.lnglat);
+            });
+
+            // 自动定位到当前位置
+            locateMe();
+        }
+
+        // 定位到当前位置
+        function locateMe() {
+            geolocation.getCurrentPosition(function(status, result) {
+                if (status === 'complete') {
+                    currentPosition = [result.position.lng, result.position.lat];
+                    map.setCenter(currentPosition);
+                    setStartLocation(new AMap.LngLat(result.position.lng, result.position.lat));
+                    showMessage('✅ 定位成功');
+                } else {
+                    showMessage('❌ 定位失败: ' + result.message, true);
+                }
+            });
+        }
+
+        // 设置出发地
+        function setStartLocation(lnglat) {
+            if (startMarker) {
+                map.remove(startMarker);
+            }
+
+            startMarker = new AMap.Marker({
+                position: lnglat,
+                icon: new AMap.Icon({
+                    image: 'https://webapi.amap.com/theme/v1.3/markers/n/start.png',
+                    size: new AMap.Size(25, 34),
+                    imageSize: new AMap.Size(25, 34)
+                }),
+                title: '出发地'
+            });
+
+            map.add(startMarker);
+
+            // 逆地理编码获取地址
+            AMap.plugin('AMap.Geocoder', function() {
+                const geocoder = new AMap.Geocoder();
+                geocoder.getAddress(lnglat, function(status, result) {
+                    if (status === 'complete' && result.regeocode) {
+                        document.getElementById('startLocation').value = result.regeocode.formattedAddress;
+                    }
+                });
+            });
+        }
+
+        // 目的地搜索
+        document.getElementById('endLocation').addEventListener('input', function(e) {
+            const keyword = e.target.value;
+            if (keyword.length > 1) {
+                searchDestination(keyword);
+            } else {
+                hideSearchResults();
+            }
+        });
+
+        function searchDestination(keyword) {
+            placeSearch.search(keyword, function(status, result) {
+                if (status === 'complete' && result.poiList.pois.length > 0) {
+                    showSearchResults(result.poiList.pois);
+                }
+            });
+        }
+
+        function showSearchResults(pois) {
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '';
+            
+            pois.slice(0, 5).forEach(poi => {
+                const item = document.createElement('div');
+                item.className = 'search-item';
+                item.innerHTML = `
+                    <div style="font-weight: bold;">${poi.name}</div>
+                    <div style="font-size: 12px; color: #666;">${poi.address}</div>
+                `;
+                item.onclick = () => selectDestination(poi);
+                resultsDiv.appendChild(item);
+            });
+            
+            resultsDiv.style.display = 'block';
+        }
+
+        function hideSearchResults() {
+            document.getElementById('searchResults').style.display = 'none';
+        }
+
+        function selectDestination(poi) {
+            document.getElementById('endLocation').value = poi.name;
+            hideSearchResults();
+            
+            if (endMarker) {
+                map.remove(endMarker);
+            }
+
+            endMarker = new AMap.Marker({
+                position: [poi.location.lng, poi.location.lat],
+                icon: new AMap.Icon({
+                    image: 'https://webapi.amap.com/theme/v1.3/markers/n/end.png',
+                    size: new AMap.Size(25, 34),
+                    imageSize: new AMap.Size(25, 34)
+                }),
+                title: '目的地'
+            });
+
+            map.add(endMarker);
+            
+            // 自动规划路线
+            if (startMarker) {
+                planRoute();
+            }
+        }
+
+        // 规划路线
+        function planRoute() {
+            if (!startMarker || !endMarker) {
+                showMessage('❌ 请先选择出发地和目的地', true);
+                return;
+            }
+
+            const startPos = startMarker.getPosition();
+            const endPos = endMarker.getPosition();
+
+            driving.search(startPos, endPos, function(status, result) {
+                if (status === 'complete') {
+                    const route = result.routes[0];
+                    const distance = (route.distance / 1000).toFixed(1);
+                    const time = Math.ceil(route.time / 60);
+                    const price = calculatePrice(route.distance);
+
+                    // 显示路线信息
+                    document.getElementById('routeDistance').textContent = distance + ' 公里';
+                    document.getElementById('routeTime').textContent = `预计时间: ${time} 分钟`;
+                    document.getElementById('estimatedPrice').textContent = `¥ ${price}`;
+                    document.getElementById('routePanel').style.display = 'block';
+
+                    // 调整地图视野
+                    map.setFitView([startMarker, endMarker]);
+                } else {
+                    showMessage('❌ 路线规划失败', true);
+                }
+            });
+        }
+
+        // 计算价格
+        function calculatePrice(distance) {
+            const baseFare = 10; // 起步价
+            const perKmFare = 2.5; // 每公里价格
+            const distanceKm = distance / 1000;
+            return Math.ceil(baseFare + (distanceKm > 3 ? (distanceKm - 3) * perKmFare : 0));
+        }
+
+        // 确认下单
+        async function confirmOrder() {
+            if (!startMarker || !endMarker) {
+                showMessage('❌ 请先规划路线', true);
+                return;
+            }
+
+            const passengerId = document.getElementById('passengerId').value;
+            const startPos = startMarker.getPosition();
+            const endPos = endMarker.getPosition();
+            const startAddress = document.getElementById('startLocation').value;
+            const endAddress = document.getElementById('endLocation').value;
+
+            const orderData = {
+                passengerId: parseInt(passengerId),
+                pickupAddress: startAddress,
+                pickupLatitude: startPos.lat,
+                pickupLongitude: startPos.lng,
+                destinationAddress: endAddress,
+                destinationLatitude: endPos.lat,
+                destinationLongitude: endPos.lng,
+                orderType: 'REAL_TIME'
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/orders/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.code === 200) {
+                    currentOrder = result.data;
+                    showOrderCreated();
+                    connectWebSocket();
+                    showMessage('✅ 订单创建成功，正在为您寻找司机...');
+                } else {
+                    showMessage('❌ 下单失败: ' + (result.message || '未知错误'), true);
+                }
+            } catch (error) {
+                showMessage('❌ 网络错误: ' + error.message, true);
+            }
+        }
+
+        // 显示订单已创建
+        function showOrderCreated() {
+            document.getElementById('routePanel').style.display = 'none';
+            document.getElementById('orderSection').style.display = 'block';
+            document.getElementById('statusSection').style.display = 'block';
+            
+            // 更新订单信息
+            const distance = document.getElementById('routeDistance').textContent;
+            const time = document.getElementById('routeTime').textContent;
+            const price = document.getElementById('estimatedPrice').textContent;
+            
+            document.getElementById('orderDistance').textContent = distance;
+            document.getElementById('orderTime').textContent = time;
+            document.getElementById('orderPrice').textContent = price;
+            
+            updateOrderStatus('PENDING', '等待接单');
+        }
+
+        // 更新订单状态
+        function updateOrderStatus(status, text) {
+            const statusEl = document.getElementById('orderStatus');
+            statusEl.textContent = text;
+            statusEl.className = 'status-indicator status-' + status.toLowerCase();
+        }
+
+        // 取消订单
+        async function cancelOrder() {
+            if (!currentOrder) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/orders/${currentOrder.id}/cancel`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('✅ 订单已取消');
+                    resetOrder();
+                } else {
+                    showMessage('❌ 取消失败: ' + (result.message || '未知错误'), true);
+                }
+            } catch (error) {
+                showMessage('❌ 网络错误: ' + error.message, true);
+            }
+        }
+
+        // 重置订单
+        function resetOrder() {
+            currentOrder = null;
+            document.getElementById('orderSection').style.display = 'none';
+            document.getElementById('statusSection').style.display = 'none';
+            document.getElementById('driverInfo').style.display = 'none';
+            document.getElementById('routePanel').style.display = 'none';
+            
+            if (websocket) {
+                websocket.disconnect();
+                websocket = null;
+            }
+            
+            // 清除地图标记
+            if (routePolyline) {
+                map.remove(routePolyline);
+            }
+            if (driverMarker) {
+                map.remove(driverMarker);
+            }
+        }
+
+        // WebSocket连接
+        function connectWebSocket() {
+            try {
+                const socket = new SockJS(`${API_BASE_URL}/ws`);
+                stompClient = new StompJs.Client({
+                    webSocketFactory: () => socket,
+                    debug: () => {}
+                });
+
+                stompClient.onConnect = function(frame) {
+                    console.log('WebSocket连接成功');
+                    
+                    // 订阅乘客消息
+                    stompClient.subscribe(`/user/${currentOrder.passengerId}/queue/orders`, function(message) {
+                        const data = JSON.parse(message.body);
+                        handleOrderUpdate(data);
+                    });
+                };
+
+                stompClient.onStompError = function(frame) {
+                    console.error('WebSocket连接失败:', frame);
+                };
+
+                stompClient.activate();
+            } catch (error) {
+                console.error('WebSocket连接错误:', error);
+            }
+        }
+
+        // 处理订单更新
+        function handleOrderUpdate(data) {
+            console.log('收到订单更新:', data);
+            
+            switch (data.type) {
+                case 'ORDER_ASSIGNED':
+                    handleOrderAssigned(data);
+                    break;
+                case 'DRIVER_LOCATION':
+                    updateDriverLocation(data);
+                    break;
+                case 'ORDER_STATUS_CHANGE':
+                    handleStatusChange(data);
+                    break;
+            }
+        }
+
+        // 处理订单被接单
+        function handleOrderAssigned(data) {
+            updateOrderStatus('ASSIGNED', '司机已接单');
+            showDriverInfo(data.driver);
+            showMessage('✅ 司机已接单，正在前往接您');
+        }
+
+        // 显示司机信息
+        function showDriverInfo(driver) {
+            document.getElementById('driverInfo').style.display = 'block';
+            document.getElementById('driverName').textContent = driver.name || `司机${driver.id}`;
+            document.getElementById('driverCar').textContent = driver.carModel || '车牌号: 京A12345';
+            document.getElementById('driverAvatar').textContent = (driver.name || '司机').charAt(0);
+            
+            // 在地图上显示司机位置
+            if (driver.latitude && driver.longitude) {
+                showDriverOnMap(driver.latitude, driver.longitude);
+            }
+        }
+
+        // 在地图上显示司机
+        function showDriverOnMap(lat, lng) {
+            if (driverMarker) {
+                map.remove(driverMarker);
+            }
+
+            driverMarker = new AMap.Marker({
+                position: [lng, lat],
+                icon: new AMap.Icon({
+                    image: '🚗',
+                    size: new AMap.Size(30, 30)
+                }),
+                title: '司机位置'
+            });
+
+            map.add(driverMarker);
+        }
+
+        // 更新司机位置
+        function updateDriverLocation(data) {
+            if (driverMarker && data.latitude && data.longitude) {
+                driverMarker.setPosition([data.longitude, data.latitude]);
+                
+                // 计算预计到达时间
+                const startPos = startMarker.getPosition();
+                const driverPos = [data.longitude, data.latitude];
+                
+                // 这里可以调用路线规划API计算实际到达时间
+                // 简化处理，使用直线距离估算
+                const distance = AMap.GeometryUtil.distance(startPos, driverPos);
+                const eta = Math.ceil(distance / 500); // 假设平均速度500米/分钟
+                
+                document.getElementById('driverETA').textContent = `${eta} 分钟`;
+            }
+        }
+
+        // 处理状态变化
+        function handleStatusChange(data) {
+            switch (data.status) {
+                case 'PICKUP':
+                    updateOrderStatus('PICKUP', '司机已到达');
+                    showMessage('✅ 司机已到达，请上车');
+                    break;
+                case 'IN_PROGRESS':
+                    updateOrderStatus('IN_PROGRESS', '行程中');
+                    showMessage('✅ 行程开始');
+                    break;
+                case 'COMPLETED':
+                    updateOrderStatus('COMPLETED', '行程完成');
+                    showMessage('✅ 行程完成，请支付费用');
+                    showPayment(data.fare);
+                    break;
+            }
+        }
+
+        // 显示支付信息
+        function showPayment(fare) {
+            const paymentHtml = `
+                <div class="info-box">
+                    <h4>💰 支付信息</h4>
+                    <div class="info-item">
+                        <span>实际费用:</span>
+                        <span class="price">¥ ${fare}</span>
+                    </div>
+                    <button class="btn btn-success" onclick="confirmPayment(${fare})">确认支付</button>
+                </div>
+            `;
+            
+            document.getElementById('statusMessages').innerHTML = paymentHtml;
+        }
+
+        // 确认支付
+        function confirmPayment(fare) {
+            showMessage(`✅ 支付成功！费用: ¥${fare}`);
+            setTimeout(() => {
+                resetOrder();
+            }, 3000);
+        }
+
+        // 显示消息
+        function showMessage(message, isError = false) {
+            const statusDiv = document.getElementById('statusMessages');
+            const messageEl = document.createElement('div');
+            messageEl.style.cssText = `
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 5px;
+                background: ${isError ? '#f8d7da' : '#d4edda'};
+                color: ${isError ? '#721c24' : '#155724'};
+                border: 1px solid ${isError ? '#f5c6cb' : '#c3e6cb'};
+            `;
+            messageEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            
+            statusDiv.appendChild(messageEl);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+
+        // 页面加载完成后初始化
+        window.onload = function() {
+            initMap();
+        };
+    </script>
+</body>
+</html>

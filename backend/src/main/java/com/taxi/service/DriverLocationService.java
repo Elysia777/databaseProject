@@ -1,7 +1,9 @@
 package com.taxi.service;
 
 import com.taxi.entity.Driver;
+import com.taxi.entity.Order;
 import com.taxi.mapper.DriverMapper;
+import com.taxi.mapper.OrderMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,12 @@ public class DriverLocationService {
     
     @Autowired
     private DriverRedisService driverRedisService;
+    
+    @Autowired
+    private OrderMapper orderMapper;
+    
+    @Autowired
+    private WebSocketNotificationService webSocketNotificationService;
 
     // 模拟TCP连接状态管理
     private final Map<Long, DriverConnectionInfo> activeConnections = new ConcurrentHashMap<>();
@@ -144,10 +152,42 @@ public class DriverLocationService {
                 
                 // 更新Redis缓存
                 driverRedisService.updateDriverLocation(driverId, latitude, longitude);
+                
+                // 🚀 新增：如果司机正在执行订单，推送位置给对应的乘客
+                pushLocationToPassengerIfNeeded(driverId, latitude.doubleValue(), longitude.doubleValue());
             }
             
         } catch (Exception e) {
             System.err.println("更新司机位置失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 如果司机正在执行订单，推送位置给对应的乘客
+     */
+    private void pushLocationToPassengerIfNeeded(Long driverId, Double latitude, Double longitude) {
+        try {
+            // 检查司机是否正在执行订单
+            if (driverRedisService.isDriverBusy(driverId)) {
+                // 获取司机当前执行的订单
+                Long currentOrderId = driverRedisService.getDriverCurrentOrder(driverId);
+                if (currentOrderId != null) {
+                    // 获取订单信息，找到对应的乘客
+                    Order order = orderMapper.selectById(currentOrderId);
+                    if (order != null && order.getPassengerId() != null) {
+                        // 推送司机位置给乘客
+                        webSocketNotificationService.pushDriverLocationToPassenger(
+                            order.getPassengerId(), 
+                            driverId, 
+                            latitude, 
+                            longitude
+                        );
+                        System.out.println("✅ 已推送司机 " + driverId + " 位置给乘客 " + order.getPassengerId());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ 推送司机位置给乘客失败: " + e.getMessage());
         }
     }
 
@@ -183,7 +223,7 @@ public class DriverLocationService {
         activeConnections.entrySet().removeIf(entry -> {
             DriverConnectionInfo info = entry.getValue();
             // 如果超过30秒没有心跳，认为连接断开
-            if (info.getLastHeartbeat().plusSeconds(30).isBefore(now)) {
+            if (info.getLastHeartbeat().plusSeconds(3000).isBefore(now)) {
                 System.out.println("司机 " + entry.getKey() + " 连接超时，自动断开");
                 closeConnection(entry.getKey());
                 return true;

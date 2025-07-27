@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户类型测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>用户类型测试工具</h1>
+        
+        <div class="test-section">
+            <h3>模拟登录测试</h3>
+            <div>
+                <label>用户名: </label>
+                <input type="text" id="username" value="passenger1" placeholder="输入用户名">
+                <label>密码: </label>
+                <input type="password" id="password" value="123456" placeholder="输入密码">
+                <button onclick="testLogin()">测试登录</button>
+            </div>
+            <div id="login-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>用户类型判断测试</h3>
+            <div>
+                <label>用户类型: </label>
+                <select id="userType">
+                    <option value="PASSENGER">PASSENGER</option>
+                    <option value="DRIVER">DRIVER</option>
+                    <option value="ADMIN">ADMIN</option>
+                </select>
+                <button onclick="testUserType()">测试用户类型</button>
+            </div>
+            <div id="usertype-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>路由跳转测试</h3>
+            <div>
+                <button onclick="testRouteRedirect('PASSENGER')">测试乘客路由</button>
+                <button onclick="testRouteRedirect('DRIVER')">测试司机路由</button>
+                <button onclick="testRouteRedirect('ADMIN')">测试管理员路由</button>
+            </div>
+            <div id="route-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>当前状态检查</h3>
+            <button onclick="checkCurrentState()">检查当前状态</button>
+            <div id="state-result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('login-result');
+            
+            if (!username || !password) {
+                resultDiv.innerHTML = '<div class="result error">请输入用户名和密码</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = '<div class="result info">正在登录...</div>';
+                
+                const response = await fetch('/api/user/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.code === 200) {
+                    // 保存到localStorage
+                    localStorage.setItem('token', data.data.token);
+                    
+                    resultDiv.innerHTML = `
+                        <div class="result success">登录成功!</div>
+                        <div class="result info">
+                            <strong>用户信息:</strong>
+                            <pre>${JSON.stringify(data.data, null, 2)}</pre>
+                        </div>
+                    `;
+                    
+                    // 自动测试用户类型
+                    setTimeout(() => {
+                        document.getElementById('userType').value = data.data.userType || 'PASSENGER';
+                        testUserType();
+                    }, 1000);
+                    
+                } else {
+                    resultDiv.innerHTML = `<div class="result error">登录失败: ${data.message || '未知错误'}</div>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">登录错误: ${error.message}</div>`;
+            }
+        }
+        
+        function testUserType() {
+            const userType = document.getElementById('userType').value;
+            const resultDiv = document.getElementById('usertype-result');
+            
+            // 模拟用户store的逻辑
+            const mockUser = {
+                userType: userType,
+                id: 1,
+                username: 'test',
+                realName: '测试用户'
+            };
+            
+            const isAdmin = mockUser.userType === 'ADMIN';
+            const isDriver = mockUser.userType === 'DRIVER';
+            const isPassenger = mockUser.userType === 'PASSENGER';
+            
+            let html = `
+                <div class="result info">
+                    <strong>用户类型:</strong> ${userType}<br>
+                    <strong>isAdmin:</strong> ${isAdmin}<br>
+                    <strong>isDriver:</strong> ${isDriver}<br>
+                    <strong>isPassenger:</strong> ${isPassenger}
+                </div>
+            `;
+            
+            // 根据用户类型显示应该跳转的路由
+            let expectedRoute = '/dashboard';
+            if (isPassenger) {
+                expectedRoute = '/dashboard/passenger-map';
+                html += '<div class="result success">乘客用户应该跳转到: /dashboard/passenger-map</div>';
+            } else if (isDriver) {
+                expectedRoute = '/dashboard/driver-map';
+                html += '<div class="result success">司机用户应该跳转到: /dashboard/driver-map</div>';
+            } else if (isAdmin) {
+                expectedRoute = '/dashboard/overview';
+                html += '<div class="result success">管理员用户应该跳转到: /dashboard/overview</div>';
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        function testRouteRedirect(userType) {
+            const resultDiv = document.getElementById('route-result');
+            
+            // 模拟路由守卫逻辑
+            let redirectPath = '/dashboard';
+            
+            if (userType === 'PASSENGER') {
+                redirectPath = '/dashboard/passenger-map';
+            } else if (userType === 'DRIVER') {
+                redirectPath = '/dashboard/driver-map';
+            } else if (userType === 'ADMIN') {
+                redirectPath = '/dashboard/overview';
+            }
+            
+            resultDiv.innerHTML = `
+                <div class="result info">
+                    <strong>用户类型:</strong> ${userType}<br>
+                    <strong>应该跳转到:</strong> ${redirectPath}
+                </div>
+                <div class="result warning">
+                    <strong>测试跳转:</strong> 
+                    <a href="${redirectPath}" target="_blank">点击测试跳转</a>
+                </div>
+            `;
+        }
+        
+        function checkCurrentState() {
+            const resultDiv = document.getElementById('state-result');
+            const token = localStorage.getItem('token');
+            const currentPath = window.location.pathname;
+            
+            let html = `
+                <div class="result info">
+                    <strong>当前路径:</strong> ${currentPath}<br>
+                    <strong>Token存在:</strong> ${!!token}<br>
+                    <strong>Token值:</strong> ${token ? token.substring(0, 20) + '...' : '无'}
+                </div>
+            `;
+            
+            if (token) {
+                // 尝试解析token获取用户信息
+                try {
+                    // 这里应该调用API获取用户信息
+                    html += '<div class="result success">Token存在，可以尝试获取用户信息</div>';
+                    
+                    // 测试获取用户信息
+                    fetch('/api/user/info', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.code === 200) {
+                            const userInfo = data.data;
+                            resultDiv.innerHTML += `
+                                <div class="result success">
+                                    <strong>用户信息获取成功:</strong>
+                                    <pre>${JSON.stringify(userInfo, null, 2)}</pre>
+                                </div>
+                            `;
+                            
+                            // 检查用户类型和路由匹配
+                            if (userInfo.userType === 'PASSENGER' && !currentPath.includes('passenger-map')) {
+                                resultDiv.innerHTML += '<div class="result warning">乘客用户但不在乘客地图页面</div>';
+                            } else if (userInfo.userType === 'DRIVER' && !currentPath.includes('driver-map')) {
+                                resultDiv.innerHTML += '<div class="result warning">司机用户但不在司机地图页面</div>';
+                            } else {
+                                resultDiv.innerHTML += '<div class="result success">用户类型和路由匹配</div>';
+                            }
+                        } else {
+                            resultDiv.innerHTML += `<div class="result error">获取用户信息失败: ${data.message}</div>`;
+                        }
+                    })
+                    .catch(error => {
+                        resultDiv.innerHTML += `<div class="result error">API调用失败: ${error.message}</div>`;
+                    });
+                    
+                } catch (error) {
+                    html += `<div class="result error">Token解析失败: ${error.message}</div>`;
+                }
+            } else {
+                html += '<div class="result warning">没有Token，用户未登录</div>';
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+        
+        // 页面加载时自动检查状态
+        window.onload = function() {
+            checkCurrentState();
+        };
+    </script>
+</body>
+</html>

@@ -71,6 +71,11 @@ const routes = [
         component: () => import('@/views/PassengerMap.vue')
       },
       {
+        path: 'driver-map',
+        name: 'DriverMap',
+        component: () => import('@/views/DriverMap.vue')
+      },
+      {
         path: 'ratings',
         name: 'Ratings',
         component: () => import('@/views/Ratings.vue')
@@ -131,6 +136,12 @@ router.beforeEach(async (to, from, next) => {
   // 乘客访问dashboard根路径，跳转到地图页面
   if (to.path === '/dashboard' && userStore.isPassenger) {
     next('/dashboard/passenger-map')
+    return
+  }
+  
+  // 司机访问dashboard根路径，跳转到司机地图页面
+  if (to.path === '/dashboard' && userStore.isDriver) {
+    next('/dashboard/driver-map')
     return
   }
   

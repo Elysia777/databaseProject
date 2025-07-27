@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多司机订单测试页面</title>
+    <!-- WebSocket相关库 -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .main-content {
+            display: flex;
+            min-height: 700px;
+        }
+
+        .passenger-panel {
+            flex: 0 0 300px;
+            padding: 20px;
+            border-right: 1px solid #eee;
+            background: #f8f9fa;
+        }
+
+        .drivers-container {
+            flex: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .driver-panel {
+            flex: 0 0 calc(50% - 5px);
+            min-width: 350px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .driver-panel.online {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+
+        .driver-panel.offline {
+            border-color: #dc3545;
+            background: #fff8f8;
+        }
+
+        .panel h2, .panel h3 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #4ECDC4;
+        }
+
+        .driver-panel h3 {
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .driver-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .status-online {
+            background: #28a745;
+            color: white;
+        }
+
+        .status-offline {
+            background: #dc3545;
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+            color: #555;
+            font-size: 12px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #4ECDC4;
+        }
+
+        .button-group {
+            margin: 10px 0;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-info { background: #17a2b8; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            line-height: 1.3;
+        }
+
+        /* 订单通知区域 */
+        .notification-area {
+            margin: 15px 0;
+            border: 2px solid #4ECDC4;
+            border-radius: 8px;
+            padding: 10px;
+            background: #f0fdff;
+        }
+
+        .notification-area h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .notifications-container {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .no-notifications {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 15px;
+            font-size: 11px;
+        }
+
+        .order-notification {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .order-notification.new {
+            border-left: 4px solid #FF6B6B;
+            animation: pulse 1s ease-in-out;
+        }
+
+        .order-notification.accepted {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+
+        .order-notification.removed {
+            background: #f8d7da;
+            border-color: #dc3545;
+            opacity: 0.7;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { background-color: white; }
+            50% { background-color: #fff5f5; }
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            color: #333;
+            font-size: 12px;
+        }
+
+        .notification-time {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .notification-content {
+            margin: 8px 0;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+
+        .notification-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .notification-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+            flex: 1;
+        }
+
+        .notification-btn.accept {
+            background: #28a745;
+            color: white;
+        }
+
+        .notification-btn.reject {
+            background: #dc3545;
+            color: white;
+        }
+
+        .notification-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .notification-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 全局订单状态面板 */
+        .global-orders {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            background: white;
+            border: 2px solid #4ECDC4;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .global-orders h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .order-item {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .order-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .status-pending { background: #ffc107; color: #212529; }
+        .status-assigned { background: #17a2b8; }
+        .status-pickup { background: #fd7e14; }
+        .status-in-progress { background: #20c997; }
+        .status-completed { background: #28a745; }
+        .status-cancelled { background: #dc3545; }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 多司机订单测试系统</h1>
+            <p>测试多个司机同时接收和处理订单的场景</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 乘客面板 -->
+            <div class="passenger-panel">
+                <h2>👤 乘客操作</h2>
+
+                <div class="form-group">
+                    <label>乘客ID:</label>
+                    <input type="number" id="passengerId" value="1" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label>上车地址:</label>
+                    <input type="text" id="pickupAddress" value="北京市朝阳区三里屯" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label>上车坐标:</label>
+                    <input type="text" id="pickupCoords" value="39.9365,116.4477" class="form-input" placeholder="纬度,经度">
+                </div>
+
+                <div class="form-group">
+                    <label>目的地地址:</label>
+                    <input type="text" id="destinationAddress" value="北京市海淀区中关村" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label>目的地坐标:</label>
+                    <input type="text" id="destinationCoords" value="39.9851,116.3058" class="form-input" placeholder="纬度,经度">
+                </div>
+
+                <div class="button-group">
+                    <button onclick="createOrder()" class="btn btn-primary">📱 下单</button>
+                    <button onclick="cancelOrder()" class="btn btn-danger">❌ 取消订单</button>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="initializeAllDrivers()" class="btn btn-success">🚀 初始化所有司机</button>
+                    <button onclick="connectAllDrivers()" class="btn btn-info">🔗 连接所有推送</button>
+                    <button onclick="disconnectAllDrivers()" class="btn btn-secondary">🔌 断开所有连接</button>
+                </div>
+
+                <div id="passengerResult" class="result-box"></div>
+            </div>
+
+            <!-- 司机面板容器 -->
+            <div class="drivers-container" id="driversContainer">
+                <!-- 司机面板将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局订单状态面板 -->
+    <div class="global-orders">
+        <h3>📋 全局订单状态</h3>
+        <button onclick="refreshGlobalOrders()" class="btn btn-info" style="width: 100%; margin-bottom: 10px;">🔄 刷新</button>
+        <div id="globalOrdersList"></div>
+    </div>
+
+    <script>
+        // API基础URL
+        const API_BASE_URL = 'http://localhost:8080';
+        
+        // 司机配置
+        const DRIVERS_CONFIG = [
+            { id: 1, name: '张师傅', coords: '39.9042,116.4074', color: '#FF6B6B' },
+            { id: 2, name: '李师傅', coords: '39.9365,116.4477', color: '#4ECDC4' },
+            { id: 3, name: '王师傅', coords: '39.9851,116.3058', color: '#45B7D1' },
+            { id: 4, name: '赵师傅', coords: '39.9200,116.4500', color: '#96CEB4' }
+        ];
+
+        // 全局状态
+        let currentOrderId = null;
+        let driverStates = {};
+        let globalOrders = [];
+
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDriverPanels();
+            refreshGlobalOrders();
+            
+            // 定期刷新全局订单状态
+            setInterval(refreshGlobalOrders, 5000);
+        });
+
+        // ==================== 司机面板管理 ====================
+
+        function initializeDriverPanels() {
+            const container = document.getElementById('driversContainer');
+            container.innerHTML = '';
+
+            DRIVERS_CONFIG.forEach(driver => {
+                const panel = createDriverPanel(driver);
+                container.appendChild(panel);
+                
+                // 初始化司机状态
+                driverStates[driver.id] = {
+                    online: false,
+                    connected: false,
+                    websocket: null,
+                    stompClient: null,
+                    notifications: []
+                };
+            });
+        }
+
+        function createDriverPanel(driver) {
+            const panel = document.createElement('div');
+            panel.className = 'driver-panel offline';
+            panel.id = `driver-panel-${driver.id}`;
+            
+            panel.innerHTML = `
+                <h3>
+                    🚕 ${driver.name} (ID: ${driver.id})
+                    <span class="driver-status status-offline" id="status-${driver.id}">离线</span>
+                </h3>
+
+                <div class="form-group">
+                    <label>司机位置:</label>
+                    <input type="text" id="coords-${driver.id}" value="${driver.coords}" class="form-input" placeholder="纬度,经度">
+                </div>
+
+                <div class="button-group">
+                    <button onclick="driverGoOnline(${driver.id})" class="btn btn-success">🟢 上线</button>
+                    <button onclick="driverGoOffline(${driver.id})" class="btn btn-secondary">🔴 下线</button>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="connectDriverWebSocket(${driver.id})" class="btn btn-info">🔗 连接推送</button>
+                    <button onclick="disconnectDriverWebSocket(${driver.id})" class="btn btn-warning">🔌 断开</button>
+                </div>
+
+                <div class="notification-area">
+                    <h4>📢 订单通知</h4>
+                    <div id="notifications-${driver.id}" class="notifications-container">
+                        <div class="no-notifications">暂无订单推送</div>
+                    </div>
+                </div>
+
+                <div id="result-${driver.id}" class="result-box"></div>
+            `;
+
+            return panel;
+        }
+
+        // ==================== 司机操作函数 ====================
+
+        async function driverGoOnline(driverId) {
+            const coords = document.getElementById(`coords-${driverId}`).value.split(',');
+            
+            if (coords.length !== 2) {
+                showDriverResult(driverId, '❌ 坐标格式错误', true);
+                return;
+            }
+
+            const latitude = parseFloat(coords[0]);
+            const longitude = parseFloat(coords[1]);
+
+            showDriverResult(driverId, '🟢 正在上线...');
+
+            // 使用查询参数而不是请求体
+            const url = `/api/drivers/${driverId}/online?latitude=${latitude}&longitude=${longitude}`;
+            const result = await apiCall(url, 'POST');
+
+            if (result.success) {
+                driverStates[driverId].online = true;
+                updateDriverStatus(driverId, true);
+                showDriverResult(driverId, '✅ 上线成功');
+                
+                // 司机上线成功后，自动建立WebSocket连接
+                showDriverResult(driverId, '🔗 自动连接WebSocket...');
+                setTimeout(() => {
+                    connectDriverWebSocket(driverId);
+                }, 500); // 延迟500ms确保上线状态已保存
+                
+            } else {
+                showDriverResult(driverId, `❌ 上线失败: ${result.data?.message || result.error}`, true);
+            }
+        }
+
+        async function driverGoOffline(driverId) {
+            showDriverResult(driverId, '🔴 正在下线...');
+
+            const result = await apiCall(`/api/drivers/${driverId}/offline`, 'POST');
+
+            if (result.success) {
+                driverStates[driverId].online = false;
+                updateDriverStatus(driverId, false);
+                showDriverResult(driverId, '✅ 下线成功');
+                
+                // 断开WebSocket连接
+                disconnectDriverWebSocket(driverId);
+            } else {
+                showDriverResult(driverId, `❌ 下线失败: ${result.data?.message || result.error}`, true);
+            }
+        }
+
+        function connectDriverWebSocket(driverId) {
+            if (driverStates[driverId].connected) {
+                showDriverResult(driverId, '⚠️ 已连接WebSocket');
+                return;
+            }
+
+            showDriverResult(driverId, '🔗 正在连接WebSocket...');
+
+            try {
+                const websocket = new SockJS(API_BASE_URL + '/ws');
+                
+                let stompClient;
+                if (typeof StompJs !== 'undefined') {
+                    stompClient = new StompJs.Client({
+                        webSocketFactory: () => new SockJS(API_BASE_URL + '/ws'),
+                        debug: () => {}
+                    });
+
+                    stompClient.onConnect = function(frame) {
+                        driverStates[driverId].connected = true;
+                        driverStates[driverId].stompClient = stompClient;
+                        updateDriverConnectionStatus(driverId, true);
+                        showDriverResult(driverId, '✅ WebSocket连接成功');
+
+                        // 发送司机连接消息
+                        stompClient.publish({
+                            destination: '/app/driver/connect',
+                            body: JSON.stringify({ driverId: driverId })
+                        });
+
+                        // 订阅订单队列
+                        stompClient.subscribe(`/user/${driverId}/queue/orders`, function(message) {
+                            const orderData = JSON.parse(message.body);
+                            handleDriverOrderPush(driverId, orderData);
+                        });
+
+                        // 订阅通知队列
+                        stompClient.subscribe(`/user/${driverId}/queue/notifications`, function(message) {
+                            const data = JSON.parse(message.body);
+                            showDriverResult(driverId, `📢 ${data.message}`);
+                            
+                            // 如果是订单被其他司机接受的通知，移除对应的通知
+                            if (data.type === 'ORDER_ACCEPTED_BY_OTHER') {
+                                removeOrderNotification(driverId, data.orderId);
+                            }
+                        });
+                    };
+
+                    stompClient.onStompError = function(frame) {
+                        driverStates[driverId].connected = false;
+                        updateDriverConnectionStatus(driverId, false);
+                        showDriverResult(driverId, `❌ WebSocket连接失败: ${frame.headers['message']}`, true);
+                    };
+
+                    stompClient.activate();
+                }
+
+            } catch (error) {
+                showDriverResult(driverId, `❌ WebSocket连接失败: ${error.message}`, true);
+                updateDriverConnectionStatus(driverId, false);
+            }
+        }
+
+        function disconnectDriverWebSocket(driverId) {
+            const state = driverStates[driverId];
+            
+            if (state.stompClient && state.connected) {
+                state.stompClient.deactivate();
+                state.connected = false;
+                state.stompClient = null;
+                updateDriverConnectionStatus(driverId, false);
+                showDriverResult(driverId, '🔌 WebSocket已断开');
+            }
+        }
+
+        function handleDriverOrderPush(driverId, orderData) {
+            showDriverResult(driverId, `📢 收到订单推送: ${orderData.orderId}`);
+
+            const notification = {
+                orderId: orderData.orderId,
+                orderNumber: orderData.orderNumber,
+                pickupAddress: orderData.pickupAddress,
+                destinationAddress: orderData.destinationAddress,
+                distance: orderData.distance,
+                estimatedFare: orderData.estimatedFare || '待计算',
+                timestamp: new Date().toLocaleTimeString()
+            };
+
+            addDriverOrderNotification(driverId, notification);
+            playNotificationSound();
+        }
+
+        function addDriverOrderNotification(driverId, notification) {
+            const container = document.getElementById(`notifications-${driverId}`);
+
+            // 移除"暂无订单推送"提示
+            const noNotifications = container.querySelector('.no-notifications');
+            if (noNotifications) {
+                noNotifications.remove();
+            }
+
+            // 创建订单通知卡片
+            const notificationCard = document.createElement('div');
+            notificationCard.className = 'order-notification new';
+            notificationCard.id = `notification-${driverId}-${notification.orderId}`;
+
+            notificationCard.innerHTML = `
+                <div class="notification-header">
+                    <div class="notification-title">🚗 订单 #${notification.orderId}</div>
+                    <div class="notification-time">${notification.timestamp}</div>
+                </div>
+                <div class="notification-content">
+                    <div><strong>📍 上车:</strong> ${notification.pickupAddress}</div>
+                    <div><strong>🎯 目的地:</strong> ${notification.destinationAddress}</div>
+                    <div><strong>📏 距离:</strong> ${notification.distance} 公里</div>
+                    <div><strong>💰 预估:</strong> ${notification.estimatedFare} 元</div>
+                </div>
+                <div class="notification-actions">
+                    <button class="notification-btn accept" onclick="acceptOrderFromNotification(${driverId}, ${notification.orderId})">
+                        ✅ 接单
+                    </button>
+                    <button class="notification-btn reject" onclick="rejectOrderFromNotification(${driverId}, ${notification.orderId})">
+                        ❌ 拒单
+                    </button>
+                </div>
+            `;
+
+            container.insertBefore(notificationCard, container.firstChild);
+
+            // 3秒后移除"new"类
+            setTimeout(() => {
+                notificationCard.classList.remove('new');
+            }, 3000);
+
+            // 存储通知到司机状态
+            driverStates[driverId].notifications.push(notification);
+        }
+
+        function removeOrderNotification(driverId, orderId) {
+            const notification = document.getElementById(`notification-${driverId}-${orderId}`);
+            if (notification) {
+                notification.classList.add('removed');
+                notification.innerHTML += '<div style="color: #721c24; font-weight: bold; margin-top: 8px; font-size: 10px;">❌ 订单已被其他司机接受</div>';
+                
+                // 禁用按钮
+                const buttons = notification.querySelectorAll('.notification-btn');
+                buttons.forEach(btn => btn.disabled = true);
+
+                // 3秒后移除通知
+                setTimeout(() => {
+                    notification.remove();
+                    
+                    // 从状态中移除
+                    driverStates[driverId].notifications = driverStates[driverId].notifications.filter(
+                        n => n.orderId !== orderId
+                    );
+
+                    // 如果没有通知了，显示提示
+                    const container = document.getElementById(`notifications-${driverId}`);
+                    if (container.children.length === 0) {
+                        container.innerHTML = '<div class="no-notifications">暂无订单推送</div>';
+                    }
+                }, 3000);
+            }
+        }
+
+        async function acceptOrderFromNotification(driverId, orderId) {
+            const notification = document.getElementById(`notification-${driverId}-${orderId}`);
+            const buttons = notification.querySelectorAll('.notification-btn');
+            buttons.forEach(btn => btn.disabled = true);
+
+            showDriverResult(driverId, `✅ 正在接单 ${orderId}...`);
+
+            const result = await apiCall(`/api/drivers/${driverId}/accept-order/${orderId}`, 'POST');
+
+            if (result.success) {
+                showDriverResult(driverId, `✅ 接单成功！订单 ${orderId}`);
+
+                // 更新通知卡片状态
+                notification.classList.add('accepted');
+                notification.innerHTML += '<div style="color: #155724; font-weight: bold; margin-top: 8px; font-size: 10px;">✅ 接单成功</div>';
+
+                // 通知所有其他司机移除此订单
+                broadcastOrderAccepted(orderId, driverId);
+
+                setTimeout(refreshGlobalOrders, 1000);
+            } else {
+                showDriverResult(driverId, `❌ 接单失败: ${result.data?.message || result.error}`, true);
+                buttons.forEach(btn => btn.disabled = false);
+            }
+        }
+
+        async function rejectOrderFromNotification(driverId, orderId) {
+            const notification = document.getElementById(`notification-${driverId}-${orderId}`);
+            
+            showDriverResult(driverId, `❌ 拒绝订单 ${orderId}`);
+            
+            // 移除通知
+            notification.remove();
+            
+            // 从状态中移除
+            driverStates[driverId].notifications = driverStates[driverId].notifications.filter(
+                n => n.orderId !== orderId
+            );
+
+            // 如果没有通知了，显示提示
+            const container = document.getElementById(`notifications-${driverId}`);
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="no-notifications">暂无订单推送</div>';
+            }
+        }
+
+        function broadcastOrderAccepted(orderId, acceptedDriverId) {
+            // 移除所有其他司机的相同订单通知
+            DRIVERS_CONFIG.forEach(driver => {
+                if (driver.id !== acceptedDriverId) {
+                    removeOrderNotification(driver.id, orderId);
+                }
+            });
+        }
+
+        // ==================== 批量操作函数 ====================
+
+        function initializeAllDrivers() {
+            showPassengerResult('🚀 正在初始化所有司机...');
+            
+            DRIVERS_CONFIG.forEach(async (driver, index) => {
+                setTimeout(() => {
+                    driverGoOnline(driver.id);
+                }, index * 500); // 错开500ms执行
+            });
+        }
+
+        function connectAllDrivers() {
+            showPassengerResult('🔗 正在连接所有司机的WebSocket...');
+            
+            DRIVERS_CONFIG.forEach((driver, index) => {
+                setTimeout(() => {
+                    connectDriverWebSocket(driver.id);
+                }, index * 300); // 错开300ms执行
+            });
+        }
+
+        function disconnectAllDrivers() {
+            showPassengerResult('🔌 正在断开所有司机的WebSocket...');
+            
+            DRIVERS_CONFIG.forEach(driver => {
+                disconnectDriverWebSocket(driver.id);
+            });
+        }
+
+        // ==================== 乘客功能 ====================
+
+        async function createOrder() {
+            const passengerId = document.getElementById('passengerId').value;
+            const pickupAddress = document.getElementById('pickupAddress').value;
+            const pickupCoords = document.getElementById('pickupCoords').value.split(',');
+            const destinationAddress = document.getElementById('destinationAddress').value;
+            const destinationCoords = document.getElementById('destinationCoords').value.split(',');
+
+            if (pickupCoords.length !== 2 || destinationCoords.length !== 2) {
+                showPassengerResult('❌ 坐标格式错误，请使用"纬度,经度"格式', true);
+                return;
+            }
+
+            const orderData = {
+                passengerId: parseInt(passengerId),
+                pickupAddress: pickupAddress,
+                pickupLatitude: parseFloat(pickupCoords[0]),
+                pickupLongitude: parseFloat(pickupCoords[1]),
+                destinationAddress: destinationAddress,
+                destinationLatitude: parseFloat(destinationCoords[0]),
+                destinationLongitude: parseFloat(destinationCoords[1]),
+                orderType: 'REAL_TIME'
+            };
+
+            showPassengerResult('📱 正在创建订单...');
+
+            const result = await apiCall('/api/orders/create', 'POST', orderData);
+
+            if (result.success) {
+                currentOrderId = result.data.data.id;
+                showPassengerResult(`✅ 订单创建成功！订单ID: ${currentOrderId}`);
+                showPassengerResult(`📡 订单已推送给符合条件的司机`);
+
+                setTimeout(refreshGlobalOrders, 1000);
+            } else {
+                showPassengerResult(`❌ 订单创建失败: ${result.data?.message || result.error}`, true);
+            }
+        }
+
+        async function cancelOrder() {
+            const orderId = currentOrderId || prompt('请输入要取消的订单ID:');
+
+            if (!orderId) {
+                showPassengerResult('❌ 请先创建订单或输入订单ID', true);
+                return;
+            }
+
+            showPassengerResult(`🚫 正在取消订单 ${orderId}...`);
+
+            const result = await apiCall(`/api/orders/${orderId}/cancel`, 'POST');
+
+            if (result.success) {
+                showPassengerResult(`✅ 订单 ${orderId} 取消成功`);
+                currentOrderId = null;
+                setTimeout(refreshGlobalOrders, 1000);
+            } else {
+                showPassengerResult(`❌ 取消订单失败: ${result.data?.message || result.error}`, true);
+            }
+        }
+
+        // ==================== 全局订单状态 ====================
+
+        async function refreshGlobalOrders() {
+            const result = await apiCall('/api/orders');
+
+            if (result.success) {
+                globalOrders = result.data.data || [];
+                displayGlobalOrders();
+            }
+        }
+
+        function displayGlobalOrders() {
+            const container = document.getElementById('globalOrdersList');
+            
+            if (globalOrders.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #666; font-style: italic;">暂无订单</div>';
+                return;
+            }
+
+            container.innerHTML = globalOrders.map(order => `
+                <div class="order-item">
+                    <div><strong>订单 #${order.id}</strong> <span class="order-status status-${order.status.toLowerCase()}">${getStatusText(order.status)}</span></div>
+                    <div>📍 ${order.pickupAddress}</div>
+                    <div>🎯 ${order.destinationAddress}</div>
+                    ${order.driverId ? `<div>🚕 司机: ${order.driverId}</div>` : ''}
+                    <div style="font-size: 10px; color: #666;">${new Date(order.createTime).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'PENDING': '待接单',
+                'ASSIGNED': '已接单',
+                'PICKUP': '前往接客',
+                'IN_PROGRESS': '行程中',
+                'COMPLETED': '已完成',
+                'CANCELLED': '已取消'
+            };
+            return statusMap[status] || status;
+        }
+
+        // ==================== 工具函数 ====================
+
+        function updateDriverStatus(driverId, online) {
+            const panel = document.getElementById(`driver-panel-${driverId}`);
+            const status = document.getElementById(`status-${driverId}`);
+            
+            if (online) {
+                panel.className = 'driver-panel online';
+                status.textContent = '在线';
+                status.className = 'driver-status status-online';
+            } else {
+                panel.className = 'driver-panel offline';
+                status.textContent = '离线';
+                status.className = 'driver-status status-offline';
+            }
+        }
+
+        function updateDriverConnectionStatus(driverId, connected) {
+            // 可以在这里添加连接状态的视觉指示
+            if (connected) {
+                showDriverResult(driverId, '🟢 WebSocket已连接');
+            } else {
+                showDriverResult(driverId, '🔴 WebSocket已断开');
+            }
+        }
+
+        function showDriverResult(driverId, message, isError = false) {
+            const element = document.getElementById(`result-${driverId}`);
+            const timestamp = new Date().toLocaleTimeString();
+            const color = isError ? '#dc3545' : '#28a745';
+            element.innerHTML += `<div style="color: ${color}; margin-bottom: 5px;">
+                [${timestamp}] ${message}
+            </div>`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function showPassengerResult(message, isError = false) {
+            const element = document.getElementById('passengerResult');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = isError ? '#dc3545' : '#28a745';
+            element.innerHTML += `<div style="color: ${color}; margin-bottom: 5px;">
+                [${timestamp}] ${message}
+            </div>`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        async function apiCall(url, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(API_BASE_URL + url, options);
+                const result = await response.json();
+
+                return { success: response.ok, data: result };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        function playNotificationSound() {
+            // 创建简单的提示音
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (error) {
+                console.log('无法播放提示音:', error);
+            }
+        }
+    </script>
+</body>
+</html>

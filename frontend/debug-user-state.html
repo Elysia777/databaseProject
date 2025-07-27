@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户状态调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .debug-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .debug-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .debug-item strong {
+            color: #007bff;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <h1>用户状态调试工具</h1>
+        
+        <div class="debug-section">
+            <h3>本地存储检查</h3>
+            <div id="localStorage-info"></div>
+            <button onclick="checkLocalStorage()">刷新本地存储</button>
+            <button onclick="clearLocalStorage()">清除本地存储</button>
+        </div>
+        
+        <div class="debug-section">
+            <h3>API连接测试</h3>
+            <div id="api-info"></div>
+            <button onclick="testAPI()">测试API连接</button>
+            <button onclick="testUserInfo()">测试用户信息API</button>
+        </div>
+        
+        <div class="debug-section">
+            <h3>路由状态</h3>
+            <div id="route-info"></div>
+            <button onclick="checkRoutes()">检查路由</button>
+        </div>
+        
+        <div class="debug-section">
+            <h3>控制台日志</h3>
+            <div id="console-logs"></div>
+            <button onclick="clearLogs()">清除日志</button>
+        </div>
+    </div>
+
+    <script>
+        let logs = [];
+        
+        // 拦截console.log
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = function(...args) {
+            logs.push({type: 'log', message: args.join(' '), time: new Date().toLocaleTimeString()});
+            updateLogs();
+            originalLog.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+            logs.push({type: 'error', message: args.join(' '), time: new Date().toLocaleTimeString()});
+            updateLogs();
+            originalError.apply(console, args);
+        };
+        
+        console.warn = function(...args) {
+            logs.push({type: 'warn', message: args.join(' '), time: new Date().toLocaleTimeString()});
+            updateLogs();
+            originalWarn.apply(console, args);
+        };
+        
+        function updateLogs() {
+            const logsDiv = document.getElementById('console-logs');
+            logsDiv.innerHTML = logs.slice(-10).map(log => 
+                `<div class="debug-item ${log.type === 'error' ? 'error' : log.type === 'warn' ? 'warning' : ''}">
+                    <strong>[${log.time}] ${log.type.toUpperCase()}:</strong> ${log.message}
+                </div>`
+            ).join('');
+        }
+        
+        function checkLocalStorage() {
+            const info = document.getElementById('localStorage-info');
+            const token = localStorage.getItem('token');
+            const userInfo = localStorage.getItem('userInfo');
+            
+            let html = '';
+            
+            if (token) {
+                html += `<div class="debug-item success"><strong>Token:</strong> ${token.substring(0, 20)}...</div>`;
+            } else {
+                html += `<div class="debug-item error"><strong>Token:</strong> 未找到</div>`;
+            }
+            
+            if (userInfo) {
+                try {
+                    const parsed = JSON.parse(userInfo);
+                    html += `<div class="debug-item success"><strong>用户信息:</strong> <pre>${JSON.stringify(parsed, null, 2)}</pre></div>`;
+                } catch (e) {
+                    html += `<div class="debug-item error"><strong>用户信息:</strong> 解析失败 - ${e.message}</div>`;
+                }
+            } else {
+                html += `<div class="debug-item warning"><strong>用户信息:</strong> 未找到</div>`;
+            }
+            
+            // 检查其他相关的localStorage项
+            const allKeys = Object.keys(localStorage);
+            if (allKeys.length > 0) {
+                html += `<div class="debug-item"><strong>所有localStorage键:</strong> ${allKeys.join(', ')}</div>`;
+            }
+            
+            info.innerHTML = html;
+        }
+        
+        function clearLocalStorage() {
+            localStorage.clear();
+            checkLocalStorage();
+            console.log('本地存储已清除');
+        }
+        
+        async function testAPI() {
+            const info = document.getElementById('api-info');
+            const token = localStorage.getItem('token');
+            
+            try {
+                // 测试基础API连接
+                const response = await fetch('/api/test', {
+                    headers: token ? {'Authorization': `Bearer ${token}`} : {}
+                });
+                
+                if (response.ok) {
+                    info.innerHTML += `<div class="debug-item success">API连接成功 (${response.status})</div>`;
+                } else {
+                    info.innerHTML += `<div class="debug-item warning">API响应: ${response.status} - ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                info.innerHTML += `<div class="debug-item error">API连接失败: ${error.message}</div>`;
+            }
+        }
+        
+        async function testUserInfo() {
+            const info = document.getElementById('api-info');
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                info.innerHTML += `<div class="debug-item error">无法测试用户信息API: 缺少token</div>`;
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/user/info', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    info.innerHTML += `<div class="debug-item success">用户信息API成功: <pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+                } else {
+                    const errorText = await response.text();
+                    info.innerHTML += `<div class="debug-item error">用户信息API失败: ${response.status} - ${errorText}</div>`;
+                }
+            } catch (error) {
+                info.innerHTML += `<div class="debug-item error">用户信息API错误: ${error.message}</div>`;
+            }
+        }
+        
+        function checkRoutes() {
+            const info = document.getElementById('route-info');
+            
+            let html = '';
+            html += `<div class="debug-item"><strong>当前URL:</strong> ${window.location.href}</div>`;
+            html += `<div class="debug-item"><strong>路径:</strong> ${window.location.pathname}</div>`;
+            html += `<div class="debug-item"><strong>查询参数:</strong> ${window.location.search || '无'}</div>`;
+            html += `<div class="debug-item"><strong>哈希:</strong> ${window.location.hash || '无'}</div>`;
+            
+            // 检查是否在正确的路由上
+            if (window.location.pathname.includes('/dashboard/passenger-map')) {
+                html += `<div class="debug-item success">当前在乘客地图页面</div>`;
+            } else if (window.location.pathname.includes('/dashboard')) {
+                html += `<div class="debug-item warning">在dashboard但不是乘客地图页面</div>`;
+            } else {
+                html += `<div class="debug-item error">不在dashboard页面</div>`;
+            }
+            
+            info.innerHTML = html;
+        }
+        
+        function clearLogs() {
+            logs = [];
+            updateLogs();
+        }
+        
+        // 页面加载时自动检查
+        window.onload = function() {
+            checkLocalStorage();
+            checkRoutes();
+            console.log('调试工具已加载');
+        };
+        
+        // 监听存储变化
+        window.addEventListener('storage', function(e) {
+            console.log('存储发生变化:', e.key, e.newValue);
+            checkLocalStorage();
+        });
+        
+        // 监听路由变化
+        window.addEventListener('popstate', function(e) {
+            console.log('路由发生变化:', window.location.pathname);
+            checkRoutes();
+        });
+    </script>
+</body>
+</html>

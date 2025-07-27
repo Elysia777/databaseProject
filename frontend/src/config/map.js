@@ -6,7 +6,7 @@ export const mapConfig = {
   
   // REST API密钥 - 用于搜索、路径规划等REST API调用
   // 注意：这个密钥必须申请REST API服务
-  restApiKey: 'de2d5b3782511b03e23a18685faccead', // 暂时使用同一个密钥
+  restApiKey: 'de2d5b3782511b03e23a18685faccead',
   
   // 安全密钥 - 用于Web端JS API的安全验证
   securityJsCode: '8b011259082e987043911232b625e2ca',

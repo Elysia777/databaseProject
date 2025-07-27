@@ -2,7 +2,9 @@ package com.taxi.controller;
 
 import com.taxi.common.Result;
 import com.taxi.entity.Driver;
+import com.taxi.entity.Order;
 import com.taxi.mapper.DriverMapper;
+import com.taxi.mapper.OrderMapper;
 import com.taxi.service.DriverRedisService;
 import com.taxi.service.OrderDispatchService;
 import com.taxi.service.DriverLocationService;
@@ -21,6 +23,9 @@ public class DriverController {
 
     @Autowired
     private DriverMapper driverMapper;
+    
+    @Autowired
+    private OrderMapper orderMapper;
     
     @Autowired
     private DriverRedisService driverRedisService;
@@ -66,12 +71,8 @@ public class DriverController {
                 driverRedisService.driverGoOnline(driver);
                 System.out.println("司机 " + driverId + " 已建立TCP连接并加入Redis GEO索引");
                 
-                // 3. 检查是否有待分配的订单（避免循环依赖，直接在这里处理）
-                try {
-                    orderDispatchService.handleDriverOnline(driverId);
-                } catch (Exception e) {
-                    System.err.println("检查待分配订单失败: " + e.getMessage());
-                }
+                // 注意：不在这里立即检查待分配订单，等WebSocket连接建立后再处理
+                System.out.println("司机 " + driverId + " 上线完成，等待WebSocket连接后推送待分配订单");
                 
             } catch (Exception e) {
                 System.err.println("司机上线处理失败: " + e.getMessage());
@@ -125,21 +126,48 @@ public class DriverController {
      * 司机接单
      */
     @PostMapping("/{driverId}/accept-order/{orderId}")
-    public Result<String> acceptOrder(@PathVariable Long driverId, @PathVariable Long orderId) {
+    public Result<Order> acceptOrder(@PathVariable Long driverId, @PathVariable Long orderId) {
         try {
-            System.out.println("司机 " + driverId + " 尝试接单 " + orderId);
+            System.out.println("=== 接单请求开始 ===");
+            System.out.println("司机ID: " + driverId);
+            System.out.println("订单ID: " + orderId);
+            
+            // 先检查司机是否存在
+            Driver driver = driverMapper.selectById(driverId);
+            if (driver == null) {
+                System.out.println("❌ 司机不存在: " + driverId);
+                return Result.error("司机不存在");
+            }
+            
+            // 检查司机是否在线
+            if (!driver.getIsOnline()) {
+                System.out.println("❌ 司机不在线: " + driverId);
+                return Result.error("司机不在线");
+            }
+            
+            System.out.println("✅ 司机状态检查通过");
             
             boolean success = orderDispatchService.acceptOrder(orderId, driverId);
             
             if (success) {
-                System.out.println("司机 " + driverId + " 接单 " + orderId + " 成功");
-                return Result.success("接单成功");
+                // 接单成功，返回完整的订单信息
+                Order order = orderMapper.selectById(orderId);
+                if (order != null) {
+                    System.out.println("✅ 司机 " + driverId + " 接单 " + orderId + " 成功，返回订单信息");
+                    System.out.println("📍 订单坐标信息: pickup(" + order.getPickupLongitude() + "," + order.getPickupLatitude() + 
+                                     "), destination(" + order.getDestinationLongitude() + "," + order.getDestinationLatitude() + ")");
+                    return Result.success(order);
+                } else {
+                    System.out.println("❌ 接单成功但无法获取订单信息");
+                    return Result.error("接单成功但无法获取订单信息");
+                }
             } else {
-                System.out.println("司机 " + driverId + " 接单 " + orderId + " 失败");
-                return Result.error("接单失败，订单可能已被其他司机接单");
+                System.out.println("❌ 司机 " + driverId + " 接单 " + orderId + " 失败");
+                return Result.error("接单失败，订单可能已被其他司机接单或司机状态不符合要求");
             }
         } catch (Exception e) {
-            System.err.println("接单异常: " + e.getMessage());
+            System.err.println("❌ 接单异常: " + e.getMessage());
+            e.printStackTrace();
             return Result.error("接单失败: " + e.getMessage());
         }
     }

@@ -87,9 +87,9 @@
         
         <!-- 司机菜单 -->
         <template v-else-if="userStore.isDriver">
-          <el-menu-item index="/dashboard/overview">
-            <el-icon><DataBoard /></el-icon>
-            <span>工作台</span>
+          <el-menu-item index="/dashboard/driver-map">
+            <el-icon><Location /></el-icon>
+            <span>接单地图</span>
           </el-menu-item>
           
           <el-menu-item index="/dashboard/orders">
@@ -184,7 +184,7 @@ const pageTitleMap = computed(() => {
     }
   } else if (userStore.isDriver) {
     return {
-      '/dashboard/overview': '工作台',
+      '/dashboard/driver-map': '接单地图',
       '/dashboard/orders': '我的订单',
       '/dashboard/drivers': '收入统计',
       '/dashboard/profile': '个人设置'

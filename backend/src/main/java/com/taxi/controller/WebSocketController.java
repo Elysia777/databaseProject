@@ -1,5 +1,6 @@
 package com.taxi.controller;
 
+import com.taxi.service.OrderDispatchService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -18,6 +19,9 @@ public class WebSocketController {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+    
+    @Autowired
+    private OrderDispatchService orderDispatchService;
 
     /**
      * 处理司机连接
@@ -61,31 +65,20 @@ public class WebSocketController {
             
             System.out.println("已向司机 " + driverId + " 发送连接成功消息");
             
-            // 同时发送广播消息测试
-            Map<String, Object> broadcastMsg = Map.of(
-                "type", "BROADCAST_TEST",
-                "message", "这是一条广播测试消息",
-                "driverId", driverId,
-                "timestamp", System.currentTimeMillis()
-            );
-            
-            messagingTemplate.convertAndSend("/topic/test", broadcastMsg);
-            System.out.println("已发送广播测试消息");
-            
-            // 发送一条测试消息到订单队列
-            Map<String, Object> testOrder = Map.of(
-                "type", "TEST_MESSAGE",
-                "message", "这是一条测试消息，确认WebSocket连接正常",
-                "timestamp", System.currentTimeMillis()
-            );
-            
-            messagingTemplate.convertAndSendToUser(
-                driverId, 
-                "/queue/orders", 
-                testOrder
-            );
-            
-            System.out.println("已向司机 " + driverId + " 发送测试消息");
+            // WebSocket连接成功后，延迟查询并推送周围的待分配订单
+            new Thread(() -> {
+                try {
+                    // 延迟3秒，确保前端WebSocket订阅已完成
+                    Thread.sleep(3000);
+                    
+                    System.out.println("=== 司机 " + driverId + " WebSocket连接完成，开始查询待分配订单 ===");
+                    orderDispatchService.handleDriverOnline(Long.valueOf(driverId));
+                    
+                } catch (Exception e) {
+                    System.err.println("WebSocket连接后处理待分配订单失败: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }).start();
             
         } catch (Exception e) {
             System.err.println("处理司机WebSocket连接失败: " + e.getMessage());
@@ -99,7 +92,18 @@ public class WebSocketController {
     @MessageMapping("/passenger/connect")
     public void handlePassengerConnect(@Payload Map<String, Object> message, SimpMessageHeaderAccessor headerAccessor) {
         try {
-            String passengerId = (String) message.get("passengerId");
+            System.out.println("=== 收到乘客WebSocket连接请求 ===");
+            System.out.println("原始消息: " + message);
+            
+            // 处理乘客ID，支持字符串和数字类型
+            Object passengerIdObj = message.get("passengerId");
+            String passengerId = passengerIdObj != null ? passengerIdObj.toString() : null;
+            
+            if (passengerId == null || passengerId.isEmpty()) {
+                System.err.println("乘客ID为空，连接失败");
+                return;
+            }
+            
             System.out.println("乘客 " + passengerId + " 已连接WebSocket");
             
             // 将乘客ID存储到session中

@@ -200,6 +200,7 @@ public class DriverRedisService {
             
         } catch (Exception e) {
             System.err.println("Redis连接失败，回退到数据库查询: " + e.getMessage());
+            e.printStackTrace(); // 打印完整的异常堆栈
             // Redis不可用时，返回空列表
             return new ArrayList<>();
         }
@@ -386,5 +387,62 @@ public class DriverRedisService {
         double s = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin(a/2), 2) +
                 Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b/2), 2)));
         return s * 6378137.0; // 地球半径，返回米
+    }
+
+    /**
+     * 获取司机当前执行的订单ID
+     */
+    public Long getDriverCurrentOrder(Long driverId) {
+        try {
+            String currentOrderKey = "driver_current_order:" + driverId;
+            Object orderId = redisTemplate.opsForValue().get(currentOrderKey);
+            return orderId != null ? Long.valueOf(orderId.toString()) : null;
+        } catch (Exception e) {
+            System.err.println("获取司机当前订单失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 设置司机当前执行的订单ID
+     */
+    public void setDriverCurrentOrder(Long driverId, Long orderId) {
+        try {
+            String currentOrderKey = "driver_current_order:" + driverId;
+            if (orderId != null) {
+                redisTemplate.opsForValue().set(currentOrderKey, orderId.toString(), 24, TimeUnit.HOURS);
+                System.out.println("已设置司机 " + driverId + " 当前订单: " + orderId);
+            } else {
+                redisTemplate.delete(currentOrderKey);
+                System.out.println("已清除司机 " + driverId + " 当前订单");
+            }
+        } catch (Exception e) {
+            System.err.println("设置司机当前订单失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取司机位置信息
+     */
+    public Map<String, Object> getDriverLocation(Long driverId) {
+        try {
+            // 从GEO获取位置
+            List<org.springframework.data.geo.Point> positions = redisTemplate.opsForGeo()
+                .position(DRIVER_GEO_KEY, driverId.toString());
+            
+            if (positions != null && !positions.isEmpty() && positions.get(0) != null) {
+                org.springframework.data.geo.Point point = positions.get(0);
+                Map<String, Object> location = new HashMap<>();
+                location.put("longitude", point.getX());
+                location.put("latitude", point.getY());
+                location.put("timestamp", System.currentTimeMillis());
+                return location;
+            }
+            
+            return null;
+        } catch (Exception e) {
+            System.err.println("获取司机位置失败: " + e.getMessage());
+            return null;
+        }
     }
 }
