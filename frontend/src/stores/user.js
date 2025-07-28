@@ -67,6 +67,12 @@ export const useUserStore = defineStore('user', () => {
       user.value = null
       token.value = ''
       localStorage.removeItem('token')
+      
+      // 清除订单相关的localStorage数据
+      localStorage.removeItem('currentOrder')
+      localStorage.removeItem('orderStatus')
+      localStorage.removeItem('driverInfo')
+      localStorage.removeItem('orderUserId')
     }
   }
 

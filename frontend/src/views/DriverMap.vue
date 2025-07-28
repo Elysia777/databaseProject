@@ -120,6 +120,18 @@
           >
             完成订单
           </el-button>
+          
+          <!-- 司机取消订单按钮 -->
+          <el-button 
+            v-if="canDriverCancelOrder" 
+            type="danger" 
+            @click="handleDriverCancelOrder"
+            :loading="cancelLoading"
+            size="large"
+            plain
+          >
+            取消订单
+          </el-button>
         </div>
       </div>
     </div>
@@ -139,7 +151,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { mapConfig, getMapApiUrl, getRestApiUrl, getSecurityConfig } from '@/config/map'
@@ -177,6 +189,7 @@ const statusLoading = ref(false)
 const currentPosition = ref({ lng: 0, lat: 0 })
 const todayEarnings = ref(0)
 const completedOrders = ref(0)
+const cancelLoading = ref(false)
 
 // 订单相关 - 新的多订单队列系统
 const pendingOrders = ref([]) // 待处理订单队列
@@ -437,7 +450,17 @@ const connectWebSocket = () => {
         console.log('📢 收到通知:', message.body)
         try {
           const data = JSON.parse(message.body)
-          ElMessage.info(data.message)
+          
+          // 处理不同类型的通知
+          if (data.type === 'ORDER_CANCELLED') {
+            ElMessage.warning(data.reason || '订单已被取消')
+            // 如果是当前订单被取消，重置状态
+            if (currentOrder.value && currentOrder.value.orderId === data.orderId) {
+              resetOrderState()
+            }
+          } else {
+            ElMessage.info(data.message || data.reason)
+          }
         } catch (error) {
           console.error('解析通知数据失败:', error)
         }
@@ -1192,6 +1215,55 @@ const completeOrder = async () => {
     }
   }
 }
+
+// 判断司机是否可以取消订单
+const canDriverCancelOrder = computed(() => {
+  return currentOrder.value && 
+         (currentOrder.value.status === 'ASSIGNED' || 
+          currentOrder.value.status === 'PICKUP');
+});
+
+// 司机取消订单
+const handleDriverCancelOrder = async () => {
+  if (!currentOrder.value) return;
+  
+  try {
+    await ElMessageBox.confirm(
+      '确定要取消订单吗？取消后订单将重新分配给其他司机，您将无法再次接到此订单。',
+      '确认取消',
+      {
+        confirmButtonText: '确定取消',
+        cancelButtonText: '继续服务',
+        type: 'warning',
+      }
+    );
+    
+    cancelLoading.value = true;
+    
+    const response = await fetch(`/api/orders/${currentOrder.value.orderId}/cancel-by-driver?driverId=${userStore.user.driverId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.code === 200) {
+      ElMessage.success('订单已取消，正在重新分配给其他司机');
+      resetOrderState();
+    } else {
+      ElMessage.error('取消失败: ' + (result.message || '未知错误'));
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('取消订单错误:', error);
+      ElMessage.error('取消失败，请重试');
+    }
+  } finally {
+    cancelLoading.value = false;
+  }
+};
 
 // 重置订单状态
 const resetOrderState = () => {

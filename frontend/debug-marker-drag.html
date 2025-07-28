@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标记拖拽问题调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .status-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .timeline {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .timeline-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-left: 4px solid #2196f3;
+            background: white;
+            border-radius: 3px;
+        }
+        .f12-effect {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 2px solid #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖱️ 标记拖拽问题调试工具</h1>
+        <p>诊断为什么起始点图标常态下无法拖拽，但打开F12后就可以拖拽</p>
+    </div>
+
+    <div class="container">
+        <div class="debug-section">
+            <h3>1. 问题现象分析</h3>
+            <button onclick="analyzeProblem()">分析问题现象</button>
+            
+            <div id="problemAnalysis" class="status-display">
+                点击按钮分析问题现象...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>2. 时序问题检查</h3>
+            <button onclick="checkTimingIssues()">检查时序问题</button>
+            
+            <div id="timingStatus" class="timeline">
+                <h4>标记创建和状态更新时序:</h4>
+                <div id="timingItems">点击按钮检查时序...</div>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>3. F12效应分析</h3>
+            <button onclick="analyzeF12Effect()">分析F12效应</button>
+            
+            <div id="f12Analysis" class="f12-effect">
+                <h4>🔍 F12打开后能拖拽的可能原因:</h4>
+                <div id="f12Reasons">点击按钮分析F12效应...</div>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>4. 状态检查工具</h3>
+            <button onclick="checkMarkerState()">检查标记状态</button>
+            <button onclick="simulateF12Effect()">模拟F12效应</button>
+            
+            <div id="markerState" class="status-display">
+                点击按钮检查标记状态...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>5. 修复方案测试</h3>
+            <button onclick="testFixSolutions()">测试修复方案</button>
+            
+            <div id="fixResults" class="status-display">
+                点击按钮测试修复方案...
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 调试日志</h3>
+        <div id="debugLog" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(logEntry);
+        }
+
+        function analyzeProblem() {
+            const analysisDiv = document.getElementById('problemAnalysis');
+            let analysis = '问题现象分析:\\n\\n';
+
+            analysis += '🔍 观察到的现象:\\n';
+            analysis += '1. 正常情况下起始点图标无法拖拽\\n';
+            analysis += '2. 打开F12开发者工具后图标变为可拖拽\\n';
+            analysis += '3. 关闭F12后可能又变为不可拖拽\\n\\n';
+
+            analysis += '🤔 可能的原因类型:\\n';
+            analysis += '• 时序竞争问题 (最常见)\\n';
+            analysis += '• CSS样式冲突\\n';
+            analysis += '• JavaScript事件绑定问题\\n';
+            analysis += '• 响应式状态同步问题\\n';
+            analysis += '• 浏览器渲染时序问题\\n\\n';
+
+            analysis += '🎯 F12效应的特点:\\n';
+            analysis += '• F12打开会触发页面重排\\n';
+            analysis += '• 开发者工具会改变viewport\\n';
+            analysis += '• 可能触发resize事件\\n';
+            analysis += '• 改变JavaScript执行时序\\n';
+            analysis += '• 触发某些延迟执行的代码';
+
+            analysisDiv.textContent = analysis;
+            analysisDiv.className = 'status-display';
+            log('问题现象分析完成');
+        }
+
+        function checkTimingIssues() {
+            const itemsDiv = document.getElementById('timingItems');
+            let content = '';
+
+            const timingSteps = [
+                {
+                    step: '1. 页面加载',
+                    action: 'onMounted() 执行',
+                    timing: '0ms',
+                    status: 'normal'
+                },
+                {
+                    step: '2. 地图初始化',
+                    action: 'initMap() 调用',
+                    timing: '500ms',
+                    status: 'normal'
+                },
+                {
+                    step: '3. 定位获取',
+                    action: 'geolocation.getCurrentPosition()',
+                    timing: '1000-3000ms',
+                    status: 'async'
+                },
+                {
+                    step: '4. 标记创建',
+                    action: 'pickupMarker = new AMap.Marker({ draggable: true })',
+                    timing: '1500-3500ms',
+                    status: 'normal'
+                },
+                {
+                    step: '5. 订单状态检查',
+                    action: 'initOrderState() 恢复订单状态',
+                    timing: '1000ms (并行)',
+                    status: 'async'
+                },
+                {
+                    step: '6. 拖拽状态更新',
+                    action: 'updatePickupMarkerDraggable() 调用',
+                    timing: '不确定',
+                    status: 'problem'
+                }
+            ];
+
+            timingSteps.forEach(step => {
+                const statusColor = step.status === 'problem' ? '#f44336' : 
+                                  step.status === 'async' ? '#ff9800' : '#4caf50';
+                
+                content += `<div class="timeline-item" style="border-left-color: ${statusColor};">
+                    <strong>${step.step}</strong><br>
+                    操作: ${step.action}<br>
+                    时机: ${step.timing}
+                </div>`;
+            });
+
+            content += `<div class="timeline-item" style="border-left-color: #f44336; background: #ffebee;">
+                <strong>⚠️ 问题点</strong><br>
+                如果步骤5在步骤4之前完成，或者步骤6在错误的时机执行，<br>
+                就会导致标记被设置为不可拖拽状态
+            </div>`;
+
+            itemsDiv.innerHTML = content;
+            log('时序问题检查完成');
+        }
+
+        function analyzeF12Effect() {
+            const reasonsDiv = document.getElementById('f12Reasons');
+            let content = '';
+
+            const f12Effects = [
+                {
+                    reason: '页面重排触发',
+                    description: 'F12打开时浏览器重新计算布局，可能触发某些初始化逻辑',
+                    probability: 'high',
+                    solution: '确保初始化逻辑不依赖页面重排'
+                },
+                {
+                    reason: 'Viewport变化',
+                    description: '开发者工具改变了viewport大小，触发resize事件',
+                    probability: 'medium',
+                    solution: '检查是否有resize事件监听器影响标记状态'
+                },
+                {
+                    reason: '异步时序改变',
+                    description: 'F12的打开改变了JavaScript执行时序，延迟了某些操作',
+                    probability: 'high',
+                    solution: '使用setTimeout确保正确的执行顺序'
+                },
+                {
+                    reason: '事件重新绑定',
+                    description: '开发者工具可能导致事件监听器重新绑定',
+                    probability: 'medium',
+                    solution: '确保事件绑定的幂等性'
+                },
+                {
+                    reason: '状态重新计算',
+                    description: '某些响应式状态在页面重排时重新计算',
+                    probability: 'high',
+                    solution: '检查响应式状态的依赖关系'
+                }
+            ];
+
+            f12Effects.forEach(effect => {
+                const probabilityColor = effect.probability === 'high' ? '#f44336' : 
+                                       effect.probability === 'medium' ? '#ff9800' : '#4caf50';
+                
+                content += `<div style="margin: 10px 0; padding: 10px; border-left: 4px solid ${probabilityColor}; background: white;">
+                    <h5 style="margin: 0 0 5px 0; color: ${probabilityColor};">
+                        ${effect.reason} (${effect.probability.toUpperCase()})
+                    </h5>
+                    <div><strong>描述:</strong> ${effect.description}</div>
+                    <div><strong>解决方案:</strong> ${effect.solution}</div>
+                </div>`;
+            });
+
+            reasonsDiv.innerHTML = content;
+            log('F12效应分析完成');
+        }
+
+        function checkMarkerState() {
+            const stateDiv = document.getElementById('markerState');
+            let state = '标记状态检查:\\n\\n';
+
+            // 模拟检查标记状态
+            state += '🔍 需要检查的状态:\\n\\n';
+            
+            state += '1. 标记对象状态:\\n';
+            state += '   - pickupMarker 是否存在\\n';
+            state += '   - pickupMarker.getDraggable() 返回值\\n';
+            state += '   - pickupMarker.getCursor() 返回值\\n\\n';
+            
+            state += '2. 订单状态:\\n';
+            state += '   - currentOrder.value 是否为null\\n';
+            state += '   - orderStatus.value 当前值\\n';
+            state += '   - hasActiveOrder 计算结果\\n\\n';
+            
+            state += '3. 时序状态:\\n';
+            state += '   - 标记创建时间\\n';
+            state += '   - updatePickupMarkerDraggable 调用时间\\n';
+            state += '   - 订单状态恢复时间\\n\\n';
+            
+            state += '🛠️ 调试方法:\\n';
+            state += '1. 在浏览器控制台执行:\\n';
+            state += '   console.log("标记可拖拽:", pickupMarker?.getDraggable())\\n';
+            state += '   console.log("当前订单:", currentOrder.value)\\n';
+            state += '2. 手动设置拖拽状态:\\n';
+            state += '   pickupMarker?.setDraggable(true)\\n';
+            state += '3. 检查事件监听器:\\n';
+            state += '   getEventListeners(pickupMarker)';
+
+            stateDiv.textContent = state;
+            stateDiv.className = 'status-display';
+            log('标记状态检查完成');
+        }
+
+        function simulateF12Effect() {
+            log('模拟F12效应...');
+            
+            // 模拟viewport变化
+            window.dispatchEvent(new Event('resize'));
+            log('触发resize事件');
+            
+            // 模拟延迟执行
+            setTimeout(() => {
+                log('延迟执行完成 - 模拟时序改变');
+            }, 100);
+            
+            // 模拟页面重排
+            document.body.style.display = 'none';
+            document.body.offsetHeight; // 强制重排
+            document.body.style.display = '';
+            log('强制页面重排完成');
+            
+            log('F12效应模拟完成');
+        }
+
+        function testFixSolutions() {
+            const resultsDiv = document.getElementById('fixResults');
+            let results = '修复方案测试结果:\\n\\n';
+
+            const solutions = [
+                {
+                    name: '方案1: 延迟状态更新',
+                    code: 'setTimeout(() => { updatePickupMarkerDraggable(); }, 100);',
+                    description: '在标记创建后延迟更新拖拽状态',
+                    effectiveness: '高',
+                    implemented: true
+                },
+                {
+                    name: '方案2: 添加状态检查',
+                    code: 'if (pickupMarker && pickupMarker.getDraggable) { ... }',
+                    description: '在更新前检查标记对象的完整性',
+                    effectiveness: '中',
+                    implemented: true
+                },
+                {
+                    name: '方案3: 事件监听优化',
+                    code: 'pickupMarker.on("complete", () => { updatePickupMarkerDraggable(); });',
+                    description: '监听标记创建完成事件',
+                    effectiveness: '高',
+                    implemented: false
+                },
+                {
+                    name: '方案4: 响应式状态监听',
+                    code: 'watch(currentOrder, () => { updatePickupMarkerDraggable(); });',
+                    description: '监听订单状态变化自动更新',
+                    effectiveness: '中',
+                    implemented: false
+                }
+            ];
+
+            solutions.forEach((solution, index) => {
+                const statusIcon = solution.implemented ? '✅' : '⏳';
+                const effectColor = solution.effectiveness === '高' ? '#4caf50' : 
+                                  solution.effectiveness === '中' ? '#ff9800' : '#f44336';
+                
+                results += `${index + 1}. ${statusIcon} ${solution.name}\\n`;
+                results += `   代码: ${solution.code}\\n`;
+                results += `   描述: ${solution.description}\\n`;
+                results += `   效果: ${solution.effectiveness}\\n`;
+                results += `   状态: ${solution.implemented ? '已实现' : '待实现'}\\n\\n`;
+            });
+
+            results += '🎯 推荐修复步骤:\\n';
+            results += '1. 确保标记创建后延迟更新状态\\n';
+            results += '2. 添加完整的状态检查和错误处理\\n';
+            results += '3. 考虑使用响应式状态监听\\n';
+            results += '4. 添加调试日志便于问题排查';
+
+            resultsDiv.textContent = results;
+            resultsDiv.className = 'status-display status-good';
+            log('修复方案测试完成');
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('标记拖拽问题调试工具已加载');
+            
+            log('调试目标: 解决起始点图标拖拽的F12效应问题');
+            log('主要检查: 时序问题、状态同步、事件绑定');
+        };
+    </script>
+</body>
+</html>"

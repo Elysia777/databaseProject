@@ -328,4 +328,29 @@ public class WebSocketNotificationService {
             e.printStackTrace();
         }
     }
+
+    /**
+     * 通知司机订单已被取消
+     */
+    public void notifyDriverOrderCancelled(Long driverId, Long orderId, String reason) {
+        try {
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("type", "ORDER_CANCELLED");
+            notification.put("orderId", orderId);
+            notification.put("reason", reason);
+            notification.put("timestamp", System.currentTimeMillis());
+            
+            messagingTemplate.convertAndSendToUser(
+                driverId.toString(), 
+                "/queue/notifications", 
+                notification
+            );
+            
+            System.out.println("✅ 已通知司机 " + driverId + " 订单 " + orderId + " 已取消: " + reason);
+            
+        } catch (Exception e) {
+            System.err.println("❌ 通知司机订单取消失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 }

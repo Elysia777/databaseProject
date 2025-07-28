@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机位置显示测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .status-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .checklist {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .checklist-item {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .checklist-item.pass {
+            color: #155724;
+        }
+        .checklist-item.fail {
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 司机位置显示测试</h1>
+        <p>用于测试乘客端司机位置和路线显示功能</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 测试环境检查</h3>
+            <button onclick="checkEnvironment()">检查测试环境</button>
+            
+            <div id="environmentStatus" class="status-display">
+                点击按钮检查测试环境...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 模拟数据设置</h3>
+            <button onclick="setupMockData()">设置模拟数据</button>
+            <button onclick="clearMockData()" class="danger">清除数据</button>
+            
+            <div id="mockDataStatus" class="status-display">
+                模拟数据状态: 未设置
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 司机位置显示测试</h3>
+            <button onclick="testDriverMarker()">测试司机标记</button>
+            <button onclick="testDriverRoute()">测试司机路线</button>
+            <button onclick="testDriverTracking()">测试位置追踪</button>
+            
+            <div id="driverTestResult" class="status-display">
+                司机显示测试结果: 未开始
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 问题诊断</h3>
+            <button onclick="diagnoseIssues()">诊断问题</button>
+            
+            <div id="diagnosisResult" class="checklist">
+                <h4>诊断检查清单:</h4>
+                <div id="checklistItems">
+                    点击诊断按钮开始检查...
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. 修复建议</h3>
+            <div id="fixSuggestions" class="status-display">
+                完成诊断后将显示修复建议...
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 测试日志</h3>
+        <div id="testLog" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        let mockOrder = null;
+        let mockDriver = null;
+        let testResults = {};
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(logEntry);
+        }
+
+        function checkEnvironment() {
+            const statusDiv = document.getElementById('environmentStatus');
+            let status = '测试环境检查结果:\\n\\n';
+            let allGood = true;
+
+            // 检查必要的全局变量和函数
+            const checks = [
+                { name: 'window.AMap', check: () => typeof window.AMap !== 'undefined' },
+                { name: 'map实例', check: () => typeof window.map !== 'undefined' && window.map },
+                { name: 'showDriverOnMap函数', check: () => typeof window.showDriverOnMap === 'function' },
+                { name: 'updateDriverRoute函数', check: () => typeof window.updateDriverRoute === 'function' },
+                { name: 'startDriverTracking函数', check: () => typeof window.startDriverTracking === 'function' },
+                { name: 'restoreOrderMapElements函数', check: () => typeof window.restoreOrderMapElements === 'function' }
+            ];
+
+            checks.forEach(check => {
+                const result = check.check();
+                status += `${result ? '✅' : '❌'} ${check.name}: ${result ? '正常' : '缺失'}\\n`;
+                if (!result) allGood = false;
+            });
+
+            status += `\\n总体状态: ${allGood ? '✅ 环境正常' : '❌ 环境有问题'}`;
+            
+            statusDiv.textContent = status;
+            statusDiv.className = allGood ? 'status-display status-good' : 'status-display status-error';
+            
+            testResults.environment = allGood;
+            log(`环境检查完成: ${allGood ? '通过' : '失败'}`);
+        }
+
+        function setupMockData() {
+            mockOrder = {
+                id: 12345,
+                orderNumber: 'ORDER12345',
+                status: 'ASSIGNED',
+                pickupAddress: '北京市朝阳区三里屯',
+                destinationAddress: '北京市海淀区中关村',
+                pickupLatitude: 39.93428,
+                pickupLongitude: 116.44857,
+                destinationLatitude: 39.98279,
+                destinationLongitude: 116.31038
+            };
+
+            mockDriver = {
+                id: 1,
+                driverId: 1,
+                name: '张师傅',
+                phone: '13900139000',
+                latitude: 39.93128,  // 司机当前位置（接近上车点）
+                longitude: 116.44557,
+                rating: 4.8,
+                vehicleInfo: '京A12345',
+                carModel: '大众朗逸'
+            };
+
+            // 模拟设置到全局store（如果存在）
+            if (window.orderStore) {
+                window.orderStore.setCurrentOrder(mockOrder);
+                window.orderStore.setDriverInfo(mockDriver);
+                window.orderStore.updateOrderStatus('ASSIGNED');
+            }
+
+            // 模拟设置到localStorage
+            localStorage.setItem('currentOrder', JSON.stringify(mockOrder));
+            localStorage.setItem('driverInfo', JSON.stringify(mockDriver));
+            localStorage.setItem('orderStatus', 'ASSIGNED');
+
+            const statusDiv = document.getElementById('mockDataStatus');
+            statusDiv.innerHTML = `模拟数据已设置:
+订单ID: ${mockOrder.id}
+订单状态: ${mockOrder.status}
+司机: ${mockDriver.name}
+司机位置: (${mockDriver.latitude}, ${mockDriver.longitude})`;
+            statusDiv.className = 'status-display status-good';
+
+            testResults.mockData = true;
+            log('模拟数据设置完成');
+        }
+
+        function clearMockData() {
+            mockOrder = null;
+            mockDriver = null;
+
+            // 清除localStorage
+            localStorage.removeItem('currentOrder');
+            localStorage.removeItem('driverInfo');
+            localStorage.removeItem('orderStatus');
+
+            // 清除全局store（如果存在）
+            if (window.orderStore) {
+                window.orderStore.clearOrderState();
+            }
+
+            const statusDiv = document.getElementById('mockDataStatus');
+            statusDiv.textContent = '模拟数据状态: 已清除';
+            statusDiv.className = 'status-display';
+
+            testResults.mockData = false;
+            log('模拟数据已清除');
+        }
+
+        function testDriverMarker() {
+            const resultDiv = document.getElementById('driverTestResult');
+            let result = '司机标记测试:\\n';
+
+            if (!mockDriver) {
+                result += '❌ 错误: 请先设置模拟数据';
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+                return;
+            }
+
+            try {
+                if (typeof window.showDriverOnMap === 'function') {
+                    window.showDriverOnMap(mockDriver.latitude, mockDriver.longitude);
+                    result += '✅ showDriverOnMap函数调用成功\\n';
+                    
+                    // 检查司机标记是否创建
+                    setTimeout(() => {
+                        if (window.driverMarker) {
+                            result += '✅ 司机标记已创建\\n';
+                            result += `📍 标记位置: (${mockDriver.latitude}, ${mockDriver.longitude})\\n`;
+                            testResults.driverMarker = true;
+                        } else {
+                            result += '❌ 司机标记创建失败\\n';
+                            testResults.driverMarker = false;
+                        }
+                        
+                        result += `\\n测试结果: ${testResults.driverMarker ? '✅ 通过' : '❌ 失败'}`;
+                        resultDiv.textContent = result;
+                        resultDiv.className = testResults.driverMarker ? 'status-display status-good' : 'status-display status-error';
+                    }, 1000);
+                } else {
+                    result += '❌ showDriverOnMap函数不存在';
+                    testResults.driverMarker = false;
+                }
+            } catch (error) {
+                result += `❌ 测试异常: ${error.message}`;
+                testResults.driverMarker = false;
+            }
+
+            if (!testResults.driverMarker) {
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+            }
+
+            log('司机标记测试完成');
+        }
+
+        function testDriverRoute() {
+            const resultDiv = document.getElementById('driverTestResult');
+            let result = '司机路线测试:\\n';
+
+            if (!mockDriver || !mockOrder) {
+                result += '❌ 错误: 请先设置模拟数据';
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+                return;
+            }
+
+            try {
+                if (typeof window.updateDriverRoute === 'function') {
+                    window.updateDriverRoute(mockDriver.latitude, mockDriver.longitude);
+                    result += '✅ updateDriverRoute函数调用成功\\n';
+                    
+                    // 检查司机路线是否创建
+                    setTimeout(() => {
+                        if (window.driverRouteLine) {
+                            result += '✅ 司机路线已创建\\n';
+                            result += `🛣️ 路线: 司机(${mockDriver.latitude}, ${mockDriver.longitude}) → 上车点(${mockOrder.pickupLatitude}, ${mockOrder.pickupLongitude})\\n`;
+                            testResults.driverRoute = true;
+                        } else {
+                            result += '❌ 司机路线创建失败\\n';
+                            testResults.driverRoute = false;
+                        }
+                        
+                        result += `\\n测试结果: ${testResults.driverRoute ? '✅ 通过' : '❌ 失败'}`;
+                        resultDiv.textContent = result;
+                        resultDiv.className = testResults.driverRoute ? 'status-display status-good' : 'status-display status-error';
+                    }, 2000);
+                } else {
+                    result += '❌ updateDriverRoute函数不存在';
+                    testResults.driverRoute = false;
+                }
+            } catch (error) {
+                result += `❌ 测试异常: ${error.message}`;
+                testResults.driverRoute = false;
+            }
+
+            if (!testResults.driverRoute) {
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+            }
+
+            log('司机路线测试完成');
+        }
+
+        function testDriverTracking() {
+            const resultDiv = document.getElementById('driverTestResult');
+            let result = '司机位置追踪测试:\\n';
+
+            if (!mockDriver) {
+                result += '❌ 错误: 请先设置模拟数据';
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+                return;
+            }
+
+            try {
+                if (typeof window.startDriverTracking === 'function') {
+                    window.startDriverTracking();
+                    result += '✅ startDriverTracking函数调用成功\\n';
+                    result += '🔄 位置追踪已启动\\n';
+                    
+                    // 模拟位置更新
+                    setTimeout(() => {
+                        if (typeof window.updateDriverLocation === 'function') {
+                            const newLocation = {
+                                driverId: mockDriver.id,
+                                latitude: mockDriver.latitude + 0.001,
+                                longitude: mockDriver.longitude + 0.001
+                            };
+                            window.updateDriverLocation(newLocation);
+                            result += '✅ 模拟位置更新成功\\n';
+                            testResults.driverTracking = true;
+                        } else {
+                            result += '❌ updateDriverLocation函数不存在\\n';
+                            testResults.driverTracking = false;
+                        }
+                        
+                        result += `\\n测试结果: ${testResults.driverTracking ? '✅ 通过' : '❌ 失败'}`;
+                        resultDiv.textContent = result;
+                        resultDiv.className = testResults.driverTracking ? 'status-display status-good' : 'status-display status-error';
+                    }, 1000);
+                } else {
+                    result += '❌ startDriverTracking函数不存在';
+                    testResults.driverTracking = false;
+                    resultDiv.textContent = result;
+                    resultDiv.className = 'status-display status-error';
+                }
+            } catch (error) {
+                result += `❌ 测试异常: ${error.message}`;
+                testResults.driverTracking = false;
+                resultDiv.textContent = result;
+                resultDiv.className = 'status-display status-error';
+            }
+
+            log('司机位置追踪测试完成');
+        }
+
+        function diagnoseIssues() {
+            const checklistDiv = document.getElementById('checklistItems');
+            let diagnosis = '';
+            let issues = [];
+
+            const diagnosticChecks = [
+                {
+                    name: '地图API加载',
+                    check: () => typeof window.AMap !== 'undefined',
+                    fix: '检查网络连接，确保高德地图API正常加载'
+                },
+                {
+                    name: '地图实例初始化',
+                    check: () => typeof window.map !== 'undefined' && window.map,
+                    fix: '检查地图容器是否存在，initMap函数是否正常执行'
+                },
+                {
+                    name: '司机信息数据',
+                    check: () => mockDriver && mockDriver.latitude && mockDriver.longitude,
+                    fix: '确保司机信息包含有效的经纬度坐标'
+                },
+                {
+                    name: '订单状态数据',
+                    check: () => mockOrder && mockOrder.pickupLatitude && mockOrder.pickupLongitude,
+                    fix: '确保订单信息包含有效的上车点坐标'
+                },
+                {
+                    name: 'showDriverOnMap函数',
+                    check: () => typeof window.showDriverOnMap === 'function',
+                    fix: '检查PassengerMap.vue中是否正确定义了showDriverOnMap函数'
+                },
+                {
+                    name: 'updateDriverRoute函数',
+                    check: () => typeof window.updateDriverRoute === 'function',
+                    fix: '检查PassengerMap.vue中是否正确定义了updateDriverRoute函数'
+                },
+                {
+                    name: 'WebSocket连接',
+                    check: () => window.stompClient && window.stompClient.connected,
+                    fix: '检查WebSocket连接状态，确保能接收司机位置更新'
+                },
+                {
+                    name: 'Store状态管理',
+                    check: () => window.orderStore && typeof window.orderStore.setDriverInfo === 'function',
+                    fix: '检查Pinia store是否正确初始化和导出'
+                }
+            ];
+
+            diagnosticChecks.forEach(check => {
+                const passed = check.check();
+                const itemClass = passed ? 'checklist-item pass' : 'checklist-item fail';
+                const icon = passed ? '✅' : '❌';
+                
+                diagnosis += `<div class="${itemClass}">${icon} ${check.name}: ${passed ? '正常' : '异常'}</div>`;
+                
+                if (!passed) {
+                    issues.push({
+                        name: check.name,
+                        fix: check.fix
+                    });
+                }
+            });
+
+            checklistDiv.innerHTML = diagnosis;
+
+            // 显示修复建议
+            const fixDiv = document.getElementById('fixSuggestions');
+            if (issues.length === 0) {
+                fixDiv.textContent = '✅ 所有检查项都正常，司机位置显示应该可以正常工作。';
+                fixDiv.className = 'status-display status-good';
+            } else {
+                let suggestions = '发现以下问题，建议修复:\\n\\n';
+                issues.forEach((issue, index) => {
+                    suggestions += `${index + 1}. ${issue.name}:\\n   ${issue.fix}\\n\\n`;
+                });
+                fixDiv.textContent = suggestions;
+                fixDiv.className = 'status-display status-error';
+            }
+
+            log(`诊断完成，发现 ${issues.length} 个问题`);
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('司机位置显示测试工具已加载');
+            
+            log('测试说明:');
+            log('1. 首先检查测试环境');
+            log('2. 设置模拟数据');
+            log('3. 逐项测试司机显示功能');
+            log('4. 诊断问题并查看修复建议');
+        };
+    </script>
+</body>
+</html>"

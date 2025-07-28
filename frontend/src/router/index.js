@@ -36,20 +36,13 @@ const routes = [
           const userStore = useUserStore()
           if (userStore.isPassenger) {
             return '/dashboard/passenger-map'
+          } else if (userStore.isDriver) {
+            return '/dashboard/driver-map'
           }
-          return '/dashboard/overview'
+          return '/dashboard/statistics'
         }
       },
-      {
-        path: 'overview',
-        name: 'Overview',
-        component: () => import('@/views/Overview.vue')
-      },
-      {
-        path: 'orders',
-        name: 'Orders',
-        component: () => import('@/views/Orders.vue')
-      },
+
       {
         path: 'drivers',
         name: 'Drivers',
@@ -60,11 +53,7 @@ const routes = [
         name: 'Vehicles',
         component: () => import('@/views/Vehicles.vue')
       },
-      {
-        path: 'passengers',
-        name: 'Passengers',
-        component: () => import('@/views/Passengers.vue')
-      },
+
       {
         path: 'passenger-map',
         name: 'PassengerMap',
@@ -76,10 +65,11 @@ const routes = [
         component: () => import('@/views/DriverMap.vue')
       },
       {
-        path: 'ratings',
-        name: 'Ratings',
-        component: () => import('@/views/Ratings.vue')
+        path: 'my-trips',
+        name: 'MyTrips',
+        component: () => import('@/views/MyTrips.vue')
       },
+
       {
         path: 'complaints',
         name: 'Complaints',

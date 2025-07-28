@@ -16,16 +16,6 @@
       >
         <!-- 管理员菜单 -->
         <template v-if="userStore.isAdmin">
-        <el-menu-item index="/dashboard/overview">
-          <el-icon><DataBoard /></el-icon>
-          <span>概览</span>
-        </el-menu-item>
-        
-        <el-menu-item index="/dashboard/orders">
-          <el-icon><Document /></el-icon>
-          <span>订单管理</span>
-        </el-menu-item>
-        
         <el-menu-item index="/dashboard/drivers">
           <el-icon><User /></el-icon>
           <span>司机管理</span>
@@ -34,16 +24,6 @@
         <el-menu-item index="/dashboard/vehicles">
           <el-icon><Van /></el-icon>
           <span>车辆管理</span>
-        </el-menu-item>
-        
-        <el-menu-item index="/dashboard/passengers">
-          <el-icon><Avatar /></el-icon>
-          <span>乘客管理</span>
-        </el-menu-item>
-        
-        <el-menu-item index="/dashboard/ratings">
-          <el-icon><Star /></el-icon>
-          <span>评价管理</span>
         </el-menu-item>
         
         <el-menu-item index="/dashboard/complaints">
@@ -64,24 +44,9 @@
             <span>叫车</span>
           </el-menu-item>
           
-          <el-menu-item index="/dashboard/overview">
-            <el-icon><DataBoard /></el-icon>
-            <span>我的行程</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/dashboard/orders">
+          <el-menu-item index="/dashboard/my-trips">
             <el-icon><Document /></el-icon>
-            <span>订单记录</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/dashboard/passengers">
-            <el-icon><Avatar /></el-icon>
-            <span>行程历史</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/dashboard/ratings">
-            <el-icon><Star /></el-icon>
-            <span>我的钱包</span>
+            <span>我的行程</span>
           </el-menu-item>
         </template>
         
@@ -163,23 +128,16 @@ const userStore = useUserStore()
 const pageTitleMap = computed(() => {
   if (userStore.isAdmin) {
     return {
-  '/dashboard/overview': '概览',
-  '/dashboard/orders': '订单管理',
-  '/dashboard/drivers': '司机管理',
-  '/dashboard/vehicles': '车辆管理',
-  '/dashboard/passengers': '乘客管理',
-  '/dashboard/ratings': '评价管理',
-  '/dashboard/complaints': '投诉处理',
-  '/dashboard/statistics': '数据统计',
-  '/dashboard/profile': '个人设置'
-}
+      '/dashboard/drivers': '司机管理',
+      '/dashboard/vehicles': '车辆管理',
+      '/dashboard/complaints': '投诉处理',
+      '/dashboard/statistics': '数据统计',
+      '/dashboard/profile': '个人设置'
+    }
   } else if (userStore.isPassenger) {
     return {
       '/dashboard/passenger-map': '叫车',
-      '/dashboard/overview': '我的行程',
-      '/dashboard/orders': '订单记录',
-      '/dashboard/passengers': '行程历史',
-      '/dashboard/ratings': '我的钱包',
+      '/dashboard/my-trips': '我的行程',
       '/dashboard/profile': '个人设置'
     }
   } else if (userStore.isDriver) {

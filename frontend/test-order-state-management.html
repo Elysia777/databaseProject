@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单状态管理测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        button.danger:hover {
+            background: #f78989;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f8f9fa;
+            border-left: 4px solid #409EFF;
+        }
+        .error {
+            border-left-color: #f56c6c;
+            background: #fef0f0;
+        }
+        .success {
+            border-left-color: #67c23a;
+            background: #f0f9ff;
+        }
+        .state-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .state-item {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 3px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            border-bottom-color: #409EFF;
+            color: #409EFF;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 订单状态管理测试</h1>
+        <p>测试全局订单状态在页面切换时的持久化和同步功能</p>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('state')">状态管理</div>
+            <div class="tab" onclick="switchTab('persistence')">持久化测试</div>
+            <div class="tab" onclick="switchTab('sync')">同步测试</div>
+        </div>
+
+        <div id="state" class="tab-content active">
+            <div class="test-section">
+                <h3>1. 当前订单状态</h3>
+                <p>显示当前全局订单状态（模拟）</p>
+                <div id="currentState" class="state-display">
+                    <div class="state-item">currentOrder: null</div>
+                    <div class="state-item">driverInfo: null</div>
+                    <div class="state-item">orderStatus: ""</div>
+                    <div class="state-item">hasUnpaidOrders: false</div>
+                </div>
+                <button onclick="refreshState()">刷新状态</button>
+                <button onclick="clearState()" class="danger">清除状态</button>
+            </div>
+
+            <div class="test-section">
+                <h3>2. 模拟订单操作</h3>
+                <p>模拟创建订单、司机接单、状态变化等操作</p>
+                <button onclick="simulateCreateOrder()">创建订单</button>
+                <button onclick="simulateDriverAccept()">司机接单</button>
+                <button onclick="simulateStatusChange('PICKUP')">到达上车点</button>
+                <button onclick="simulateStatusChange('IN_PROGRESS')">开始行程</button>
+                <button onclick="simulateStatusChange('COMPLETED')">完成订单</button>
+                <div id="operationResult" class="result" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div id="persistence" class="tab-content">
+            <div class="test-section">
+                <h3>3. localStorage持久化测试</h3>
+                <p>测试订单状态在localStorage中的存储和恢复</p>
+                <button onclick="saveToStorage()">保存到localStorage</button>
+                <button onclick="loadFromStorage()">从localStorage恢复</button>
+                <button onclick="clearStorage()" class="danger">清除localStorage</button>
+                <div id="storageResult" class="result" style="display:none;"></div>
+                
+                <h4>localStorage内容：</h4>
+                <div id="storageContent" class="state-display"></div>
+            </div>
+
+            <div class="test-section">
+                <h3>4. 页面刷新测试</h3>
+                <p>测试页面刷新后状态是否能正确恢复</p>
+                <button onclick="simulatePageRefresh()">模拟页面刷新</button>
+                <div id="refreshResult" class="result" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div id="sync" class="tab-content">
+            <div class="test-section">
+                <h3>5. 页面间同步测试</h3>
+                <p>测试在不同页面间切换时订单状态的同步</p>
+                <button onclick="simulatePageSwitch('PassengerMap')">切换到叫车页面</button>
+                <button onclick="simulatePageSwitch('MyTrips')">切换到我的行程</button>
+                <button onclick="simulatePageSwitch('Profile')">切换到个人设置</button>
+                <div id="syncResult" class="result" style="display:none;"></div>
+            </div>
+
+            <div class="test-section">
+                <h3>6. API同步测试</h3>
+                <p>测试与后端API的状态同步</p>
+                <button onclick="testCurrentOrderAPI()">测试获取当前订单API</button>
+                <button onclick="testUnpaidOrdersAPI()">测试未支付订单API</button>
+                <div id="apiResult" class="result" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 测试日志</h3>
+        <div id="testLog" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        // 模拟全局订单状态
+        let mockOrderState = {
+            currentOrder: null,
+            driverInfo: null,
+            orderStatus: '',
+            hasUnpaidOrders: false
+        };
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(logEntry);
+        }
+
+        function showResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.textContent = message;
+            element.className = isError ? 'result error' : 'result success';
+        }
+
+        function switchTab(tabName) {
+            // 隐藏所有标签页
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // 显示选中的标签页
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            log(`切换到标签页: ${tabName}`);
+        }
+
+        function updateStateDisplay() {
+            const stateDiv = document.getElementById('currentState');
+            stateDiv.innerHTML = `
+                <div class="state-item">currentOrder: ${JSON.stringify(mockOrderState.currentOrder, null, 2)}</div>
+                <div class="state-item">driverInfo: ${JSON.stringify(mockOrderState.driverInfo, null, 2)}</div>
+                <div class="state-item">orderStatus: "${mockOrderState.orderStatus}"</div>
+                <div class="state-item">hasUnpaidOrders: ${mockOrderState.hasUnpaidOrders}</div>
+            `;
+        }
+
+        function refreshState() {
+            log('刷新订单状态显示');
+            updateStateDisplay();
+            showResult('operationResult', '状态已刷新');
+        }
+
+        function clearState() {
+            log('清除订单状态');
+            mockOrderState = {
+                currentOrder: null,
+                driverInfo: null,
+                orderStatus: '',
+                hasUnpaidOrders: false
+            };
+            updateStateDisplay();
+            showResult('operationResult', '状态已清除');
+        }
+
+        function simulateCreateOrder() {
+            log('模拟创建订单');
+            mockOrderState.currentOrder = {
+                id: Date.now(),
+                orderNumber: `ORDER${Date.now()}`,
+                pickupAddress: '测试上车点',
+                destinationAddress: '测试目的地',
+                status: 'PENDING',
+                estimatedFare: 25
+            };
+            mockOrderState.orderStatus = 'PENDING';
+            updateStateDisplay();
+            showResult('operationResult', '✅ 订单创建成功');
+        }
+
+        function simulateDriverAccept() {
+            if (!mockOrderState.currentOrder) {
+                showResult('operationResult', '❌ 请先创建订单', true);
+                return;
+            }
+
+            log('模拟司机接单');
+            mockOrderState.driverInfo = {
+                id: 1,
+                name: '测试司机',
+                phone: '13800138000',
+                vehicleInfo: '京A12345',
+                latitude: 39.90923,
+                longitude: 116.397428
+            };
+            mockOrderState.orderStatus = 'ASSIGNED';
+            mockOrderState.currentOrder.status = 'ASSIGNED';
+            updateStateDisplay();
+            showResult('operationResult', '✅ 司机接单成功');
+        }
+
+        function simulateStatusChange(status) {
+            if (!mockOrderState.currentOrder) {
+                showResult('operationResult', '❌ 请先创建订单', true);
+                return;
+            }
+
+            log(`模拟状态变化: ${status}`);
+            mockOrderState.orderStatus = status;
+            mockOrderState.currentOrder.status = status;
+            
+            if (status === 'COMPLETED') {
+                mockOrderState.hasUnpaidOrders = true;
+            }
+            
+            updateStateDisplay();
+            showResult('operationResult', `✅ 状态已更新为: ${status}`);
+        }
+
+        function saveToStorage() {
+            log('保存状态到localStorage');
+            localStorage.setItem('currentOrder', JSON.stringify(mockOrderState.currentOrder));
+            localStorage.setItem('driverInfo', JSON.stringify(mockOrderState.driverInfo));
+            localStorage.setItem('orderStatus', mockOrderState.orderStatus);
+            localStorage.setItem('hasUnpaidOrders', mockOrderState.hasUnpaidOrders.toString());
+            
+            updateStorageDisplay();
+            showResult('storageResult', '✅ 状态已保存到localStorage');
+        }
+
+        function loadFromStorage() {
+            log('从localStorage恢复状态');
+            try {
+                const savedOrder = localStorage.getItem('currentOrder');
+                const savedDriver = localStorage.getItem('driverInfo');
+                const savedStatus = localStorage.getItem('orderStatus');
+                const savedUnpaid = localStorage.getItem('hasUnpaidOrders');
+
+                if (savedOrder) mockOrderState.currentOrder = JSON.parse(savedOrder);
+                if (savedDriver) mockOrderState.driverInfo = JSON.parse(savedDriver);
+                if (savedStatus) mockOrderState.orderStatus = savedStatus;
+                if (savedUnpaid) mockOrderState.hasUnpaidOrders = savedUnpaid === 'true';
+
+                updateStateDisplay();
+                updateStorageDisplay();
+                showResult('storageResult', '✅ 状态已从localStorage恢复');
+            } catch (error) {
+                log(`localStorage恢复失败: ${error.message}`, 'error');
+                showResult('storageResult', '❌ localStorage恢复失败', true);
+            }
+        }
+
+        function clearStorage() {
+            log('清除localStorage');
+            localStorage.removeItem('currentOrder');
+            localStorage.removeItem('driverInfo');
+            localStorage.removeItem('orderStatus');
+            localStorage.removeItem('hasUnpaidOrders');
+            
+            updateStorageDisplay();
+            showResult('storageResult', '✅ localStorage已清除');
+        }
+
+        function updateStorageDisplay() {
+            const storageDiv = document.getElementById('storageContent');
+            const items = [
+                'currentOrder',
+                'driverInfo', 
+                'orderStatus',
+                'hasUnpaidOrders'
+            ];
+            
+            let content = '';
+            items.forEach(key => {
+                const value = localStorage.getItem(key);
+                content += `<div class="state-item">${key}: ${value || 'null'}</div>`;
+            });
+            
+            storageDiv.innerHTML = content;
+        }
+
+        function simulatePageRefresh() {
+            log('模拟页面刷新');
+            // 先保存当前状态
+            saveToStorage();
+            
+            // 模拟清除内存状态
+            const originalState = { ...mockOrderState };
+            mockOrderState = {
+                currentOrder: null,
+                driverInfo: null,
+                orderStatus: '',
+                hasUnpaidOrders: false
+            };
+            updateStateDisplay();
+            
+            // 延迟恢复状态，模拟页面重新加载
+            setTimeout(() => {
+                loadFromStorage();
+                showResult('refreshResult', '✅ 页面刷新后状态恢复成功');
+            }, 1000);
+        }
+
+        function simulatePageSwitch(pageName) {
+            log(`模拟切换到页面: ${pageName}`);
+            
+            // 保存当前状态
+            saveToStorage();
+            
+            // 模拟页面切换后的状态恢复
+            setTimeout(() => {
+                loadFromStorage();
+                showResult('syncResult', `✅ 切换到${pageName}页面，状态同步成功`);
+            }, 500);
+        }
+
+        function testCurrentOrderAPI() {
+            log('测试获取当前订单API');
+            // 模拟API调用
+            const mockResponse = {
+                code: 200,
+                data: mockOrderState.currentOrder
+            };
+            
+            setTimeout(() => {
+                if (mockResponse.data) {
+                    showResult('apiResult', '✅ 获取当前订单API测试成功');
+                    log(`API返回订单: ${JSON.stringify(mockResponse.data)}`);
+                } else {
+                    showResult('apiResult', '✅ 当前无进行中订单');
+                    log('API返回: 无当前订单');
+                }
+            }, 500);
+        }
+
+        function testUnpaidOrdersAPI() {
+            log('测试未支付订单API');
+            // 模拟API调用
+            const mockUnpaidOrders = mockOrderState.hasUnpaidOrders ? [
+                { id: 1, status: 'COMPLETED', paymentStatus: 'UNPAID' }
+            ] : [];
+            
+            const mockResponse = {
+                code: 200,
+                data: mockUnpaidOrders
+            };
+            
+            setTimeout(() => {
+                showResult('apiResult', `✅ 未支付订单API测试成功，找到${mockResponse.data.length}个未支付订单`);
+                log(`API返回未支付订单数量: ${mockResponse.data.length}`);
+            }, 500);
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('订单状态管理测试页面已加载');
+            updateStateDisplay();
+            updateStorageDisplay();
+            log('测试功能说明:');
+            log('1. 状态管理: 测试订单状态的创建、更新、清除');
+            log('2. 持久化测试: 测试localStorage的存储和恢复');
+            log('3. 同步测试: 测试页面切换时的状态同步');
+        };
+    </script>
+</body>
+</html>

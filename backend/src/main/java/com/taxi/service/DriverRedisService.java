@@ -445,4 +445,32 @@ public class DriverRedisService {
             return null;
         }
     }
+
+    /**
+     * 将司机加入订单黑名单（司机取消订单后，该订单不再分配给此司机）
+     */
+    public void addDriverToOrderBlacklist(Long orderId, Long driverId) {
+        try {
+            String blacklistKey = "order_driver_blacklist:" + orderId;
+            redisTemplate.opsForSet().add(blacklistKey, driverId.toString());
+            // 设置过期时间为24小时
+            redisTemplate.expire(blacklistKey, 24, TimeUnit.HOURS);
+            System.out.println("已将司机 " + driverId + " 加入订单 " + orderId + " 的黑名单");
+        } catch (Exception e) {
+            System.err.println("添加司机到订单黑名单失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 检查司机是否在订单黑名单中
+     */
+    public boolean isDriverInOrderBlacklist(Long orderId, Long driverId) {
+        try {
+            String blacklistKey = "order_driver_blacklist:" + orderId;
+            return redisTemplate.opsForSet().isMember(blacklistKey, driverId.toString());
+        } catch (Exception e) {
+            System.err.println("检查司机黑名单状态失败: " + e.getMessage());
+            return false;
+        }
+    }
 }

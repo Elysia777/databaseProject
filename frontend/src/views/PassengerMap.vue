@@ -72,8 +72,8 @@
       <el-button
         type="primary"
         class="call-car-btn"
-        :disabled="!canOrder || currentOrder !== null"
-        @click="handleCallCar"
+        :disabled="!canOrder || currentOrder !== null || hasUnpaidOrders"
+        @click="hasUnpaidOrders ? goToMyTrips() : handleCallCar()"
         size="large"
       >
         {{ callCarText }}
@@ -84,10 +84,29 @@
     <div v-if="currentOrder" class="order-panel">
       <div class="order-status">
         <div class="status-text">{{ getStatusText() }}</div>
-        <div v-if="driverInfo && (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP')" class="driver-info">
+        <div
+          v-if="
+            driverInfo &&
+            (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP')
+          "
+          class="driver-info"
+        >
           <div class="driver-name">司机：{{ driverInfo.name }}</div>
           <div class="driver-phone">{{ driverInfo.phone }}</div>
           <div class="vehicle-info">{{ driverInfo.vehicleInfo }}</div>
+        </div>
+
+        <!-- 取消订单按钮 -->
+        <div v-if="canCancelOrder" class="cancel-order-section">
+          <el-button
+            type="danger"
+            @click="handleCancelOrder"
+            :loading="cancelLoading"
+            size="large"
+            plain
+          >
+            取消订单
+          </el-button>
         </div>
       </div>
     </div>
@@ -95,20 +114,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted } from "vue";
-import { ElMessage } from "element-plus";
+import { ref, onMounted, computed, onUnmounted, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Location } from "@element-plus/icons-vue";
 import { useUserStore } from "@/stores/user";
+import { useOrderStore } from "@/stores/order";
 import {
   mapConfig,
   getMapApiUrl,
   getRestApiUrl,
   getSecurityConfig,
 } from "@/config/map";
-import SockJS from "sockjs-client";
-import { Client } from "@stomp/stompjs";
+// WebSocket现在由全局store管理，不需要在组件中导入
 
 const userStore = useUserStore();
+const orderStore = useOrderStore();
 
 // 地图相关变量
 let map = null;
@@ -128,13 +148,28 @@ const selectedCarType = ref("economy");
 const canOrder = ref(false);
 const isCalling = ref(false);
 
-// 订单状态相关
-const currentOrder = ref(null);
-const driverInfo = ref(null);
-const orderStatus = ref("");
+// 订单状态相关（使用全局store）
+const cancelLoading = ref(false);
+const showPaymentDialog = ref(false);
+const completedOrder = ref(null);
+const selectedPaymentMethod = ref('');
 
-// WebSocket相关
-let stompClient = null;
+// 从store获取订单状态
+const currentOrder = computed(() => orderStore.currentOrder);
+const driverInfo = computed(() => orderStore.driverInfo);
+const orderStatus = computed(() => orderStore.orderStatus);
+const hasUnpaidOrders = computed(() => orderStore.hasUnpaidOrders);
+const canCancelOrder = computed(() => orderStore.canCancelOrder);
+
+// 监听订单状态变化，自动更新拖拽状态
+watch([currentOrder, orderStatus], () => {
+  console.log('📊 订单状态变化，更新拖拽状态');
+  setTimeout(() => {
+    updatePickupMarkerDraggable();
+  }, 100);
+}, { immediate: false });
+
+// WebSocket现在由全局store管理
 
 // 司机位置相关变量
 let driverMarker = null;
@@ -156,10 +191,13 @@ const getDrivingConfig = () => ({
 });
 
 onUnmounted(() => {
-  if (stompClient) {
-    stompClient.deactivate();
-  }
   stopDriverTracking();
+  
+  // 清理全局函数
+  if (window.handleMapOrderUpdate) {
+    delete window.handleMapOrderUpdate;
+    console.log("✅ 已清理全局地图消息处理函数");
+  }
 });
 
 // 车型价格配置
@@ -180,6 +218,7 @@ const getPrice = (type) => {
 
 // 叫车按钮文本
 const callCarText = computed(() => {
+  if (hasUnpaidOrders.value) return "请先完成支付";
   if (currentOrder.value) return "订单进行中";
   if (isCalling.value) return "正在叫车...";
   if (!canOrder.value) return "请选择目的地";
@@ -205,9 +244,70 @@ const getStatusText = () => {
       return "未知状态";
   }
 };
+
+
+
+// 取消订单
+const handleCancelOrder = async () => {
+  if (!currentOrder.value) return;
+
+  try {
+    await ElMessageBox.confirm(
+      "确定要取消订单吗？取消后将无法恢复。",
+      "确认取消",
+      {
+        confirmButtonText: "确定取消",
+        cancelButtonText: "继续等待",
+        type: "warning",
+      }
+    );
+
+    cancelLoading.value = true;
+
+    console.log("🚫 准备取消订单:", currentOrder.value);
+    console.log("🆔 订单ID:", currentOrder.value.id);
+    console.log("📞 请求URL:", `/api/orders/${currentOrder.value.id}/cancel`);
+
+    const response = await fetch(
+      `/api/orders/${currentOrder.value.id}/cancel`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${userStore.token}`,
+        },
+      }
+    );
+
+    const result = await response.json();
+
+    console.log("📋 取消订单响应:", response.status, result);
+
+    if (response.ok && result.code === 200) {
+      ElMessage.success("订单已取消");
+      resetOrderState();
+    } else {
+      console.error("❌ 取消订单失败:", result);
+      ElMessage.error("取消失败: " + (result.message || "未知错误"));
+    }
+  } catch (error) {
+    if (error !== "cancel") {
+      console.error("取消订单错误:", error);
+      ElMessage.error("取消失败，请重试");
+    }
+  } finally {
+    cancelLoading.value = false;
+  }
+};
 // 初始化地图
-onMounted(() => {
+onMounted(async () => {
   console.log("开始初始化地图...");
+
+  // 注册全局函数，让store能够通知地图组件
+  window.handleMapOrderUpdate = handleOrderUpdate;
+  console.log("✅ 已注册全局地图消息处理函数");
+
+  // 初始化订单状态（包括检查未支付订单和当前订单）
+  await orderStore.initOrderState();
 
   setTimeout(() => {
     if (window.AMap) {
@@ -291,6 +391,16 @@ function initMap() {
             title: "拖拽调整上车位置",
           });
 
+          // 延迟更新拖拽状态，确保地图完全初始化
+          setTimeout(() => {
+            updatePickupMarkerDraggable();
+          }, 500);
+          
+          // 也在地图完全加载后再次更新
+          setTimeout(() => {
+            updatePickupMarkerDraggable();
+          }, 1000);
+
           // 添加拖拽事件监听器
           pickupMarker.on("dragend", (e) => {
             // 如果已有订单，不允许拖拽
@@ -331,11 +441,17 @@ function initMap() {
 
           getAddressFromLocation(lng, lat);
           initAutocomplete();
+          
+          // 🔑 关键：恢复订单相关的地图元素
+          restoreOrderMapElements();
         } else {
           console.error("定位失败:", status);
           ElMessage.error("定位失败，请检查浏览器权限");
           pickupAddress.value = "定位失败";
           initAutocomplete();
+          
+          // 即使定位失败，也尝试恢复订单地图元素
+          restoreOrderMapElements();
         }
       });
     });
@@ -523,10 +639,30 @@ const stopDriverTracking = () => {
 // 更新上车点标记的可拖拽状态
 const updatePickupMarkerDraggable = () => {
   if (pickupMarker) {
-    const isDraggable = !currentOrder.value;
-    pickupMarker.setDraggable(isDraggable);
-    pickupMarker.setCursor(isDraggable ? "move" : "default");
-    pickupMarker.setTitle(isDraggable ? "拖拽调整上车位置" : "上车点");
+    // 只有在订单真正进行中时才禁用拖拽（司机已接单或更进一步的状态）
+    const isOrderInProgress = currentOrder.value && 
+                             ['ASSIGNED', 'PICKUP', 'IN_PROGRESS'].includes(orderStatus.value);
+    const isDraggable = !isOrderInProgress;
+    
+    console.log('🔧 更新上车点拖拽状态:', {
+      hasOrder: !!currentOrder.value,
+      orderStatus: orderStatus.value,
+      isOrderInProgress: isOrderInProgress,
+      isDraggable: isDraggable,
+      markerExists: !!pickupMarker
+    });
+    
+    try {
+      pickupMarker.setDraggable(isDraggable);
+      pickupMarker.setCursor(isDraggable ? "move" : "default");
+      pickupMarker.setTitle(isDraggable ? "拖拽调整上车位置" : "上车点");
+      
+      console.log('✅ 上车点拖拽状态更新成功:', isDraggable ? '可拖拽' : '不可拖拽');
+    } catch (error) {
+      console.error('❌ 更新上车点拖拽状态失败:', error);
+    }
+  } else {
+    console.warn('⚠️ 上车点标记不存在，无法更新拖拽状态');
   }
 };
 
@@ -565,7 +701,6 @@ const showRoute = async () => {
     console.log("已清除旧路径，开始新的路径规划");
 
     currentDriving = new window.AMap.Driving(getDrivingConfig());
-
     currentDriving.search(
       new window.AMap.LngLat(
         currentPosition.value.lng,
@@ -614,11 +749,15 @@ const showRoute = async () => {
             });
             map.add(routeLine);
 
-            map.setFitView(
-              [pickupMarker, destMarker, routeLine],
-              false,
-              [50, 50, 50, 50]
-            );
+            // 安全地调整地图视野
+            const elements = [];
+            if (pickupMarker) elements.push(pickupMarker);
+            if (destMarker) elements.push(destMarker);
+            if (routeLine) elements.push(routeLine);
+            
+            if (elements.length > 0) {
+              map.setFitView(elements, false, [50, 50, 50, 50]);
+            }
           }
         } else {
           console.log("路径规划失败，使用备用方案");
@@ -665,11 +804,15 @@ const handleRoutePlanningFallback = (destLng, destLat) => {
   });
   map.add(routeLine);
 
-  map.setFitView(
-    [pickupMarker, destMarker, routeLine],
-    false,
-    [50, 50, 50, 50]
-  );
+  // 安全地调整地图视野
+  const elements = [];
+  if (pickupMarker) elements.push(pickupMarker);
+  if (destMarker) elements.push(destMarker);
+  if (routeLine) elements.push(routeLine);
+  
+  if (elements.length > 0) {
+    map.setFitView(elements, false, [50, 50, 50, 50]);
+  }
 };
 
 // 叫车
@@ -723,9 +866,9 @@ const handleCallCar = async () => {
     const result = await response.json();
 
     if (response.ok && result.code === 200) {
-      currentOrder.value = {
-        id: result.data,
-        orderNumber: result.data,
+      const newOrder = {
+        id: result.data, // 现在后端返回的是订单ID
+        orderNumber: `ORDER${result.data}`, // 生成订单号用于显示
         pickupAddress: pickupAddress.value,
         destinationAddress: destination.value.name,
         pickupLatitude: currentPosition.value.lat,
@@ -737,13 +880,13 @@ const handleCallCar = async () => {
         status: "PENDING",
       };
 
-      orderStatus.value = "PENDING";
+      orderStore.setCurrentOrder(newOrder);
 
       ElMessage.success(
         `已为您呼叫${carTypes[selectedCarType.value].name}，正在为您寻找司机...`
       );
 
-      connectWebSocket(result.data);
+      // WebSocket连接现在由全局store自动管理
 
       // 更新UI状态，禁用相关操作
       canOrder.value = false;
@@ -760,67 +903,7 @@ const handleCallCar = async () => {
   }
 };
 
-// WebSocket连接
-const connectWebSocket = (orderId) => {
-  try {
-    console.log("开始建立乘客WebSocket连接...");
-
-    const socket = new SockJS("/ws");
-    stompClient = new Client({
-      webSocketFactory: () => socket,
-      debug: (str) => {
-        console.log("乘客STOMP Debug:", str);
-      },
-    });
-
-    stompClient.onConnect = () => {
-      console.log("✅ 乘客WebSocket连接成功");
-
-      const passengerId = (userStore.user.passengerId || userStore.user.id).toString();
-      console.log("乘客ID:", passengerId);
-
-      stompClient.subscribe(`/user/${passengerId}/queue/orders`, (message) => {
-        console.log("🚗 乘客收到订单更新:", message.body);
-        console.log("📨 消息头信息:", message.headers);
-        try {
-          const data = JSON.parse(message.body);
-          console.log("📋 解析后的数据:", data);
-          handleOrderUpdate(data);
-        } catch (error) {
-          console.error("❌ 解析订单更新数据失败:", error);
-          console.error("❌ 原始消息:", message.body);
-        }
-      });
-
-      stompClient.publish({
-        destination: "/app/passenger/connect",
-        body: JSON.stringify({
-          passengerId: passengerId,
-          orderId: orderId,
-          timestamp: Date.now(),
-        }),
-      });
-
-      console.log("✅ 乘客WebSocket订阅完成");
-    };
-
-    stompClient.onStompError = (frame) => {
-      console.error("❌ 乘客WebSocket连接失败:", frame);
-    };
-
-    stompClient.onWebSocketError = (error) => {
-      console.error("❌ 乘客WebSocket错误:", error);
-    };
-
-    stompClient.onDisconnect = () => {
-      console.log("⚠️ 乘客WebSocket连接断开");
-    };
-
-    stompClient.activate();
-  } catch (error) {
-    console.error("❌ 乘客WebSocket连接错误:", error);
-  }
-};
+// WebSocket连接现在由全局store管理
 
 // 处理订单更新
 const handleOrderUpdate = (data) => {
@@ -851,15 +934,16 @@ const handleOrderAssigned = (data) => {
   console.log("司机接单数据:", data);
 
   if (data.order) {
-    currentOrder.value = {
+    const updatedOrder = {
       ...currentOrder.value,
       ...data.order,
       status: "ASSIGNED",
     };
+    orderStore.setCurrentOrder(updatedOrder);
   }
 
   if (data.driver) {
-    driverInfo.value = {
+    const driverData = {
       id: data.driver.id || data.driver.driverId,
       name: data.driver.name || data.driver.driverName || "司机",
       phone: data.driver.phone || data.driver.phoneNumber,
@@ -869,9 +953,10 @@ const handleOrderAssigned = (data) => {
       latitude: data.driver.latitude,
       longitude: data.driver.longitude,
     };
+    orderStore.setDriverInfo(driverData);
   }
 
-  orderStatus.value = "ASSIGNED";
+  orderStore.updateOrderStatus("ASSIGNED");
 
   ElMessage.success("司机已接单，正在前往接您");
 
@@ -962,7 +1047,12 @@ const updateDriverRoute = async (driverLat, driverLng) => {
       map.remove(window.driverRouteLine);
       window.driverRouteLine = null;
     }
-
+    if(routeLine){
+      map.remove(routeLine);
+    }
+    if(currentDriving){
+      map.remove(currentDriving);
+    }
     // 使用高德地图路线规划API
     const driving = new window.AMap.Driving(getDrivingConfig());
 
@@ -1114,9 +1204,15 @@ const updateDriverLocation = (data) => {
   console.log("📍 更新司机位置:", data);
 
   if (data.driverId === driverInfo.value?.id) {
+    // 通过store更新司机位置信息，不要直接修改computed属性
     if (driverInfo.value) {
-      driverInfo.value.latitude = data.latitude;
-      driverInfo.value.longitude = data.longitude;
+      const updatedDriver = {
+        ...driverInfo.value,
+        latitude: data.latitude,
+        longitude: data.longitude,
+      };
+      orderStore.setDriverInfo(updatedDriver);
+      console.log("✅ 司机位置已通过store更新");
     }
 
     const isFirstTime = !driverMarker;
@@ -1160,9 +1256,11 @@ const handleStatusChange = (data) => {
   console.log("🔍 当前订单ID:", currentOrder.value?.id);
   console.log("🔍 推送订单ID:", data.orderId);
 
-  if (data.orderId === currentOrder.value?.id || data.orderId === currentOrder.value?.orderNumber) {
-    currentOrder.value.status = data.status;
-    orderStatus.value = data.status;
+  if (
+    data.orderId === currentOrder.value?.id ||
+    data.orderId === currentOrder.value?.orderNumber
+  ) {
+    orderStore.updateOrderStatus(data.status);
 
     switch (data.status) {
       case "PICKUP":
@@ -1216,9 +1314,7 @@ const handleStatusChange = (data) => {
 const resetOrderState = () => {
   console.log("🔄 重置订单状态");
 
-  currentOrder.value = null;
-  driverInfo.value = null;
-  orderStatus.value = "";
+  orderStore.clearOrderState();
 
   stopDriverTracking();
 
@@ -1240,10 +1336,7 @@ const resetOrderState = () => {
     });
   }
 
-  if (stompClient) {
-    stompClient.deactivate();
-    stompClient = null;
-  }
+  // WebSocket连接现在由全局store管理
 
   // 重置路线初始化标记
   window.routeInitialized = false;
@@ -1253,6 +1346,108 @@ const resetOrderState = () => {
 
   // 恢复上车点标记的可拖拽状态
   updatePickupMarkerDraggable();
+
+  // 重新检查未支付订单
+  orderStore.checkUnpaidOrders();
+};
+
+
+
+// 恢复订单相关的地图元素
+const restoreOrderMapElements = () => {
+  console.log('🔄 恢复订单相关的地图元素...');
+  
+  // 检查地图是否已初始化
+  if (!map) {
+    console.log('⚠️ 地图未初始化，延迟恢复地图元素');
+    setTimeout(restoreOrderMapElements, 1000);
+    return;
+  }
+  
+  // 检查是否有当前订单
+  if (!currentOrder.value) {
+    console.log('✅ 没有当前订单，无需恢复地图元素');
+    return;
+  }
+  
+  console.log('📋 当前订单状态:', orderStatus.value);
+  console.log('🚗 司机信息:', driverInfo.value);
+  
+  // 如果有司机信息，在地图上显示司机位置
+  if (driverInfo.value && driverInfo.value.latitude && driverInfo.value.longitude && 
+      (orderStatus.value === 'ASSIGNED' || orderStatus.value === 'PICKUP' || orderStatus.value === 'IN_PROGRESS')) {
+    console.log('🚗 恢复司机位置标记:', driverInfo.value.latitude, driverInfo.value.longitude);
+    
+    try {
+      showDriverOnMap(driverInfo.value.latitude, driverInfo.value.longitude);
+      
+      // 开始追踪司机位置
+      startDriverTracking();
+    } catch (error) {
+      console.error('❌ 恢复司机位置失败:', error);
+    }
+  }
+  
+  // 如果有目的地信息，恢复路线规划
+  if (currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude) {
+    console.log('🗺️ 恢复路线规划');
+    
+    // 设置目的地信息
+    destination.value = {
+      name: currentOrder.value.destinationAddress,
+      location: {
+        lng: currentOrder.value.destinationLongitude,
+        lat: currentOrder.value.destinationLatitude
+      }
+    };
+    
+    // 重新规划路线
+    setTimeout(() => {
+      try {
+        showRoute();
+      } catch (error) {
+        console.error('❌ 恢复路线规划失败:', error);
+      }
+    }, 1500);
+  }
+  
+  // 根据订单状态调整地图视图
+  setTimeout(() => {
+    try {
+      if (orderStatus.value === 'IN_PROGRESS' && driverInfo.value) {
+        // 行程中，显示当前位置到目的地的路线
+        console.log('🛣️ 行程进行中，调整地图视图');
+        updateSharedMapView(true);
+      } else if ((orderStatus.value === 'ASSIGNED' || orderStatus.value === 'PICKUP') && driverInfo.value && 
+                 driverInfo.value.latitude && driverInfo.value.longitude) {
+        // 司机前往上车点，显示司机到上车点的路线
+        console.log('🚕 司机前往上车点，显示相关路线');
+        updateDriverRoute(driverInfo.value.latitude, driverInfo.value.longitude);
+      }
+    } catch (error) {
+      console.error('❌ 调整地图视图失败:', error);
+    }
+  }, 2000);
+};
+
+// 跳转到我的行程页面
+const goToMyTrips = () => {
+  console.log("🚀 跳转到我的行程页面");
+  // 使用Vue Router跳转
+  if (window.location.pathname.includes("passenger-app.html")) {
+    // 如果是在独立页面中，直接跳转
+    window.location.href = "/frontend/src/views/MyTrips.vue";
+  } else {
+    // 如果是在Vue应用中，使用路由跳转
+    import("@/router")
+      .then(({ default: router }) => {
+        router.push("/dashboard/my-trips");
+      })
+      .catch(() => {
+        // 如果路由不可用，使用直接跳转
+        window.location.href = "#/dashboard/my-trips";
+      });
+  }
 };
 </script>
 
@@ -1503,6 +1698,12 @@ const resetOrderState = () => {
 .vehicle-info {
   font-size: 14px;
   color: #666;
+}
+
+.cancel-order-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
 }
 
 @media (max-width: 768px) {

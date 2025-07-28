@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>消息流调试工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .status-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .flow-step {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #2196f3;
+            border-radius: 3px;
+        }
+        .flow-step.success {
+            background: #e8f5e8;
+            border-left-color: #4caf50;
+        }
+        .flow-step.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        .checklist {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .checklist-item {
+            margin: 8px 0;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 消息流调试工具</h1>
+        <p>诊断乘客端为什么接收不到司机状态变化消息</p>
+    </div>
+
+    <div class="container">
+        <div class="debug-section">
+            <h3>1. 消息流程检查</h3>
+            <button onclick="checkMessageFlow()">检查消息流程</button>
+            
+            <div id="messageFlowStatus" class="status-display">
+                点击按钮检查消息流程...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>2. WebSocket连接状态</h3>
+            <button onclick="checkWebSocketStatus()">检查连接状态</button>
+            <button onclick="simulateReconnect()">模拟重连</button>
+            
+            <div id="websocketStatus" class="status-display">
+                点击按钮检查WebSocket状态...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>3. 用户ID匹配检查</h3>
+            <button onclick="checkUserIdMatching()">检查用户ID</button>
+            
+            <div id="userIdStatus" class="status-display">
+                点击按钮检查用户ID匹配...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>4. 订阅路径验证</h3>
+            <button onclick="verifySubscriptionPath()">验证订阅路径</button>
+            
+            <div id="subscriptionStatus" class="status-display">
+                点击按钮验证订阅路径...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>5. 消息处理链检查</h3>
+            <button onclick="checkMessageHandling()">检查消息处理</button>
+            
+            <div id="handlingStatus" class="status-display">
+                点击按钮检查消息处理链...
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <h3>6. 问题诊断和建议</h3>
+            <button onclick="diagnoseIssues()">诊断问题</button>
+            
+            <div id="diagnosisResult" class="checklist">
+                <h4>诊断结果:</h4>
+                <div id="diagnosisItems">点击诊断按钮开始...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 调试日志</h3>
+        <div id="debugLog" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(logEntry);
+        }
+
+        function checkMessageFlow() {
+            const statusDiv = document.getElementById('messageFlowStatus');
+            let content = '';
+
+            const flowSteps = [
+                {
+                    step: '1. 司机点击"到达起始点"',
+                    backend: 'OrderController.confirmArrival()',
+                    action: '更新订单状态为PICKUP',
+                    notification: 'notifyPassengerOrderStatusChange(passengerId, orderId, "PICKUP", message)',
+                    status: 'success'
+                },
+                {
+                    step: '2. 后端发送WebSocket消息',
+                    backend: 'WebSocketNotificationService.notifyPassengerOrderStatusChange()',
+                    action: 'messagingTemplate.convertAndSendToUser(passengerId, "/queue/orders", notification)',
+                    notification: '发送到 /user/{passengerId}/queue/orders',
+                    status: 'success'
+                },
+                {
+                    step: '3. 前端WebSocket接收',
+                    backend: 'stompClient.subscribe("/user/{passengerId}/queue/orders")',
+                    action: '接收消息并解析JSON',
+                    notification: 'handleOrderUpdate(data)',
+                    status: 'error'
+                },
+                {
+                    step: '4. 全局store处理',
+                    backend: 'handleOrderUpdate() in order.js',
+                    action: 'handleOrderStatusChange(data)',
+                    notification: '更新订单状态，显示UI消息',
+                    status: 'error'
+                },
+                {
+                    step: '5. 地图组件更新',
+                    backend: 'window.handleMapOrderUpdate(data)',
+                    action: 'handleStatusChange() in PassengerMap.vue',
+                    notification: '更新地图元素和UI',
+                    status: 'error'
+                }
+            ];
+
+            flowSteps.forEach((step, index) => {
+                const stepClass = step.status === 'success' ? 'flow-step success' : 'flow-step error';
+                const statusIcon = step.status === 'success' ? '✅' : '❌';
+                
+                content += `<div class="${stepClass}">
+                    ${statusIcon} ${step.step}<br>
+                    📍 位置: ${step.backend}<br>
+                    🔧 操作: ${step.action}<br>
+                    📨 通知: ${step.notification}
+                </div>`;
+            });
+
+            content += `<div class="flow-step error">
+                ❌ 问题点: 步骤3-5可能存在问题<br>
+                🔍 需要检查: WebSocket连接、用户ID匹配、消息处理链
+            </div>`;
+
+            statusDiv.innerHTML = content;
+            log('消息流程检查完成');
+        }
+
+        function checkWebSocketStatus() {
+            const statusDiv = document.getElementById('websocketStatus');
+            let status = 'WebSocket连接状态检查:\\n\\n';
+
+            // 模拟检查WebSocket状态
+            const checks = [
+                { name: 'WebSocket连接', status: '需要检查', details: '检查stompClient.connected状态' },
+                { name: '订阅状态', status: '需要检查', details: '检查是否成功订阅/user/{id}/queue/orders' },
+                { name: '用户认证', status: '需要检查', details: '检查用户是否正确认证' },
+                { name: '消息接收', status: '需要检查', details: '检查是否能接收到任何消息' }
+            ];
+
+            checks.forEach(check => {
+                status += `🔍 ${check.name}: ${check.status}\\n`;
+                status += `   详情: ${check.details}\\n\\n`;
+            });
+
+            status += '💡 调试建议:\\n';
+            status += '1. 在浏览器控制台查看WebSocket连接日志\\n';
+            status += '2. 检查Network标签页的WebSocket连接\\n';
+            status += '3. 确认用户ID和订阅路径正确\\n';
+            status += '4. 检查后端是否真的发送了消息';
+
+            statusDiv.textContent = status;
+            statusDiv.className = 'status-display';
+            log('WebSocket状态检查完成');
+        }
+
+        function checkUserIdMatching() {
+            const statusDiv = document.getElementById('userIdStatus');
+            let status = '用户ID匹配检查:\\n\\n';
+
+            // 模拟用户ID检查
+            status += '🆔 用户ID匹配流程:\\n\\n';
+            
+            status += '1. 前端获取用户ID:\\n';
+            status += '   - userStore.user.passengerId 或 userStore.user.id\\n';
+            status += '   - 转换为字符串: passengerId.toString()\\n';
+            status += '   - 订阅路径: /user/{passengerId}/queue/orders\\n\\n';
+            
+            status += '2. 后端发送消息:\\n';
+            status += '   - order.getPassengerId()\\n';
+            status += '   - 转换为字符串: passengerId.toString()\\n';
+            status += '   - 发送路径: /user/{passengerId}/queue/orders\\n\\n';
+            
+            status += '❗ 可能的问题:\\n';
+            status += '1. 前端和后端的用户ID类型不匹配\\n';
+            status += '2. 用户ID为null或undefined\\n';
+            status += '3. 字符串转换问题\\n';
+            status += '4. 订单中的passengerId与当前用户不匹配\\n\\n';
+            
+            status += '🔧 调试方法:\\n';
+            status += '1. 在前端打印: console.log("前端用户ID:", passengerId)\\n';
+            status += '2. 在后端打印: System.out.println("后端用户ID: " + passengerId)\\n';
+            status += '3. 检查订单表中的passenger_id字段\\n';
+            status += '4. 确认WebSocket连接时使用的用户ID';
+
+            statusDiv.textContent = status;
+            statusDiv.className = 'status-display';
+            log('用户ID匹配检查完成');
+        }
+
+        function verifySubscriptionPath() {
+            const statusDiv = document.getElementById('subscriptionStatus');
+            let status = '订阅路径验证:\\n\\n';
+
+            status += '📡 WebSocket订阅路径分析:\\n\\n';
+            
+            status += '前端订阅:\\n';
+            status += '  路径: /user/{passengerId}/queue/orders\\n';
+            status += '  示例: /user/1/queue/orders\\n';
+            status += '  代码: stompClient.subscribe(`/user/${passengerId}/queue/orders`)\\n\\n';
+            
+            status += '后端发送:\\n';
+            status += '  方法: messagingTemplate.convertAndSendToUser()\\n';
+            status += '  用户: passengerId.toString()\\n';
+            status += '  目标: "/queue/orders"\\n';
+            status += '  实际路径: /user/{passengerId}/queue/orders\\n\\n';
+            
+            status += '✅ 路径匹配分析:\\n';
+            status += '前端订阅和后端发送的路径应该是匹配的\\n\\n';
+            
+            status += '🔍 可能的问题:\\n';
+            status += '1. 用户ID不一致导致路径不匹配\\n';
+            status += '2. WebSocket连接在订阅前断开\\n';
+            status += '3. Spring Security配置问题\\n';
+            status += '4. STOMP协议配置问题\\n\\n';
+            
+            status += '🛠️ 验证方法:\\n';
+            status += '1. 在浏览器开发者工具中查看WebSocket帧\\n';
+            status += '2. 检查SUBSCRIBE帧的destination\\n';
+            status += '3. 检查MESSAGE帧的destination\\n';
+            status += '4. 确认用户认证状态';
+
+            statusDiv.textContent = status;
+            statusDiv.className = 'status-display';
+            log('订阅路径验证完成');
+        }
+
+        function checkMessageHandling() {
+            const statusDiv = document.getElementById('handlingStatus');
+            let status = '消息处理链检查:\\n\\n';
+
+            const handlingChain = [
+                {
+                    step: '1. WebSocket消息接收',
+                    location: 'stompClient.subscribe() callback',
+                    action: '接收原始消息',
+                    check: '检查message.body是否存在'
+                },
+                {
+                    step: '2. JSON解析',
+                    location: 'JSON.parse(message.body)',
+                    action: '解析消息内容',
+                    check: '检查解析是否成功，数据结构是否正确'
+                },
+                {
+                    step: '3. 全局store处理',
+                    location: 'handleOrderUpdate(data)',
+                    action: '根据消息类型分发处理',
+                    check: '检查data.type是否为ORDER_STATUS_CHANGE'
+                },
+                {
+                    step: '4. 状态更新',
+                    location: 'handleOrderStatusChange(data)',
+                    action: '更新订单状态，显示UI消息',
+                    check: '检查订单ID匹配，状态更新'
+                },
+                {
+                    step: '5. 地图组件通知',
+                    location: 'window.handleMapOrderUpdate(data)',
+                    action: '通知地图组件更新',
+                    check: '检查全局函数是否存在并被调用'
+                },
+                {
+                    step: '6. 地图UI更新',
+                    location: 'handleStatusChange(data) in PassengerMap.vue',
+                    action: '更新地图元素和UI',
+                    check: '检查地图元素是否正确更新'
+                }
+            ];
+
+            handlingChain.forEach((item, index) => {
+                status += `${index + 1}. ${item.step}\\n`;
+                status += `   位置: ${item.location}\\n`;
+                status += `   操作: ${item.action}\\n`;
+                status += `   检查: ${item.check}\\n\\n`;
+            });
+
+            status += '🚨 常见问题点:\\n';
+            status += '1. JSON解析失败 - 消息格式不正确\\n';
+            status += '2. 消息类型不匹配 - data.type !== "ORDER_STATUS_CHANGE"\\n';
+            status += '3. 订单ID不匹配 - data.orderId !== currentOrder.id\\n';
+            status += '4. 全局函数未注册 - window.handleMapOrderUpdate不存在\\n';
+            status += '5. 组件已卸载 - 地图组件不在当前页面\\n\\n';
+            
+            status += '🔧 调试建议:\\n';
+            status += '1. 在每个步骤添加console.log\\n';
+            status += '2. 检查错误捕获和处理\\n';
+            status += '3. 验证数据流的完整性\\n';
+            status += '4. 确认组件生命周期状态';
+
+            statusDiv.textContent = status;
+            statusDiv.className = 'status-display';
+            log('消息处理链检查完成');
+        }
+
+        function diagnoseIssues() {
+            const itemsDiv = document.getElementById('diagnosisItems');
+            let content = '';
+
+            const diagnosticItems = [
+                {
+                    issue: 'WebSocket连接问题',
+                    symptoms: ['控制台显示连接错误', '无法接收任何消息'],
+                    solutions: ['检查网络连接', '验证WebSocket端点', '检查认证状态'],
+                    priority: 'high'
+                },
+                {
+                    issue: '用户ID不匹配',
+                    symptoms: ['消息发送但未接收', '订阅路径错误'],
+                    solutions: ['对比前后端用户ID', '检查数据类型转换', '验证订单归属'],
+                    priority: 'high'
+                },
+                {
+                    issue: '消息处理链断裂',
+                    symptoms: ['接收到消息但UI无变化', '部分功能正常'],
+                    solutions: ['检查全局函数注册', '验证组件生命周期', '添加错误处理'],
+                    priority: 'medium'
+                },
+                {
+                    issue: '页面切换问题',
+                    symptoms: ['切换页面后功能失效', '重新进入无效果'],
+                    solutions: ['检查组件卸载清理', '验证重新注册逻辑', '确认状态恢复'],
+                    priority: 'medium'
+                },
+                {
+                    issue: '时序问题',
+                    symptoms: ['偶尔正常偶尔失效', '刷新后正常'],
+                    solutions: ['检查初始化顺序', '添加延迟处理', '确认异步操作'],
+                    priority: 'low'
+                }
+            ];
+
+            diagnosticItems.forEach(item => {
+                const priorityColor = item.priority === 'high' ? '#f44336' : 
+                                    item.priority === 'medium' ? '#ff9800' : '#4caf50';
+                
+                content += `<div style="border-left: 4px solid ${priorityColor}; padding: 10px; margin: 10px 0; background: #f9f9f9;">
+                    <h4 style="margin: 0 0 10px 0; color: ${priorityColor};">
+                        ${item.issue} (${item.priority.toUpperCase()})
+                    </h4>
+                    <div><strong>症状:</strong> ${item.symptoms.join(', ')}</div>
+                    <div><strong>解决方案:</strong> ${item.solutions.join(', ')}</div>
+                </div>`;
+            });
+
+            content += `<div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                <h4>🎯 推荐调试步骤:</h4>
+                <ol>
+                    <li>在浏览器控制台查看WebSocket连接状态和消息</li>
+                    <li>在前端添加详细的日志输出</li>
+                    <li>在后端添加消息发送日志</li>
+                    <li>使用WebSocket调试工具监控消息流</li>
+                    <li>逐步验证消息处理链的每个环节</li>
+                </ol>
+            </div>`;
+
+            itemsDiv.innerHTML = content;
+            log('问题诊断完成');
+        }
+
+        function simulateReconnect() {
+            log('模拟WebSocket重连...');
+            
+            setTimeout(() => {
+                log('WebSocket重连完成');
+                checkWebSocketStatus();
+            }, 2000);
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('消息流调试工具已加载');
+            
+            log('调试目标: 解决乘客端接收不到司机状态变化消息的问题');
+            log('主要检查点: WebSocket连接、用户ID匹配、消息处理链');
+        };
+    </script>
+</body>
+</html>"

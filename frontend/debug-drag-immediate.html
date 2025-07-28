@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拖拽问题即时调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .step {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .warning {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .success {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #4caf50;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 拖拽问题即时调试</h1>
+        <p>直接在浏览器控制台执行这些命令来调试拖拽问题</p>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤1: 检查当前状态</h3>
+            <p>在浏览器控制台执行以下命令：</p>
+            <div class="debug-code">
+// 检查标记是否存在
+console.log("pickupMarker存在:", !!window.pickupMarker);
+
+// 检查标记的拖拽状态
+if (window.pickupMarker) {
+    console.log("当前拖拽状态:", window.pickupMarker.getDraggable());
+    console.log("标记光标:", window.pickupMarker.getCursor());
+    console.log("标记标题:", window.pickupMarker.getTitle());
+}
+
+// 检查订单状态
+console.log("当前订单:", window.currentOrder?.value);
+console.log("订单状态:", window.orderStatus?.value);
+            </div>
+            <button onclick="copyToClipboard(this.nextElementSibling.textContent)">复制代码</button>
+        </div>
+
+        <div class="step">
+            <h3>步骤2: 强制启用拖拽</h3>
+            <p>如果标记存在但不能拖拽，执行以下命令强制启用：</p>
+            <div class="debug-code">
+// 强制设置为可拖拽
+if (window.pickupMarker) {
+    window.pickupMarker.setDraggable(true);
+    window.pickupMarker.setCursor("move");
+    window.pickupMarker.setTitle("拖拽调整上车位置");
+    console.log("✅ 已强制启用拖拽");
+} else {
+    console.log("❌ 标记不存在");
+}
+            </div>
+            <button onclick="copyToClipboard(this.nextElementSibling.textContent)">复制代码</button>
+        </div>
+
+        <div class="step">
+            <h3>步骤3: 检查事件监听器</h3>
+            <p>检查标记上是否有正确的事件监听器：</p>
+            <div class="debug-code">
+// 检查事件监听器（Chrome DevTools）
+if (window.pickupMarker) {
+    console.log("标记对象:", window.pickupMarker);
+    
+    // 如果有getEventListeners函数（Chrome DevTools）
+    if (typeof getEventListeners === 'function') {
+        console.log("事件监听器:", getEventListeners(window.pickupMarker));
+    }
+    
+    // 手动测试拖拽事件
+    window.pickupMarker.on('dragstart', () => console.log('拖拽开始'));
+    window.pickupMarker.on('dragend', () => console.log('拖拽结束'));
+}
+            </div>
+            <button onclick="copyToClipboard(this.nextElementSibling.textContent)">复制代码</button>
+        </div>
+
+        <div class="step">
+            <h3>步骤4: 检查CSS干扰</h3>
+            <p>检查是否有CSS样式影响拖拽：</p>
+            <div class="debug-code">
+// 检查地图容器的CSS
+const mapContainer = document.getElementById('mapContainer');
+if (mapContainer) {
+    const styles = window.getComputedStyle(mapContainer);
+    console.log("地图容器样式:");
+    console.log("pointer-events:", styles.pointerEvents);
+    console.log("user-select:", styles.userSelect);
+    console.log("touch-action:", styles.touchAction);
+}
+
+// 检查是否有全局CSS影响
+console.log("body样式:");
+const bodyStyles = window.getComputedStyle(document.body);
+console.log("user-select:", bodyStyles.userSelect);
+console.log("touch-action:", bodyStyles.touchAction);
+            </div>
+            <button onclick="copyToClipboard(this.nextElementSibling.textContent)">复制代码</button>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ 常见问题排查</h3>
+            <ul>
+                <li><strong>订单状态问题</strong>: 如果currentOrder.value不为null，拖拽会被禁用</li>
+                <li><strong>时序问题</strong>: updatePickupMarkerDraggable()可能在错误的时机被调用</li>
+                <li><strong>CSS冲突</strong>: user-select: none 或 pointer-events: none 会影响拖拽</li>
+                <li><strong>地图版本问题</strong>: 不同版本的高德地图API可能有不同的拖拽行为</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>步骤5: 临时修复方案</h3>
+            <p>如果上述检查发现问题，可以使用以下临时修复：</p>
+            <div class="debug-code">
+// 临时修复：忽略订单状态，强制启用拖拽
+if (window.pickupMarker) {
+    // 保存原始的updatePickupMarkerDraggable函数
+    window.originalUpdatePickupMarkerDraggable = window.updatePickupMarkerDraggable;
+    
+    // 重写函数，始终启用拖拽
+    window.updatePickupMarkerDraggable = function() {
+        if (window.pickupMarker) {
+            window.pickupMarker.setDraggable(true);
+            window.pickupMarker.setCursor("move");
+            window.pickupMarker.setTitle("拖拽调整上车位置");
+            console.log("🔧 临时修复：强制启用拖拽");
+        }
+    };
+    
+    // 立即执行
+    window.updatePickupMarkerDraggable();
+}
+            </div>
+            <button onclick="copyToClipboard(this.nextElementSibling.textContent)">复制代码</button>
+        </div>
+
+        <div class="success">
+            <h3>✅ 如果拖拽正常工作</h3>
+            <p>如果通过上述步骤拖拽开始正常工作，说明问题确实在于：</p>
+            <ul>
+                <li>订单状态导致拖拽被禁用</li>
+                <li>updatePickupMarkerDraggable函数的调用时机</li>
+                <li>需要修改逻辑，在没有订单时始终允许拖拽</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🔧 永久修复建议</h3>
+        <p>基于调试结果，以下是可能的永久修复方案：</p>
+        
+        <div class="step">
+            <h4>方案1: 修改拖拽逻辑</h4>
+            <div class="debug-code">
+// 在PassengerMap.vue中修改updatePickupMarkerDraggable函数
+const updatePickupMarkerDraggable = () => {
+  if (pickupMarker) {
+    // 只有在订单状态为进行中时才禁用拖拽
+    const isDraggable = !currentOrder.value || 
+                       !['ASSIGNED', 'PICKUP', 'IN_PROGRESS'].includes(orderStatus.value);
+    
+    pickupMarker.setDraggable(isDraggable);
+    pickupMarker.setCursor(isDraggable ? "move" : "default");
+    pickupMarker.setTitle(isDraggable ? "拖拽调整上车位置" : "上车点");
+  }
+};
+            </div>
+        </div>
+
+        <div class="step">
+            <h4>方案2: 延迟更新时机</h4>
+            <div class="debug-code">
+// 在标记创建后更长时间延迟
+setTimeout(() => {
+    updatePickupMarkerDraggable();
+}, 500); // 增加到500ms
+
+// 或者监听地图完全加载事件
+map.on('complete', () => {
+    updatePickupMarkerDraggable();
+});
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('代码已复制到剪贴板！');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                // 备用方案
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('代码已复制到剪贴板！');
+            });
+        }
+
+        // 页面加载时的说明
+        window.onload = function() {
+            console.log('🚀 拖拽调试工具已加载');
+            console.log('请按照页面上的步骤在控制台中执行调试命令');
+        };
+    </script>
+</body>
+</html>"

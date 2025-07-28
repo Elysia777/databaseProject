@@ -1,0 +1,872 @@
+<template>
+  <div class="my-trips">
+    <!-- 顶部标题 -->
+    <div class="header">
+      <h1>我的行程</h1>
+      <div class="stats">
+        <span>总计 {{ orders.length }} 个订单</span>
+        <span v-if="unpaidCount > 0" class="unpaid-count">{{ unpaidCount }} 个待支付</span>
+      </div>
+    </div>
+
+    <!-- 当前进行中的订单 -->
+    <div v-if="orderStore.currentOrder" class="current-order-section">
+      <h3>🚗 当前订单</h3>
+      <div class="current-order-card">
+        <div class="status-badge current" :class="getStatusClass(orderStore.orderStatus)">
+          {{ getStatusText(orderStore.orderStatus) }}
+        </div>
+        
+        <div class="order-header">
+          <div class="order-number">订单号: {{ orderStore.currentOrder.orderNumber }}</div>
+          <div class="order-time">{{ formatTime(orderStore.currentOrder.createdAt) }}</div>
+        </div>
+
+        <div class="trip-info">
+          <div class="location-item">
+            <el-icon class="pickup-icon"><Location /></el-icon>
+            <div class="location-text">
+              <div class="label">上车点</div>
+              <div class="address">{{ orderStore.currentOrder.pickupAddress }}</div>
+            </div>
+          </div>
+          
+          <div class="location-divider"></div>
+          
+          <div class="location-item">
+            <el-icon class="destination-icon"><Position /></el-icon>
+            <div class="location-text">
+              <div class="label">目的地</div>
+              <div class="address">{{ orderStore.currentOrder.destinationAddress }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fare-info">
+          <div class="fare-item">
+            <span class="label">预估费用:</span>
+            <span class="amount">¥{{ orderStore.currentOrder.estimatedFare }}</span>
+          </div>
+        </div>
+
+        <div v-if="orderStore.driverInfo" class="driver-info">
+          <h4>司机信息</h4>
+          <div class="driver-details">
+            <span>司机：{{ orderStore.driverInfo.name }}</span>
+            <span>电话：{{ orderStore.driverInfo.phone }}</span>
+            <span>车辆：{{ orderStore.driverInfo.vehicleInfo }}</span>
+          </div>
+        </div>
+
+        <div class="current-order-actions">
+          <el-button type="primary" @click="goToMap">返回地图</el-button>
+          <el-button v-if="orderStore.canCancelOrder" type="danger" plain @click="cancelCurrentOrder">取消订单</el-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史订单列表 -->
+    <div class="orders-container">
+      <h3 v-if="orderStore.currentOrder">📋 历史订单</h3>
+      
+      <div v-if="loading" class="loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>加载中...</span>
+      </div>
+
+      <div v-else-if="orders.length === 0 && !orderStore.currentOrder" class="empty">
+        <el-icon><DocumentRemove /></el-icon>
+        <p>暂无行程记录</p>
+      </div>
+
+      <div v-else class="orders-list">
+        <div 
+          v-for="order in orders" 
+          :key="order.id" 
+          class="order-item"
+          :class="{ 'unpaid': isUnpaid(order) }"
+        >
+          <!-- 订单状态标签 -->
+          <div class="status-badge" :class="getStatusClass(order.status)">
+            {{ getStatusText(order.status) }}
+          </div>
+
+          <!-- 订单基本信息 -->
+          <div class="order-header">
+            <div class="order-number">订单号: {{ order.orderNumber }}</div>
+            <div class="order-time">{{ formatTime(order.createdAt) }}</div>
+          </div>
+
+          <!-- 行程信息 -->
+          <div class="trip-info">
+            <div class="location-item">
+              <el-icon class="pickup-icon"><Location /></el-icon>
+              <div class="location-text">
+                <div class="label">上车点</div>
+                <div class="address">{{ order.pickupAddress }}</div>
+              </div>
+            </div>
+            
+            <div class="location-divider"></div>
+            
+            <div class="location-item">
+              <el-icon class="destination-icon"><Position /></el-icon>
+              <div class="location-text">
+                <div class="label">目的地</div>
+                <div class="address">{{ order.destinationAddress }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 费用信息 -->
+          <div class="fare-info">
+            <div class="fare-item">
+              <span class="label">预估费用:</span>
+              <span class="amount">¥{{ order.estimatedFare }}</span>
+            </div>
+            <div v-if="order.actualFare" class="fare-item">
+              <span class="label">实际费用:</span>
+              <span class="amount actual">¥{{ order.actualFare }}</span>
+            </div>
+          </div>
+
+          <!-- 支付状态和操作 -->
+          <div class="payment-section">
+            <div v-if="order.paymentStatus === 'PAID'" class="payment-status paid">
+              <el-icon><SuccessFilled /></el-icon>
+              <span>已支付 ({{ getPaymentMethodText(order.paymentMethod) }})</span>
+            </div>
+            
+            <div v-else-if="isUnpaid(order)" class="payment-actions">
+              <div class="unpaid-notice">
+                <el-icon><WarningFilled /></el-icon>
+                <span>待支付</span>
+              </div>
+              <el-button 
+                type="primary" 
+                @click="showPaymentDialog(order)"
+                :loading="paymentLoading"
+                size="small"
+              >
+                立即支付
+              </el-button>
+            </div>
+            
+            <div v-else class="payment-status other">
+              <span>{{ getPaymentStatusText(order.paymentStatus) }}</span>
+            </div>
+          </div>
+
+          <!-- 司机信息 (如果有) -->
+          <div v-if="order.driverId" class="driver-info">
+            <el-icon><User /></el-icon>
+            <span>司机ID: {{ order.driverId }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 支付对话框 -->
+    <el-dialog
+      v-model="paymentDialogVisible"
+      title="选择支付方式"
+      width="400px"
+      :close-on-click-modal="false"
+    >
+      <div v-if="selectedOrder" class="payment-dialog">
+        <div class="order-summary">
+          <h3>订单信息</h3>
+          <div class="summary-item">
+            <span>订单号:</span>
+            <span>{{ selectedOrder.orderNumber }}</span>
+          </div>
+          <div class="summary-item">
+            <span>行程:</span>
+            <span>{{ selectedOrder.pickupAddress }} → {{ selectedOrder.destinationAddress }}</span>
+          </div>
+          <div class="summary-item total">
+            <span>应付金额:</span>
+            <span class="amount">¥{{ selectedOrder.actualFare || selectedOrder.estimatedFare }}</span>
+          </div>
+        </div>
+
+        <div class="payment-methods">
+          <h3>支付方式</h3>
+          <el-radio-group v-model="selectedPaymentMethod">
+            <el-radio label="WECHAT" class="payment-option">
+              <div class="payment-method">
+                <span class="icon">💚</span>
+                <span>微信支付</span>
+              </div>
+            </el-radio>
+            <el-radio label="ALIPAY" class="payment-option">
+              <div class="payment-method">
+                <span class="icon">🔵</span>
+                <span>支付宝</span>
+              </div>
+            </el-radio>
+            <el-radio label="CASH" class="payment-option">
+              <div class="payment-method">
+                <span class="icon">💵</span>
+                <span>现金支付</span>
+              </div>
+            </el-radio>
+          </el-radio-group>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="paymentDialogVisible = false">取消</el-button>
+          <el-button 
+            type="primary" 
+            @click="confirmPayment"
+            :loading="paymentLoading"
+            :disabled="!selectedPaymentMethod"
+          >
+            确认支付
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  Location, 
+  Position, 
+  Loading, 
+  DocumentRemove, 
+  SuccessFilled, 
+  WarningFilled, 
+  User 
+} from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
+import { useOrderStore } from '@/stores/order'
+import { useRouter } from 'vue-router'
+
+const userStore = useUserStore()
+const orderStore = useOrderStore()
+const router = useRouter()
+
+// 响应式数据
+const orders = ref([])
+const loading = ref(false)
+const paymentLoading = ref(false)
+const paymentDialogVisible = ref(false)
+const selectedOrder = ref(null)
+const selectedPaymentMethod = ref('')
+
+// 计算属性
+const unpaidCount = computed(() => {
+  return orders.value.filter(order => isUnpaid(order)).length
+})
+
+// 页面加载时获取订单历史
+onMounted(async () => {
+  // 初始化订单状态
+  await orderStore.initOrderState()
+  // 加载订单历史
+  loadOrderHistory()
+})
+
+// 加载订单历史
+const loadOrderHistory = async () => {
+  loading.value = true
+  try {
+    const passengerId = userStore.user.passengerId || userStore.user.id
+    const response = await fetch(`/api/orders/passenger/${passengerId}/history`, {
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok && result.code === 200) {
+      orders.value = result.data || []
+      console.log('✅ 加载到', orders.value.length, '个历史订单')
+    } else {
+      ElMessage.error('加载订单历史失败: ' + (result.message || '未知错误'))
+    }
+  } catch (error) {
+    console.error('加载订单历史错误:', error)
+    ElMessage.error('加载失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 判断订单是否未支付
+const isUnpaid = (order) => {
+  return order.status === 'COMPLETED' && order.paymentStatus !== 'PAID'
+}
+
+// 获取状态样式类
+const getStatusClass = (status) => {
+  const statusMap = {
+    'PENDING': 'pending',
+    'ASSIGNED': 'assigned', 
+    'PICKUP': 'pickup',
+    'IN_PROGRESS': 'in-progress',
+    'COMPLETED': 'completed',
+    'CANCELLED': 'cancelled'
+  }
+  return statusMap[status] || 'default'
+}
+
+// 获取状态文本
+const getStatusText = (status) => {
+  const statusMap = {
+    'PENDING': '等待接单',
+    'ASSIGNED': '司机已接单',
+    'PICKUP': '司机已到达',
+    'IN_PROGRESS': '行程中',
+    'COMPLETED': '已完成',
+    'CANCELLED': '已取消'
+  }
+  return statusMap[status] || '未知状态'
+}
+
+// 返回地图页面
+const goToMap = () => {
+  router.push('/dashboard/passenger-map')
+}
+
+// 取消当前订单
+const cancelCurrentOrder = async () => {
+  try {
+    await ElMessageBox.confirm('确定要取消当前订单吗？', '确认取消', {
+      confirmButtonText: '确定取消',
+      cancelButtonText: '继续等待',
+      type: 'warning',
+    })
+    
+    const response = await fetch(`/api/orders/${orderStore.currentOrder.id}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok && result.code === 200) {
+      ElMessage.success('订单已取消')
+      orderStore.clearOrderState()
+      // 刷新历史订单
+      loadOrderHistory()
+    } else {
+      ElMessage.error('取消失败: ' + (result.message || '未知错误'))
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('取消失败，请重试')
+    }
+  }
+}
+
+// 获取支付方式文本
+const getPaymentMethodText = (method) => {
+  const methodMap = {
+    'WECHAT': '微信支付',
+    'ALIPAY': '支付宝',
+    'CASH': '现金',
+    'CREDIT_CARD': '信用卡'
+  }
+  return methodMap[method] || method
+}
+
+// 获取支付状态文本
+const getPaymentStatusText = (status) => {
+  const statusMap = {
+    'UNPAID': '未支付',
+    'PAID': '已支付',
+    'REFUNDED': '已退款'
+  }
+  return statusMap[status] || status
+}
+
+// 格式化时间
+const formatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 显示支付对话框
+const showPaymentDialog = (order) => {
+  selectedOrder.value = order
+  selectedPaymentMethod.value = ''
+  paymentDialogVisible.value = true
+}
+
+// 确认支付
+const confirmPayment = async () => {
+  if (!selectedOrder.value || !selectedPaymentMethod.value) {
+    ElMessage.warning('请选择支付方式')
+    return
+  }
+  
+  paymentLoading.value = true
+  
+  try {
+    const response = await fetch(`/api/orders/${selectedOrder.value.id}/pay?paymentMethod=${selectedPaymentMethod.value}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    })
+    
+    const result = await response.json()
+    
+    if (response.ok && result.code === 200) {
+      ElMessage.success('支付成功！')
+      
+      // 更新本地订单状态
+      const orderIndex = orders.value.findIndex(o => o.id === selectedOrder.value.id)
+      if (orderIndex !== -1) {
+        orders.value[orderIndex].paymentStatus = 'PAID'
+        orders.value[orderIndex].paymentMethod = selectedPaymentMethod.value
+      }
+      
+      // 更新全局未支付订单状态
+      orderStore.checkUnpaidOrders()
+      
+      paymentDialogVisible.value = false
+    } else {
+      ElMessage.error('支付失败: ' + (result.message || '未知错误'))
+    }
+  } catch (error) {
+    console.error('支付错误:', error)
+    ElMessage.error('支付失败，请重试')
+  } finally {
+    paymentLoading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.my-trips {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+.current-order-section {
+  margin-bottom: 30px;
+}
+
+.current-order-section h3 {
+  color: #333;
+  margin-bottom: 15px;
+  font-size: 18px;
+}
+
+.current-order-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #409EFF;
+  position: relative;
+}
+
+.status-badge.current {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  padding: 6px 16px;
+  border-radius: 15px;
+  font-size: 14px;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.current-order-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.driver-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.driver-info h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 14px;
+}
+
+.driver-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+.header {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.stats {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+  color: #666;
+}
+
+.unpaid-count {
+  color: #f56c6c;
+  font-weight: bold;
+}
+
+.orders-container {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.loading, .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.loading .el-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.empty .el-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.orders-list {
+  padding: 0;
+}
+
+.order-item {
+  position: relative;
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.3s;
+}
+
+.order-item:hover {
+  background: #fafafa;
+}
+
+.order-item:last-child {
+  border-bottom: none;
+}
+
+.order-item.unpaid {
+  border-left: 4px solid #f56c6c;
+  background: #fef7f7;
+}
+
+.status-badge {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.assigned {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-badge.pickup {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.in-progress {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.status-badge.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.order-header {
+  margin-bottom: 15px;
+  padding-right: 100px;
+}
+
+.order-number {
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.order-time {
+  font-size: 14px;
+  color: #666;
+}
+
+.trip-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  gap: 15px;
+}
+
+.location-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.pickup-icon {
+  color: #28a745;
+  font-size: 18px;
+}
+
+.destination-icon {
+  color: #dc3545;
+  font-size: 18px;
+}
+
+.location-text .label {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.location-text .address {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.location-divider {
+  width: 2px;
+  height: 30px;
+  background: #ddd;
+  margin: 0 10px;
+}
+
+.fare-info {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.fare-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.fare-item .label {
+  font-size: 14px;
+  color: #666;
+}
+
+.fare-item .amount {
+  font-weight: bold;
+  color: #333;
+}
+
+.fare-item .amount.actual {
+  color: #f56c6c;
+}
+
+.payment-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.payment-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.payment-status.paid {
+  color: #28a745;
+}
+
+.payment-status.paid .el-icon {
+  color: #28a745;
+}
+
+.payment-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.unpaid-notice {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #f56c6c;
+  font-size: 14px;
+}
+
+.driver-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #999;
+}
+
+.payment-dialog .order-summary {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.payment-dialog h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.summary-item:last-child {
+  margin-bottom: 0;
+}
+
+.summary-item.total {
+  font-weight: bold;
+  font-size: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #ddd;
+}
+
+.summary-item.total .amount {
+  color: #f56c6c;
+}
+
+.payment-methods .el-radio-group {
+  width: 100%;
+}
+
+.payment-option {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.payment-method {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.payment-option.is-checked .payment-method {
+  border-color: #409EFF;
+  background: #f0f8ff;
+}
+
+.payment-method .icon {
+  font-size: 20px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .my-trips {
+    padding: 10px;
+  }
+  
+  .trip-info {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .location-divider {
+    width: 30px;
+    height: 2px;
+    margin: 10px 0;
+  }
+  
+  .fare-info {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .payment-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+</style>

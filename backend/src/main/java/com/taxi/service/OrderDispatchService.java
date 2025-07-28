@@ -244,6 +244,12 @@ public class OrderDispatchService {
                 return;
             }
             
+            // 检查司机是否在订单黑名单中（司机之前取消过此订单）
+            if (driverRedisService.isDriverInOrderBlacklist(order.getId(), driver.getId())) {
+                System.out.println("司机 " + driver.getId() + " 在订单 " + order.getId() + " 的黑名单中，跳过通知");
+                return;
+            }
+            
             // 计算距离
             double distance = calculateDistance(
                 order.getPickupLatitude().doubleValue(),
