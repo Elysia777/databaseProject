@@ -173,7 +173,6 @@ watch([currentOrder, orderStatus], () => {
 
 // 司机位置相关变量
 let driverMarker = null;
-let driverTrackingTimer = null;
 
 // 统一的路径规划配置
 const getDrivingConfig = () => ({
@@ -300,16 +299,20 @@ const handleCancelOrder = async () => {
 };
 // 初始化地图
 onMounted(async () => {
-  console.log("开始初始化地图...");
+  console.log("🚀 开始初始化乘客地图页面...");
 
-  // 注册全局函数，让store能够通知地图组件
+  // 立即注册全局函数，让store能够通知地图组件
   window.handleMapOrderUpdate = handleOrderUpdate;
   console.log("✅ 已注册全局地图消息处理函数");
 
   // 初始化订单状态（包括检查未支付订单和当前订单）
+  console.log("🔄 开始初始化订单状态...");
   await orderStore.initOrderState();
+  console.log("✅ 订单状态初始化完成");
 
+  // 延迟初始化地图，确保DOM完全加载
   setTimeout(() => {
+    console.log("🗺️ 开始初始化地图...");
     if (window.AMap) {
       console.log("高德地图已加载，直接初始化");
       initMap();
@@ -627,12 +630,8 @@ const selectDestination = (item) => {
   showRoute();
 };
 
-// 停止追踪司机位置
+// 停止追踪司机位置（已移除轮询逻辑，司机位置通过WebSocket推送）
 const stopDriverTracking = () => {
-  if (driverTrackingTimer) {
-    clearInterval(driverTrackingTimer);
-    driverTrackingTimer = null;
-  }
   console.log("⏹️ 已停止追踪司机位置");
 };
 
@@ -1157,47 +1156,13 @@ const updateSharedMapView = (forceRefit = false) => {
   }
 };
 
-// 开始追踪司机位置
+// 开始追踪司机位置（已移除轮询逻辑，司机位置通过WebSocket推送）
 const startDriverTracking = () => {
-  console.log("🔍 开始追踪司机位置");
-
-  if (driverTrackingTimer) {
-    clearInterval(driverTrackingTimer);
-  }
-
-  driverTrackingTimer = setInterval(() => {
-    if (currentOrder.value && driverInfo.value) {
-      requestDriverLocation();
-    }
-  }, 5000);
+  console.log("🔍 开始追踪司机位置（通过WebSocket接收位置更新）");
+  // 司机位置现在通过WebSocket实时推送，无需轮询
 };
 
-// 请求司机位置更新
-const requestDriverLocation = async () => {
-  try {
-    const response = await fetch(
-      `/api/drivers/${driverInfo.value.id}/location`,
-      {
-        headers: {
-          Authorization: `Bearer ${userStore.token}`,
-        },
-      }
-    );
-
-    if (response.ok) {
-      const locationData = await response.json();
-      if (locationData.code === 200 && locationData.data) {
-        updateDriverLocation({
-          driverId: driverInfo.value.id,
-          latitude: locationData.data.latitude,
-          longitude: locationData.data.longitude,
-        });
-      }
-    }
-  } catch (error) {
-    console.error("获取司机位置失败:", error);
-  }
-};
+// 已删除requestDriverLocation函数 - 司机位置通过WebSocket推送，无需主动请求
 
 // 更新司机位置
 const updateDriverLocation = (data) => {

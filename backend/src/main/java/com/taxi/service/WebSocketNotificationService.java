@@ -61,6 +61,11 @@ public class WebSocketNotificationService {
             notification.put("orderNumber", orderNumber);
             notification.put("pickupAddress", pickupAddress);
             notification.put("destinationAddress", destinationAddress);
+            notification.put("pickupLatitude", order.getPickupLatitude());
+            notification.put("pickupLongitude", order.getPickupLongitude());
+            notification.put("destinationLatitude", order.getDestinationLatitude());
+            notification.put("destinationLongitude", order.getDestinationLongitude());
+            notification.put("passengerId", order.getPassengerId());
             notification.put("distance", distanceStr);
             notification.put("estimatedFare", estimatedFare);
             notification.put("timestamp", System.currentTimeMillis());

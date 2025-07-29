@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>退出登录司机状态测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.warning {
+            background: #e6a23c;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .flow-diagram {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .flow-step {
+            text-align: center;
+            flex: 1;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            margin: 0 5px;
+        }
+        .flow-arrow {
+            font-size: 20px;
+            color: #409EFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚪 退出登录司机状态测试</h1>
+        <p>测试退出登录时司机状态的正确处理</p>
+    </div>
+
+    <div class="container">
+        <h2>🔧 问题描述与修复</h2>
+        <div class="test-section">
+            <h3>问题现象</h3>
+            <ul>
+                <li>退出登录时司机没有自动下线</li>
+                <li>重新登录时司机按钮显示上线状态</li>
+                <li>但实际上接不到订单（前后端状态不一致）</li>
+            </ul>
+            
+            <h3>修复方案</h3>
+            <ul>
+                <li>退出登录时自动调用司机下线API</li>
+                <li>清除司机store中的所有状态</li>
+                <li>重新登录时检查前后端状态一致性</li>
+                <li>如果状态不一致，强制同步到下线状态</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📋 测试流程</h2>
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <div><strong>1. 司机上线</strong></div>
+                <small>正常上线接单</small>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div><strong>2. 退出登录</strong></div>
+                <small>应该自动下线</small>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div><strong>3. 重新登录</strong></div>
+                <small>状态应该是下线</small>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div><strong>4. 验证状态</strong></div>
+                <small>前后端一致</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 检查当前状态</h3>
+            <button onclick="checkCurrentStatus()">检查当前状态</button>
+            <button onclick="checkBackendStatus()">检查后端状态</button>
+            
+            <div id="statusResult" class="result-display">
+                点击按钮检查当前状态...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 模拟司机上线</h3>
+            <button onclick="simulateDriverOnline()" class="success">司机上线</button>
+            <button onclick="checkOnlineStatus()">验证上线状态</button>
+            
+            <div id="onlineResult" class="result-display">
+                点击按钮模拟司机上线...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 测试退出登录</h3>
+            <button onclick="testLogout()" class="danger">模拟退出登录</button>
+            <button onclick="checkLogoutEffect()">检查退出效果</button>
+            
+            <div id="logoutResult" class="result-display">
+                点击按钮测试退出登录...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 测试重新登录</h3>
+            <button onclick="simulateRelogin()" class="warning">模拟重新登录</button>
+            <button onclick="checkStateConsistency()">检查状态一致性</button>
+            
+            <div id="reloginResult" class="result-display">
+                点击按钮测试重新登录...
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 localStorage状态检查</h2>
+        <div class="test-section">
+            <h3>存储状态</h3>
+            <button onclick="checkLocalStorage()">检查localStorage</button>
+            <button onclick="clearAllStorage()">清除所有存储</button>
+            
+            <div id="storageResult" class="result-display">
+                点击按钮检查localStorage状态...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, containerId) {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        async function checkCurrentStatus() {
+            const resultDiv = document.getElementById('statusResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔍 检查当前状态...', 'statusResult');
+            
+            // 检查localStorage
+            const driverState = localStorage.getItem('driverState');
+            const token = localStorage.getItem('token');
+            
+            log(`Token存在: ${!!token}`, 'statusResult');
+            log(`司机状态存在: ${!!driverState}`, 'statusResult');
+            
+            if (driverState) {
+                try {
+                    const state = JSON.parse(driverState);
+                    log(`司机在线状态: ${state.isOnline}`, 'statusResult');
+                    log(`司机ID: ${state.driverId}`, 'statusResult');
+                    log(`当前订单: ${state.currentOrder ? state.currentOrder.orderNumber : '无'}`, 'statusResult');
+                } catch (error) {
+                    log(`解析司机状态失败: ${error.message}`, 'statusResult');
+                }
+            }
+            
+            resultDiv.className = 'result-display status-good';
+        }
+
+        async function checkBackendStatus() {
+            log('\\n🔍 检查后端状态...', 'statusResult');
+            
+            try {
+                const response = await fetch('/api/drivers/1/status-detail');
+                if (response.ok) {
+                    const result = await response.json();
+                    const detail = result.data;
+                    
+                    log(`后端在线状态: ${detail.isOnlineAndFree}`, 'statusResult');
+                    log(`数据库存在: ${detail.consistency.dbExists}`, 'statusResult');
+                    log(`Redis存在: ${detail.consistency.redisExists}`, 'statusResult');
+                } else {
+                    log(`后端状态检查失败: ${response.status}`, 'statusResult');
+                }
+            } catch (error) {
+                log(`后端状态检查异常: ${error.message}`, 'statusResult');
+            }
+        }
+
+        async function simulateDriverOnline() {
+            const resultDiv = document.getElementById('onlineResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🚗 模拟司机上线...', 'onlineResult');
+            
+            try {
+                const response = await fetch('/api/drivers/1/online?latitude=39.044237&longitude=121.749849', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 司机上线成功', 'onlineResult');
+                    
+                    // 模拟更新localStorage
+                    const driverState = {
+                        isOnline: true,
+                        currentPosition: { lng: 121.749849, lat: 39.044237 },
+                        todayEarnings: 0,
+                        completedOrders: 0,
+                        currentOrder: null,
+                        navigationInfo: null,
+                        driverId: 1,
+                        timestamp: Date.now()
+                    };
+                    
+                    localStorage.setItem('driverState', JSON.stringify(driverState));
+                    localStorage.setItem('driverUserId', '1');
+                    
+                    log('✅ 本地状态已更新', 'onlineResult');
+                    resultDiv.className = 'result-display status-good';
+                } else {
+                    log(`❌ 司机上线失败: ${response.status}`, 'onlineResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 上线操作异常: ${error.message}`, 'onlineResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function checkOnlineStatus() {
+            log('\\n🔍 验证上线状态...', 'onlineResult');
+            
+            try {
+                // 检查后端状态
+                const response = await fetch('/api/drivers/1/status-detail');
+                if (response.ok) {
+                    const result = await response.json();
+                    const detail = result.data;
+                    
+                    if (detail.isOnlineAndFree) {
+                        log('✅ 后端确认司机在线', 'onlineResult');
+                    } else {
+                        log('❌ 后端显示司机不在线', 'onlineResult');
+                    }
+                }
+                
+                // 检查本地状态
+                const driverState = localStorage.getItem('driverState');
+                if (driverState) {
+                    const state = JSON.parse(driverState);
+                    if (state.isOnline) {
+                        log('✅ 本地状态显示在线', 'onlineResult');
+                    } else {
+                        log('❌ 本地状态显示下线', 'onlineResult');
+                    }
+                }
+                
+            } catch (error) {
+                log(`验证状态异常: ${error.message}`, 'onlineResult');
+            }
+        }
+
+        function testLogout() {
+            const resultDiv = document.getElementById('logoutResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🚪 模拟退出登录...', 'logoutResult');
+            
+            // 模拟退出登录的清理过程
+            log('1. 调用司机下线API...', 'logoutResult');
+            
+            fetch('/api/drivers/1/offline', {
+                method: 'POST'
+            }).then(response => {
+                if (response.ok) {
+                    log('✅ 司机下线API调用成功', 'logoutResult');
+                } else {
+                    log(`❌ 司机下线API调用失败: ${response.status}`, 'logoutResult');
+                }
+            }).catch(error => {
+                log(`❌ 司机下线API异常: ${error.message}`, 'logoutResult');
+            });
+            
+            log('2. 清除localStorage...', 'logoutResult');
+            
+            // 清除相关的localStorage项
+            localStorage.removeItem('token');
+            localStorage.removeItem('driverState');
+            localStorage.removeItem('driverUserId');
+            localStorage.removeItem('currentOrder');
+            localStorage.removeItem('orderStatus');
+            localStorage.removeItem('driverInfo');
+            localStorage.removeItem('orderUserId');
+            
+            log('✅ localStorage已清除', 'logoutResult');
+            log('3. 司机store状态应该被清除', 'logoutResult');
+            log('4. WebSocket连接应该断开', 'logoutResult');
+            
+            resultDiv.className = 'result-display status-good';
+        }
+
+        async function checkLogoutEffect() {
+            log('\\n🔍 检查退出登录效果...', 'logoutResult');
+            
+            // 检查localStorage
+            const driverState = localStorage.getItem('driverState');
+            const token = localStorage.getItem('token');
+            
+            if (!driverState && !token) {
+                log('✅ localStorage已正确清除', 'logoutResult');
+            } else {
+                log('❌ localStorage清除不完整', 'logoutResult');
+                log(`driverState存在: ${!!driverState}`, 'logoutResult');
+                log(`token存在: ${!!token}`, 'logoutResult');
+            }
+            
+            // 检查后端状态
+            try {
+                const response = await fetch('/api/drivers/1/status-detail');
+                if (response.ok) {
+                    const result = await response.json();
+                    const detail = result.data;
+                    
+                    if (!detail.isOnlineAndFree) {
+                        log('✅ 后端确认司机已下线', 'logoutResult');
+                    } else {
+                        log('❌ 后端仍显示司机在线', 'logoutResult');
+                    }
+                }
+            } catch (error) {
+                log(`检查后端状态异常: ${error.message}`, 'logoutResult');
+            }
+        }
+
+        function simulateRelogin() {
+            const resultDiv = document.getElementById('reloginResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔄 模拟重新登录...', 'reloginResult');
+            
+            // 模拟重新设置token
+            localStorage.setItem('token', 'mock-token-12345');
+            log('✅ Token已设置', 'reloginResult');
+            
+            log('2. 模拟状态恢复过程...', 'reloginResult');
+            log('- 检查localStorage中的司机状态', 'reloginResult');
+            log('- 从后端获取真实状态', 'reloginResult');
+            log('- 比较前后端状态一致性', 'reloginResult');
+            
+            // 模拟状态恢复逻辑
+            const driverState = localStorage.getItem('driverState');
+            if (!driverState) {
+                log('✅ 本地无司机状态，应该显示下线', 'reloginResult');
+                resultDiv.className = 'result-display status-good';
+            } else {
+                log('⚠️ 本地仍有司机状态，需要验证', 'reloginResult');
+                resultDiv.className = 'result-display status-warning';
+            }
+        }
+
+        async function checkStateConsistency() {
+            log('\\n🔍 检查状态一致性...', 'reloginResult');
+            
+            try {
+                // 检查后端状态
+                const response = await fetch('/api/drivers/1/status-detail');
+                if (response.ok) {
+                    const result = await response.json();
+                    const detail = result.data;
+                    
+                    // 检查本地状态
+                    const driverState = localStorage.getItem('driverState');
+                    
+                    log('状态对比:', 'reloginResult');
+                    log(`后端在线: ${detail.isOnlineAndFree}`, 'reloginResult');
+                    log(`本地状态存在: ${!!driverState}`, 'reloginResult');
+                    
+                    if (driverState) {
+                        const state = JSON.parse(driverState);
+                        log(`本地在线: ${state.isOnline}`, 'reloginResult');
+                        
+                        if (detail.isOnlineAndFree !== state.isOnline) {
+                            log('❌ 状态不一致！', 'reloginResult');
+                            log('修复方案: 强制同步到下线状态', 'reloginResult');
+                            document.getElementById('reloginResult').className = 'result-display status-error';
+                        } else {
+                            log('✅ 状态一致', 'reloginResult');
+                            document.getElementById('reloginResult').className = 'result-display status-good';
+                        }
+                    } else {
+                        if (!detail.isOnlineAndFree) {
+                            log('✅ 状态一致（都是下线）', 'reloginResult');
+                            document.getElementById('reloginResult').className = 'result-display status-good';
+                        } else {
+                            log('❌ 状态不一致（后端在线，本地无状态）', 'reloginResult');
+                            document.getElementById('reloginResult').className = 'result-display status-error';
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`状态检查异常: ${error.message}`, 'reloginResult');
+            }
+        }
+
+        function checkLocalStorage() {
+            const resultDiv = document.getElementById('storageResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🗄️ 检查localStorage状态...', 'storageResult');
+            
+            const keys = [
+                'token', 'driverState', 'driverUserId', 'currentOrder', 
+                'orderStatus', 'driverInfo', 'orderUserId'
+            ];
+            
+            keys.forEach(key => {
+                const value = localStorage.getItem(key);
+                if (value) {
+                    log(`${key}: 存在 (${value.length} 字符)`, 'storageResult');
+                    if (key === 'driverState') {
+                        try {
+                            const state = JSON.parse(value);
+                            log(`  - 在线状态: ${state.isOnline}`, 'storageResult');
+                            log(`  - 司机ID: ${state.driverId}`, 'storageResult');
+                        } catch (e) {
+                            log(`  - 解析失败: ${e.message}`, 'storageResult');
+                        }
+                    }
+                } else {
+                    log(`${key}: 不存在`, 'storageResult');
+                }
+            });
+            
+            resultDiv.className = 'result-display status-good';
+        }
+
+        function clearAllStorage() {
+            log('\\n🧹 清除所有localStorage...', 'storageResult');
+            
+            const keys = [
+                'token', 'driverState', 'driverUserId', 'currentOrder', 
+                'orderStatus', 'driverInfo', 'orderUserId'
+            ];
+            
+            keys.forEach(key => {
+                localStorage.removeItem(key);
+                log(`✅ 已清除: ${key}`, 'storageResult');
+            });
+            
+            log('\\n✅ 所有存储已清除', 'storageResult');
+        }
+
+        // 页面加载时自动检查状态
+        window.onload = function() {
+            setTimeout(() => {
+                checkCurrentStatus();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

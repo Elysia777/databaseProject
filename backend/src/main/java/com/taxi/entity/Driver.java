@@ -17,6 +17,18 @@ public class Driver {
 
     /** 用户ID */
     private Long userId;
+    
+    /** 司机姓名 (来自users表的real_name) */
+    private String name;
+    
+    /** 手机号 (来自users表) */
+    private String phone;
+    
+    /** 用户状态 (来自users表) */
+    private String status;
+    
+    /** 驾驶证号 */
+    private String licenseNumber;  // 重命名以匹配常用命名
 
     /** 驾驶证号 */
     private String driverLicense;
@@ -29,6 +41,9 @@ public class Driver {
 
     /** 从业资格证到期日期 */
     private LocalDateTime professionalLicenseExpiry;
+    
+    /** 车辆信息 */
+    private String vehicleInfo;
 
     /** 驾龄(年) */
     private Integer drivingYears;

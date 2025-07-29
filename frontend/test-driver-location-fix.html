@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机位置修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .location-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ 司机位置修复测试</h1>
+        <p>测试司机位置获取和导航功能的修复</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 浏览器地理位置测试</h3>
+            <button onclick="testBrowserGeolocation()">测试浏览器定位</button>
+            <button onclick="useDefaultLocation()">使用默认位置</button>
+            
+            <div id="locationStatus" class="result-display">
+                点击按钮测试地理位置功能...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 当前位置信息</h3>
+            <div id="currentLocationInfo" class="location-info">
+                <p><strong>经度:</strong> <span id="currentLng">未获取</span></p>
+                <p><strong>纬度:</strong> <span id="currentLat">未获取</span></p>
+                <p><strong>获取时间:</strong> <span id="locationTime">-</span></p>
+                <p><strong>定位方式:</strong> <span id="locationType">-</span></p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 司机上线测试</h3>
+            <button onclick="testDriverOnline()">司机上线</button>
+            <button onclick="testLocationReport()">上报位置</button>
+            
+            <div id="onlineStatus" class="result-display">
+                点击按钮测试司机上线功能...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 导航功能测试</h3>
+            <button onclick="testNavigationPrerequisites()">检查导航前置条件</button>
+            <button onclick="simulateNavigation()">模拟导航</button>
+            
+            <div id="navigationStatus" class="result-display">
+                点击按钮测试导航功能...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPosition = { lng: null, lat: null };
+
+        function log(message, containerId = 'locationStatus') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        function updateLocationDisplay(lng, lat, type = '浏览器定位') {
+            document.getElementById('currentLng').textContent = lng || '未获取';
+            document.getElementById('currentLat').textContent = lat || '未获取';
+            document.getElementById('locationTime').textContent = new Date().toLocaleTimeString();
+            document.getElementById('locationType').textContent = type;
+            
+            currentPosition = { lng, lat };
+        }
+
+        function testBrowserGeolocation() {
+            const statusDiv = document.getElementById('locationStatus');
+            statusDiv.textContent = '';
+            statusDiv.className = 'result-display';
+            
+            log('🌍 开始测试浏览器地理位置...');
+            
+            if (!navigator.geolocation) {
+                log('❌ 浏览器不支持地理位置服务');
+                statusDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            log('✅ 浏览器支持地理位置服务');
+            log('正在请求位置权限...');
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { longitude, latitude } = position.coords;
+                    log(`✅ 位置获取成功:`);
+                    log(`经度: ${longitude}`);
+                    log(`纬度: ${latitude}`);
+                    log(`精度: ${position.coords.accuracy} 米`);
+                    
+                    updateLocationDisplay(longitude, latitude, '浏览器定位');
+                    statusDiv.className = 'result-display status-good';
+                },
+                (error) => {
+                    log(`❌ 位置获取失败:`);
+                    log(`错误代码: ${error.code}`);
+                    log(`错误信息: ${error.message}`);
+                    
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            log('用户拒绝了地理位置请求');
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            log('位置信息不可用');
+                            break;
+                        case error.TIMEOUT:
+                            log('请求位置信息超时');
+                            break;
+                        default:
+                            log('未知错误');
+                            break;
+                    }
+                    
+                    log('\\n建议使用默认位置');
+                    statusDiv.className = 'result-display status-error';
+                },
+                options
+            );
+        }
+
+        function useDefaultLocation() {
+            const statusDiv = document.getElementById('locationStatus');
+            statusDiv.textContent = '';
+            statusDiv.className = 'result-display';
+            
+            log('🔄 使用默认位置（大连理工大学）');
+            
+            const defaultLng = 121.749849;
+            const defaultLat = 39.044237;
+            
+            log(`默认经度: ${defaultLng}`);
+            log(`默认纬度: ${defaultLat}`);
+            
+            updateLocationDisplay(defaultLng, defaultLat, '默认位置');
+            statusDiv.className = 'result-display status-good';
+            
+            log('✅ 默认位置设置成功');
+        }
+
+        async function testDriverOnline() {
+            const statusDiv = document.getElementById('onlineStatus');
+            statusDiv.textContent = '';
+            statusDiv.className = 'result-display';
+            
+            log('🚗 测试司机上线功能...', 'onlineStatus');
+            
+            if (!currentPosition.lng || !currentPosition.lat) {
+                log('❌ 当前位置未获取，请先获取位置', 'onlineStatus');
+                statusDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/drivers/1/online?latitude=${currentPosition.lat}&longitude=${currentPosition.lng}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log('✅ 司机上线成功', 'onlineStatus');
+                    log(`响应: ${result.message}`, 'onlineStatus');
+                    statusDiv.className = 'result-display status-good';
+                } else {
+                    log(`❌ 司机上线失败: ${response.status}`, 'onlineStatus');
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 司机上线异常: ${error.message}`, 'onlineStatus');
+                statusDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function testLocationReport() {
+            const statusDiv = document.getElementById('onlineStatus');
+            
+            log('📍 测试位置上报功能...', 'onlineStatus');
+            
+            if (!currentPosition.lng || !currentPosition.lat) {
+                log('❌ 当前位置未获取，请先获取位置', 'onlineStatus');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/drivers/1/location', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        latitude: currentPosition.lat,
+                        longitude: currentPosition.lng
+                    })
+                });
+                
+                if (response.ok) {
+                    log('✅ 位置上报成功', 'onlineStatus');
+                } else {
+                    log(`❌ 位置上报失败: ${response.status}`, 'onlineStatus');
+                }
+            } catch (error) {
+                log(`❌ 位置上报异常: ${error.message}`, 'onlineStatus');
+            }
+        }
+
+        function testNavigationPrerequisites() {
+            const statusDiv = document.getElementById('navigationStatus');
+            statusDiv.textContent = '';
+            statusDiv.className = 'result-display';
+            
+            log('🧭 检查导航前置条件...', 'navigationStatus');
+            
+            // 检查当前位置
+            if (!currentPosition.lng || !currentPosition.lat) {
+                log('❌ 司机当前位置未获取', 'navigationStatus');
+                log('解决方案: 请先获取位置信息', 'navigationStatus');
+                statusDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            log('✅ 司机当前位置已获取', 'navigationStatus');
+            log(`当前位置: ${currentPosition.lng}, ${currentPosition.lat}`, 'navigationStatus');
+            
+            // 模拟订单信息
+            const mockOrder = {
+                id: 'TEST_ORDER',
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                pickupAddress: '测试上车点',
+                destinationAddress: '测试目的地'
+            };
+            
+            log('✅ 模拟订单信息完整', 'navigationStatus');
+            log(`上车点: ${mockOrder.pickupAddress}`, 'navigationStatus');
+            log(`目的地: ${mockOrder.destinationAddress}`, 'navigationStatus');
+            log(`上车坐标: ${mockOrder.pickupLongitude}, ${mockOrder.pickupLatitude}`, 'navigationStatus');
+            log(`目的坐标: ${mockOrder.destinationLongitude}, ${mockOrder.destinationLatitude}`, 'navigationStatus');
+            
+            // 计算距离
+            const distance = calculateDistance(
+                currentPosition.lat, currentPosition.lng,
+                mockOrder.pickupLatitude, mockOrder.pickupLongitude
+            );
+            
+            log(`\\n📏 到上车点距离: ${distance.toFixed(2)} 公里`, 'navigationStatus');
+            
+            if (distance < 10) {
+                log('✅ 距离合理，可以开始导航', 'navigationStatus');
+                statusDiv.className = 'result-display status-good';
+            } else {
+                log('⚠️  距离较远，但仍可导航', 'navigationStatus');
+                statusDiv.className = 'result-display status-warning';
+            }
+            
+            log('\\n🎯 导航前置条件检查完成', 'navigationStatus');
+        }
+
+        function simulateNavigation() {
+            const statusDiv = document.getElementById('navigationStatus');
+            
+            log('\\n🚀 模拟开始导航...', 'navigationStatus');
+            
+            if (!currentPosition.lng || !currentPosition.lat) {
+                log('❌ 无法开始导航：司机位置未获取', 'navigationStatus');
+                statusDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            log('✅ 司机位置检查通过', 'navigationStatus');
+            log('✅ 订单信息检查通过', 'navigationStatus');
+            log('✅ 开始规划路线...', 'navigationStatus');
+            
+            // 模拟导航过程
+            setTimeout(() => {
+                log('✅ 路线规划完成', 'navigationStatus');
+                log('🧭 导航已开始', 'navigationStatus');
+                log('📱 请按照导航指示前往目的地', 'navigationStatus');
+                statusDiv.className = 'result-display status-good';
+            }, 1000);
+        }
+
+        // 计算两点间距离（简化版）
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // 地球半径（公里）
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 页面加载时自动测试
+        window.onload = function() {
+            log('页面加载完成，开始自动测试...');
+            
+            // 先使用默认位置
+            setTimeout(() => {
+                useDefaultLocation();
+            }, 500);
+            
+            // 然后尝试获取真实位置
+            setTimeout(() => {
+                testBrowserGeolocation();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

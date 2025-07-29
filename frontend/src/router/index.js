@@ -32,6 +32,7 @@ const routes = [
     children: [
       {
         path: '',
+        name: 'DashboardHome',
         redirect: (to) => {
           const userStore = useUserStore()
           if (userStore.isPassenger) {

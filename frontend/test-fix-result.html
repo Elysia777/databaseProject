@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复结果测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 修复结果测试</h1>
+        <p>验证司机状态修复和订单推送功能</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 司机状态验证</h3>
+            <button onclick="checkDriverStatus()">检查司机状态</button>
+            <button onclick="checkRedisDrivers()">检查Redis司机</button>
+            
+            <div id="driverStatus" class="result-display">
+                点击按钮检查司机状态...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 订单推送测试</h3>
+            <button onclick="createTestOrder()">创建测试订单</button>
+            <button onclick="checkPendingOrders()">检查待分配订单</button>
+            
+            <div id="orderStatus" class="result-display">
+                点击按钮测试订单推送...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. WebSocket连接测试</h3>
+            <button onclick="testWebSocketConnection()">测试WebSocket连接</button>
+            <button onclick="simulateDriverConnection()">模拟司机连接</button>
+            
+            <div id="websocketStatus" class="result-display">
+                点击按钮测试WebSocket连接...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 完整流程测试</h3>
+            <button onclick="runFullTest()" style="background: #f56c6c; font-size: 16px; padding: 15px 30px;">🚀 运行完整测试</button>
+            
+            <div id="fullTestStatus" class="result-display">
+                点击按钮运行完整测试流程...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function log(message, containerId = 'fullTestStatus') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        async function checkDriverStatus() {
+            const statusDiv = document.getElementById('driverStatus');
+            let status = '司机状态检查结果:\\n\\n';
+            
+            try {
+                // 检查司机1的详细状态
+                const response = await fetch('/api/drivers/1/status-detail');
+                if (response.ok) {
+                    const result = await response.json();
+                    const detail = result.data;
+                    
+                    status += '=== 司机1状态详情 ===\\n';
+                    status += `数据库存在: ${detail.consistency.dbExists ? '✅' : '❌'}\\n`;
+                    status += `Redis存在: ${detail.consistency.redisExists ? '✅' : '❌'}\\n`;
+                    status += `在线且空闲: ${detail.isOnlineAndFree ? '✅' : '❌'}\\n`;
+                    
+                    if (detail.database) {
+                        status += `司机姓名: ${detail.database.name}\\n`;
+                        status += `司机状态: ${detail.database.status}\\n`;
+                        status += `当前位置: ${detail.database.currentLatitude}, ${detail.database.currentLongitude}\\n`;
+                    }
+                    
+                    if (detail.geoPosition) {
+                        status += `GEO位置: ${detail.geoPosition.x}, ${detail.geoPosition.y}\\n`;
+                    }
+                    
+                    statusDiv.className = detail.consistency.dbExists && detail.consistency.redisExists && detail.isOnlineAndFree 
+                        ? 'result-display status-good' : 'result-display status-warning';
+                } else {
+                    status += `❌ 检查失败: ${response.status}\\n`;
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                status += `❌ 检查异常: ${error.message}\\n`;
+                statusDiv.className = 'result-display status-error';
+            }
+            
+            statusDiv.textContent = status;
+        }
+
+        async function checkRedisDrivers() {
+            const statusDiv = document.getElementById('driverStatus');
+            let status = 'Redis司机检查结果:\\n\\n';
+            
+            try {
+                const response = await fetch('/api/drivers/online/redis');
+                if (response.ok) {
+                    const result = await response.json();
+                    const drivers = result.data || [];
+                    
+                    status += `✅ Redis连接正常\\n`;
+                    status += `在线司机数量: ${drivers.length}\\n\\n`;
+                    
+                    if (drivers.length > 0) {
+                        status += '在线司机列表:\\n';
+                        drivers.forEach(driver => {
+                            status += `- 司机${driver.id}: ${driver.name} (${driver.status})\\n`;
+                            status += `  位置: ${driver.currentLatitude}, ${driver.currentLongitude}\\n`;
+                        });
+                        statusDiv.className = 'result-display status-good';
+                    } else {
+                        status += '❌ 没有在线司机\\n';
+                        statusDiv.className = 'result-display status-warning';
+                    }
+                } else {
+                    status += `❌ 检查失败: ${response.status}\\n`;
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                status += `❌ 检查异常: ${error.message}\\n`;
+                statusDiv.className = 'result-display status-error';
+            }
+            
+            statusDiv.textContent = status;
+        }
+
+        async function createTestOrder() {
+            const statusDiv = document.getElementById('orderStatus');
+            let status = '创建测试订单结果:\\n\\n';
+            
+            try {
+                const orderData = {
+                    passengerId: 1,
+                    pickupAddress: '测试上车点 (大连理工大学)',
+                    pickupLatitude: 39.044237,
+                    pickupLongitude: 121.749849,
+                    destinationAddress: '测试目的地 (大连火车站)',
+                    destinationLatitude: 39.054237,
+                    destinationLongitude: 121.759849
+                };
+                
+                const response = await fetch('/api/orders/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    status += '✅ 测试订单创建成功\\n';
+                    status += `订单ID: ${result.data}\\n`;
+                    status += '\\n正在检查订单推送情况...\\n';
+                    
+                    // 等待一下，然后检查订单状态
+                    setTimeout(async () => {
+                        try {
+                            const orderResponse = await fetch(`/api/orders/${result.data}`);
+                            if (orderResponse.ok) {
+                                const orderResult = await orderResponse.json();
+                                const order = orderResult.data;
+                                status += `\\n订单状态: ${order.status}\\n`;
+                                if (order.driverId) {
+                                    status += `分配司机: ${order.driverId}\\n`;
+                                } else {
+                                    status += '⚠️  订单尚未分配司机\\n';
+                                }
+                                statusDiv.textContent = status;
+                            }
+                        } catch (e) {
+                            status += `\\n❌ 检查订单状态失败: ${e.message}\\n`;
+                            statusDiv.textContent = status;
+                        }
+                    }, 2000);
+                    
+                    statusDiv.className = 'result-display status-good';
+                } else {
+                    status += `❌ 创建订单失败: ${response.status}\\n`;
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                status += `❌ 创建订单异常: ${error.message}\\n`;
+                statusDiv.className = 'result-display status-error';
+            }
+            
+            statusDiv.textContent = status;
+        }
+
+        async function checkPendingOrders() {
+            const statusDiv = document.getElementById('orderStatus');
+            let status = '待分配订单检查结果:\\n\\n';
+            
+            try {
+                const response = await fetch('/api/orders');
+                if (response.ok) {
+                    const result = await response.json();
+                    const orders = result.data || [];
+                    
+                    const pendingOrders = orders.filter(order => order.status === 'PENDING');
+                    
+                    status += `总订单数: ${orders.length}\\n`;
+                    status += `待分配订单数: ${pendingOrders.length}\\n\\n`;
+                    
+                    if (pendingOrders.length > 0) {
+                        status += '待分配订单列表:\\n';
+                        pendingOrders.forEach(order => {
+                            status += `- 订单${order.id}: ${order.pickupAddress} -> ${order.destinationAddress}\\n`;
+                            status += `  创建时间: ${order.createdAt}\\n`;
+                        });
+                        statusDiv.className = 'result-display status-warning';
+                    } else {
+                        status += '✅ 没有待分配订单\\n';
+                        statusDiv.className = 'result-display status-good';
+                    }
+                } else {
+                    status += `❌ 检查失败: ${response.status}\\n`;
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                status += `❌ 检查异常: ${error.message}\\n`;
+                statusDiv.className = 'result-display status-error';
+            }
+            
+            statusDiv.textContent = status;
+        }
+
+        async function testWebSocketConnection() {
+            const statusDiv = document.getElementById('websocketStatus');
+            let status = 'WebSocket连接测试结果:\\n\\n';
+            
+            try {
+                // 测试WebSocket连接
+                const ws = new WebSocket('ws://localhost:8080/ws/driver/1');
+                
+                ws.onopen = function() {
+                    status += '✅ WebSocket连接成功\\n';
+                    status += '正在等待消息...\\n';
+                    statusDiv.textContent = status;
+                    statusDiv.className = 'result-display status-good';
+                };
+                
+                ws.onmessage = function(event) {
+                    status += `📨 收到消息: ${event.data}\\n`;
+                    statusDiv.textContent = status;
+                };
+                
+                ws.onerror = function(error) {
+                    status += `❌ WebSocket错误: ${error}\\n`;
+                    statusDiv.textContent = status;
+                    statusDiv.className = 'result-display status-error';
+                };
+                
+                ws.onclose = function() {
+                    status += '🔌 WebSocket连接关闭\\n';
+                    statusDiv.textContent = status;
+                };
+                
+                // 5秒后关闭连接
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.close();
+                        status += '\\n测试完成，连接已关闭\\n';
+                        statusDiv.textContent = status;
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                status += `❌ WebSocket测试异常: ${error.message}\\n`;
+                statusDiv.textContent = status;
+                statusDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function simulateDriverConnection() {
+            const statusDiv = document.getElementById('websocketStatus');
+            let status = '模拟司机连接结果:\\n\\n';
+            
+            try {
+                // 先让司机上线
+                const onlineResponse = await fetch('/api/drivers/1/online?latitude=39.044237&longitude=121.749849', {
+                    method: 'POST'
+                });
+                
+                if (onlineResponse.ok) {
+                    status += '✅ 司机1上线成功\\n';
+                    
+                    // 建立WebSocket连接
+                    const ws = new WebSocket('ws://localhost:8080/ws/driver/1');
+                    
+                    ws.onopen = function() {
+                        status += '✅ 司机1 WebSocket连接建立\\n';
+                        statusDiv.textContent = status;
+                        statusDiv.className = 'result-display status-good';
+                        
+                        // 连接建立后，创建一个测试订单
+                        setTimeout(async () => {
+                            const orderData = {
+                                passengerId: 1,
+                                pickupAddress: '测试推送订单',
+                                pickupLatitude: 39.044237,
+                                pickupLongitude: 121.749849,
+                                destinationAddress: '测试目的地',
+                                destinationLatitude: 39.054237,
+                                destinationLongitude: 121.759849
+                            };
+                            
+                            const orderResponse = await fetch('/api/orders/create', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(orderData)
+                            });
+                            
+                            if (orderResponse.ok) {
+                                status += '\\n📋 创建测试订单，等待推送...\\n';
+                                statusDiv.textContent = status;
+                            }
+                        }, 1000);
+                    };
+                    
+                    ws.onmessage = function(event) {
+                        status += `\\n🎉 收到订单推送: ${event.data}\\n`;
+                        statusDiv.textContent = status;
+                        statusDiv.className = 'result-display status-good';
+                    };
+                    
+                    ws.onerror = function(error) {
+                        status += `\\n❌ WebSocket错误: ${error}\\n`;
+                        statusDiv.textContent = status;
+                        statusDiv.className = 'result-display status-error';
+                    };
+                    
+                    // 10秒后关闭连接
+                    setTimeout(() => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.close();
+                            status += '\\n测试完成，连接已关闭\\n';
+                            statusDiv.textContent = status;
+                        }
+                    }, 10000);
+                    
+                } else {
+                    status += `❌ 司机上线失败: ${onlineResponse.status}\\n`;
+                    statusDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                status += `❌ 模拟连接异常: ${error.message}\\n`;
+                statusDiv.className = 'result-display status-error';
+            }
+            
+            statusDiv.textContent = status;
+        }
+
+        async function runFullTest() {
+            const statusDiv = document.getElementById('fullTestStatus');
+            statusDiv.textContent = '';
+            statusDiv.className = 'result-display';
+            
+            log('🚀 开始完整测试流程...');
+            
+            try {
+                // 步骤1: 检查司机状态
+                log('步骤1: 检查司机状态...');
+                const driverResponse = await fetch('/api/drivers/online/redis');
+                if (driverResponse.ok) {
+                    const result = await driverResponse.json();
+                    const drivers = result.data || [];
+                    log(`✅ 发现 ${drivers.length} 个在线司机`);
+                    
+                    if (drivers.length === 0) {
+                        log('⚠️  没有在线司机，尝试修复...');
+                        const fixResponse = await fetch('/api/drivers/fix-redis-status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        if (fixResponse.ok) {
+                            log('✅ 司机状态修复完成');
+                        }
+                    }
+                } else {
+                    log('❌ 检查司机状态失败');
+                    return;
+                }
+                
+                // 步骤2: 建立WebSocket连接
+                log('步骤2: 建立司机WebSocket连接...');
+                const ws = new WebSocket('ws://localhost:8080/ws/driver/1');
+                
+                await new Promise((resolve, reject) => {
+                    ws.onopen = function() {
+                        log('✅ 司机1 WebSocket连接建立成功');
+                        resolve();
+                    };
+                    
+                    ws.onerror = function(error) {
+                        log(`❌ WebSocket连接失败: ${error}`);
+                        reject(error);
+                    };
+                    
+                    setTimeout(() => {
+                        reject(new Error('WebSocket连接超时'));
+                    }, 5000);
+                });
+                
+                // 步骤3: 创建测试订单
+                log('步骤3: 创建测试订单...');
+                const orderData = {
+                    passengerId: 1,
+                    pickupAddress: '完整测试订单',
+                    pickupLatitude: 39.044237,
+                    pickupLongitude: 121.749849,
+                    destinationAddress: '测试目的地',
+                    destinationLatitude: 39.054237,
+                    destinationLongitude: 121.759849
+                };
+                
+                const orderResponse = await fetch('/api/orders/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (orderResponse.ok) {
+                    const orderResult = await orderResponse.json();
+                    log(`✅ 订单创建成功，ID: ${orderResult.data}`);
+                    
+                    // 步骤4: 等待订单推送
+                    log('步骤4: 等待订单推送...');
+                    
+                    let messageReceived = false;
+                    ws.onmessage = function(event) {
+                        log(`🎉 收到订单推送: ${event.data}`);
+                        messageReceived = true;
+                        
+                        // 解析推送消息
+                        try {
+                            const pushData = JSON.parse(event.data);
+                            if (pushData.type === 'NEW_ORDER') {
+                                log('✅ 订单推送格式正确');
+                                log(`订单详情: ${pushData.data.pickupAddress} -> ${pushData.data.destinationAddress}`);
+                            }
+                        } catch (e) {
+                            log('⚠️  推送消息格式异常');
+                        }
+                    };
+                    
+                    // 等待5秒检查是否收到推送
+                    setTimeout(() => {
+                        if (messageReceived) {
+                            log('\\n🎉 完整测试流程成功！');
+                            log('✅ 司机状态正常');
+                            log('✅ WebSocket连接正常');
+                            log('✅ 订单创建正常');
+                            log('✅ 订单推送正常');
+                            statusDiv.className = 'result-display status-good';
+                        } else {
+                            log('\\n⚠️  测试部分成功');
+                            log('✅ 司机状态正常');
+                            log('✅ WebSocket连接正常');
+                            log('✅ 订单创建正常');
+                            log('❌ 未收到订单推送');
+                            statusDiv.className = 'result-display status-warning';
+                        }
+                        
+                        ws.close();
+                        log('\\n测试完成，连接已关闭');
+                    }, 5000);
+                    
+                } else {
+                    log('❌ 订单创建失败');
+                    statusDiv.className = 'result-display status-error';
+                }
+                
+            } catch (error) {
+                log(`❌ 测试过程中出现异常: ${error.message}`);
+                statusDiv.className = 'result-display status-error';
+            }
+        }
+
+        // 页面加载时自动检查状态
+        window.onload = function() {
+            setTimeout(() => {
+                checkDriverStatus();
+                checkRedisDrivers();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

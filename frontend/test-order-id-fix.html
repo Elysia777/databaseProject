@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单ID字段修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .json-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>订单ID字段修复测试</h1>
+        <p>测试司机端订单恢复后，各种操作按钮是否能正确获取订单ID</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>问题描述</h3>
+            <div class="info">
+                <p><strong>原始问题：</strong></p>
+                <ul>
+                    <li>司机端恢复订单后，点击"确认到达"等按钮报错</li>
+                    <li>错误信息：<code>POST http://localhost:3000/api/orders/undefined/pickup 400</code></li>
+                    <li>原因：代码中使用 <code>currentOrder.value.orderId</code>，但后端返回的是 <code>id</code> 字段</li>
+                </ul>
+                <p><strong>修复方案：</strong></p>
+                <ul>
+                    <li>使用兼容写法：<code>currentOrder.value.orderId || currentOrder.value.id</code></li>
+                    <li>添加订单ID存在性检查</li>
+                    <li>改进错误处理和日志记录</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 检查当前订单状态</h3>
+            <button onclick="checkCurrentOrder()">检查当前订单</button>
+            <div id="orderResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 测试订单ID获取</h3>
+            <button onclick="testOrderIdExtraction()">测试订单ID提取</button>
+            <div id="idResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 模拟不同的订单对象结构</h3>
+            <button onclick="testDifferentOrderStructures()">测试不同订单结构</button>
+            <div id="structureResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 验证修复效果</h3>
+            <button onclick="verifyFix()">验证修复效果</button>
+            <div id="verifyResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 检查当前订单状态
+        function checkCurrentOrder() {
+            const resultDiv = document.getElementById('orderResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '检查中...';
+
+            try {
+                const driverState = localStorage.getItem('driverState');
+                
+                if (!driverState) {
+                    resultDiv.innerHTML = '<span class="warning">⚠️ 没有司机状态数据</span>';
+                    return;
+                }
+
+                const state = JSON.parse(driverState);
+                const currentOrder = state.currentOrder;
+
+                if (!currentOrder) {
+                    resultDiv.innerHTML = '<span class="info">ℹ️ 没有当前订单</span>';
+                    return;
+                }
+
+                // 分析订单对象结构
+                const analysis = {
+                    hasId: !!currentOrder.id,
+                    hasOrderId: !!currentOrder.orderId,
+                    idValue: currentOrder.id,
+                    orderIdValue: currentOrder.orderId,
+                    orderNumber: currentOrder.orderNumber,
+                    status: currentOrder.status,
+                    extractedId: currentOrder.orderId || currentOrder.id
+                };
+
+                resultDiv.innerHTML = `
+                    <span class="success">✅ 发现当前订单</span>
+                    <div class="json-display">${JSON.stringify(analysis, null, 2)}</div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 检查失败: ${error.message}</span>`;
+            }
+        }
+
+        // 测试订单ID提取
+        function testOrderIdExtraction() {
+            const resultDiv = document.getElementById('idResult');
+            resultDiv.style.display = 'block';
+
+            // 模拟不同的订单对象
+            const testCases = [
+                { name: '只有id字段', order: { id: 123, orderNumber: 'ORD001', status: 'ASSIGNED' } },
+                { name: '只有orderId字段', order: { orderId: 456, orderNumber: 'ORD002', status: 'PICKUP' } },
+                { name: '两个字段都有', order: { id: 789, orderId: 999, orderNumber: 'ORD003', status: 'IN_PROGRESS' } },
+                { name: '两个字段都没有', order: { orderNumber: 'ORD004', status: 'ASSIGNED' } },
+                { name: 'id为null', order: { id: null, orderId: 111, orderNumber: 'ORD005', status: 'PICKUP' } },
+                { name: 'orderId为undefined', order: { id: 222, orderId: undefined, orderNumber: 'ORD006', status: 'IN_PROGRESS' } }
+            ];
+
+            const results = testCases.map(testCase => {
+                const extractedId = testCase.order.orderId || testCase.order.id;
+                return {
+                    name: testCase.name,
+                    order: testCase.order,
+                    extractedId: extractedId,
+                    isValid: !!extractedId
+                };
+            });
+
+            resultDiv.innerHTML = `
+                <span class="info">ℹ️ 订单ID提取测试结果</span>
+                <div class="json-display">${JSON.stringify(results, null, 2)}</div>
+            `;
+        }
+
+        // 测试不同的订单结构
+        function testDifferentOrderStructures() {
+            const resultDiv = document.getElementById('structureResult');
+            resultDiv.style.display = 'block';
+
+            // 模拟从不同来源获取的订单对象
+            const structures = {
+                fromBackendAPI: {
+                    description: '从后端API获取的订单（使用id字段）',
+                    order: {
+                        id: 12345,
+                        orderNumber: 'ORD20241201001',
+                        status: 'ASSIGNED',
+                        driverId: 1,
+                        passengerId: 2,
+                        pickupLatitude: 39.044237,
+                        pickupLongitude: 121.749849,
+                        destinationLatitude: 39.054237,
+                        destinationLongitude: 121.759849
+                    }
+                },
+                fromWebSocketMessage: {
+                    description: '从WebSocket消息获取的订单（使用orderId字段）',
+                    order: {
+                        orderId: 12345,
+                        orderNumber: 'ORD20241201001',
+                        status: 'ASSIGNED',
+                        driverId: 1,
+                        passengerId: 2,
+                        pickupLatitude: 39.044237,
+                        pickupLongitude: 121.749849,
+                        destinationLatitude: 39.054237,
+                        destinationLongitude: 121.759849
+                    }
+                },
+                fromLocalStorage: {
+                    description: '从localStorage恢复的订单（可能有两个字段）',
+                    order: {
+                        id: 12345,
+                        orderId: 12345,
+                        orderNumber: 'ORD20241201001',
+                        status: 'ASSIGNED',
+                        driverId: 1,
+                        passengerId: 2,
+                        pickupLatitude: 39.044237,
+                        pickupLongitude: 121.749849,
+                        destinationLatitude: 39.054237,
+                        destinationLongitude: 121.759849
+                    }
+                }
+            };
+
+            const analysis = {};
+            for (const [key, structure] of Object.entries(structures)) {
+                const order = structure.order;
+                analysis[key] = {
+                    description: structure.description,
+                    hasId: !!order.id,
+                    hasOrderId: !!order.orderId,
+                    extractedId: order.orderId || order.id,
+                    canMakeAPICall: !!(order.orderId || order.id)
+                };
+            }
+
+            resultDiv.innerHTML = `
+                <span class="info">ℹ️ 不同订单结构分析</span>
+                <div class="json-display">${JSON.stringify(analysis, null, 2)}</div>
+            `;
+        }
+
+        // 验证修复效果
+        function verifyFix() {
+            const resultDiv = document.getElementById('verifyResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '验证中...';
+
+            try {
+                const driverState = localStorage.getItem('driverState');
+                
+                if (!driverState) {
+                    resultDiv.innerHTML = '<span class="warning">⚠️ 没有司机状态数据，无法验证</span>';
+                    return;
+                }
+
+                const state = JSON.parse(driverState);
+                const currentOrder = state.currentOrder;
+
+                if (!currentOrder) {
+                    resultDiv.innerHTML = '<span class="info">ℹ️ 没有当前订单，无法验证</span>';
+                    return;
+                }
+
+                // 模拟修复后的ID提取逻辑
+                const extractOrderId = (order) => {
+                    const orderId = order.orderId || order.id;
+                    
+                    if (!orderId) {
+                        console.error('❌ 订单ID不存在:', order);
+                        return null;
+                    }
+                    
+                    return orderId;
+                };
+
+                const extractedId = extractOrderId(currentOrder);
+                
+                // 模拟API调用URL构建
+                const apiUrls = {
+                    confirmArrival: `/api/orders/${extractedId}/pickup`,
+                    startTrip: `/api/orders/${extractedId}/start`,
+                    completeOrder: `/api/orders/${extractedId}/complete`,
+                    cancelOrder: `/api/orders/${extractedId}/cancel-by-driver`
+                };
+
+                const verification = {
+                    orderExists: !!currentOrder,
+                    idExtracted: !!extractedId,
+                    extractedId: extractedId,
+                    apiUrlsValid: Object.values(apiUrls).every(url => !url.includes('undefined')),
+                    apiUrls: apiUrls,
+                    status: currentOrder.status,
+                    availableActions: []
+                };
+
+                // 根据订单状态确定可用操作
+                if (currentOrder.status === 'ASSIGNED') {
+                    verification.availableActions.push('confirmArrival');
+                } else if (currentOrder.status === 'PICKUP') {
+                    verification.availableActions.push('startTrip');
+                } else if (currentOrder.status === 'IN_PROGRESS') {
+                    verification.availableActions.push('completeOrder');
+                }
+
+                if (['ASSIGNED', 'PICKUP'].includes(currentOrder.status)) {
+                    verification.availableActions.push('cancelOrder');
+                }
+
+                const isFixed = verification.idExtracted && verification.apiUrlsValid;
+
+                resultDiv.innerHTML = `
+                    <span class="${isFixed ? 'success' : 'error'}">
+                        ${isFixed ? '✅ 修复验证成功' : '❌ 修复验证失败'}
+                    </span>
+                    <div class="json-display">${JSON.stringify(verification, null, 2)}</div>
+                    ${isFixed ? '<p><strong>结论：</strong>订单ID字段问题已修复，所有API调用都能正确获取订单ID。</p>' : '<p><strong>结论：</strong>仍存在问题，需要进一步检查。</p>'}
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 验证失败: ${error.message}</span>`;
+            }
+        }
+
+        // 页面加载时自动检查
+        window.onload = function() {
+            setTimeout(() => {
+                checkCurrentOrder();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

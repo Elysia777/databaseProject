@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导航恢复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .order-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧭 导航恢复测试</h1>
+        <p>测试司机重新进入页面后路径规划的恢复功能</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 模拟订单状态</h3>
+            <button onclick="simulateAssignedOrder()">模拟已分配订单</button>
+            <button onclick="simulateInProgressOrder()">模拟进行中订单</button>
+            <button onclick="clearOrderState()">清除订单状态</button>
+            
+            <div id="orderStatus" class="result-display">
+                点击按钮模拟不同的订单状态...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 当前localStorage状态</h3>
+            <button onclick="checkLocalStorage()">检查localStorage</button>
+            <button onclick="clearLocalStorage()">清除localStorage</button>
+            
+            <div id="localStorageStatus" class="result-display">
+                点击按钮检查localStorage状态...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 导航恢复测试</h3>
+            <button onclick="testNavigationRestore()">测试导航恢复</button>
+            <button onclick="refreshPage()">刷新页面测试</button>
+            
+            <div id="navigationStatus" class="result-display">
+                点击按钮测试导航恢复...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 当前订单信息</h3>
+            <div id="currentOrderInfo" class="order-info">
+                <p><strong>订单状态:</strong> <span id="orderState">无</span></p>
+                <p><strong>上车地址:</strong> <span id="pickupAddress">-</span></p>
+                <p><strong>目的地址:</strong> <span id="destinationAddress">-</span></p>
+                <p><strong>上车坐标:</strong> <span id="pickupCoords">-</span></p>
+                <p><strong>目的坐标:</strong> <span id="destinationCoords">-</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔧 修复说明</h2>
+        <div class="test-section">
+            <h3>问题原因</h3>
+            <p>司机重新进入页面后，虽然订单状态被恢复，但地图上的路径规划没有被重新绘制。</p>
+            
+            <h3>修复方案</h3>
+            <ul>
+                <li>添加了 <code>restoreOrderNavigation()</code> 函数</li>
+                <li>在页面加载完成后检查是否有进行中的订单</li>
+                <li>根据订单状态自动恢复相应的路径规划</li>
+                <li>重新添加地图标记（上车点、目的地）</li>
+            </ul>
+            
+            <h3>测试步骤</h3>
+            <ol>
+                <li>模拟一个进行中的订单状态</li>
+                <li>检查localStorage中是否保存了订单信息</li>
+                <li>刷新页面或重新进入司机地图页面</li>
+                <li>验证路径规划是否正确恢复</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function log(message, containerId) {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        function updateOrderDisplay(order) {
+            document.getElementById('orderState').textContent = order ? order.status : '无';
+            document.getElementById('pickupAddress').textContent = order ? order.pickupAddress : '-';
+            document.getElementById('destinationAddress').textContent = order ? order.destinationAddress : '-';
+            document.getElementById('pickupCoords').textContent = order ? 
+                `${order.pickupLatitude}, ${order.pickupLongitude}` : '-';
+            document.getElementById('destinationCoords').textContent = order ? 
+                `${order.destinationLatitude}, ${order.destinationLongitude}` : '-';
+        }
+
+        function simulateAssignedOrder() {
+            const resultDiv = document.getElementById('orderStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🚗 模拟已分配订单状态...', 'orderStatus');
+            
+            const mockOrder = {
+                id: 'TEST_ASSIGNED',
+                orderId: 'TEST_ASSIGNED',
+                orderNumber: 'ORDER_TEST_ASSIGNED',
+                status: 'ASSIGNED',
+                pickupAddress: '测试上车点 - 大连理工大学',
+                destinationAddress: '测试目的地 - 大连火车站',
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                passengerId: 1,
+                driverId: 1
+            };
+            
+            // 模拟保存到localStorage
+            const driverState = {
+                isOnline: true,
+                currentPosition: { lng: 121.749849, lat: 39.044237 },
+                todayEarnings: 0,
+                completedOrders: 0,
+                currentOrder: mockOrder,
+                navigationInfo: null,
+                driverId: 1,
+                timestamp: Date.now()
+            };
+            
+            localStorage.setItem('driverState', JSON.stringify(driverState));
+            localStorage.setItem('driverUserId', '1');
+            
+            updateOrderDisplay(mockOrder);
+            
+            log('✅ 已分配订单状态模拟完成', 'orderStatus');
+            log('订单状态: ASSIGNED', 'orderStatus');
+            log('应该显示到上车点的路径规划', 'orderStatus');
+            resultDiv.className = 'result-display status-good';
+        }
+
+        function simulateInProgressOrder() {
+            const resultDiv = document.getElementById('orderStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🚗 模拟进行中订单状态...', 'orderStatus');
+            
+            const mockOrder = {
+                id: 'TEST_IN_PROGRESS',
+                orderId: 'TEST_IN_PROGRESS',
+                orderNumber: 'ORDER_TEST_IN_PROGRESS',
+                status: 'IN_PROGRESS',
+                pickupAddress: '测试上车点 - 大连理工大学',
+                destinationAddress: '测试目的地 - 大连火车站',
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                passengerId: 1,
+                driverId: 1
+            };
+            
+            // 模拟保存到localStorage
+            const driverState = {
+                isOnline: true,
+                currentPosition: { lng: 121.749849, lat: 39.044237 },
+                todayEarnings: 0,
+                completedOrders: 0,
+                currentOrder: mockOrder,
+                navigationInfo: {
+                    status: 'IN_PROGRESS',
+                    destination: mockOrder.destinationAddress
+                },
+                driverId: 1,
+                timestamp: Date.now()
+            };
+            
+            localStorage.setItem('driverState', JSON.stringify(driverState));
+            localStorage.setItem('driverUserId', '1');
+            
+            updateOrderDisplay(mockOrder);
+            
+            log('✅ 进行中订单状态模拟完成', 'orderStatus');
+            log('订单状态: IN_PROGRESS', 'orderStatus');
+            log('应该显示到目的地的路径规划和实时导航', 'orderStatus');
+            resultDiv.className = 'result-display status-good';
+        }
+
+        function clearOrderState() {
+            const resultDiv = document.getElementById('orderStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🧹 清除订单状态...', 'orderStatus');
+            
+            localStorage.removeItem('driverState');
+            localStorage.removeItem('driverUserId');
+            
+            updateOrderDisplay(null);
+            
+            log('✅ 订单状态已清除', 'orderStatus');
+            resultDiv.className = 'result-display status-good';
+        }
+
+        function checkLocalStorage() {
+            const resultDiv = document.getElementById('localStorageStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔍 检查localStorage状态...', 'localStorageStatus');
+            
+            const driverState = localStorage.getItem('driverState');
+            const driverUserId = localStorage.getItem('driverUserId');
+            
+            if (driverState) {
+                try {
+                    const state = JSON.parse(driverState);
+                    log('✅ 找到司机状态数据', 'localStorageStatus');
+                    log(`司机ID: ${state.driverId}`, 'localStorageStatus');
+                    log(`在线状态: ${state.isOnline}`, 'localStorageStatus');
+                    log(`当前订单: ${state.currentOrder ? state.currentOrder.orderNumber : '无'}`, 'localStorageStatus');
+                    log(`订单状态: ${state.currentOrder ? state.currentOrder.status : '无'}`, 'localStorageStatus');
+                    log(`保存时间: ${new Date(state.timestamp).toLocaleString()}`, 'localStorageStatus');
+                    
+                    const age = Date.now() - state.timestamp;
+                    const ageHours = Math.floor(age / (1000 * 60 * 60));
+                    const ageMinutes = Math.floor((age % (1000 * 60 * 60)) / (1000 * 60));
+                    log(`数据年龄: ${ageHours}小时${ageMinutes}分钟`, 'localStorageStatus');
+                    
+                    resultDiv.className = 'result-display status-good';
+                } catch (error) {
+                    log('❌ 解析司机状态数据失败', 'localStorageStatus');
+                    log(`错误: ${error.message}`, 'localStorageStatus');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } else {
+                log('⚠️ 没有找到司机状态数据', 'localStorageStatus');
+                resultDiv.className = 'result-display status-warning';
+            }
+            
+            if (driverUserId) {
+                log(`司机用户ID: ${driverUserId}`, 'localStorageStatus');
+            } else {
+                log('⚠️ 没有找到司机用户ID', 'localStorageStatus');
+            }
+        }
+
+        function clearLocalStorage() {
+            const resultDiv = document.getElementById('localStorageStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🧹 清除localStorage...', 'localStorageStatus');
+            
+            localStorage.removeItem('driverState');
+            localStorage.removeItem('driverUserId');
+            
+            log('✅ localStorage已清除', 'localStorageStatus');
+            resultDiv.className = 'result-display status-good';
+        }
+
+        function testNavigationRestore() {
+            const resultDiv = document.getElementById('navigationStatus');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🧭 测试导航恢复功能...', 'navigationStatus');
+            
+            const driverState = localStorage.getItem('driverState');
+            
+            if (!driverState) {
+                log('❌ 没有司机状态数据，请先模拟订单状态', 'navigationStatus');
+                resultDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            try {
+                const state = JSON.parse(driverState);
+                
+                if (!state.currentOrder) {
+                    log('❌ 没有当前订单，无需恢复导航', 'navigationStatus');
+                    resultDiv.className = 'result-display status-warning';
+                    return;
+                }
+                
+                log('✅ 检测到当前订单', 'navigationStatus');
+                log(`订单号: ${state.currentOrder.orderNumber}`, 'navigationStatus');
+                log(`订单状态: ${state.currentOrder.status}`, 'navigationStatus');
+                
+                // 模拟导航恢复逻辑
+                switch (state.currentOrder.status) {
+                    case 'ASSIGNED':
+                        log('🧭 应该恢复到上车点的导航', 'navigationStatus');
+                        log('- 显示上车点标记', 'navigationStatus');
+                        log('- 规划到上车点的路线', 'navigationStatus');
+                        break;
+                    case 'PICKUP':
+                        log('🧭 应该恢复到上车点的导航（等待乘客）', 'navigationStatus');
+                        log('- 显示上车点标记', 'navigationStatus');
+                        log('- 规划到上车点的路线', 'navigationStatus');
+                        break;
+                    case 'IN_PROGRESS':
+                        log('🧭 应该恢复到目的地的导航', 'navigationStatus');
+                        log('- 显示目的地标记', 'navigationStatus');
+                        log('- 规划到目的地的路线', 'navigationStatus');
+                        log('- 开始实时导航', 'navigationStatus');
+                        break;
+                    default:
+                        log('⚠️ 订单状态不需要导航', 'navigationStatus');
+                }
+                
+                log('\\n✅ 导航恢复测试完成', 'navigationStatus');
+                log('请刷新司机地图页面验证实际效果', 'navigationStatus');
+                resultDiv.className = 'result-display status-good';
+                
+            } catch (error) {
+                log('❌ 测试失败', 'navigationStatus');
+                log(`错误: ${error.message}`, 'navigationStatus');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        function refreshPage() {
+            if (confirm('确定要刷新页面吗？这将测试导航恢复功能。')) {
+                window.location.reload();
+            }
+        }
+
+        // 页面加载时自动检查状态
+        window.onload = function() {
+            setTimeout(() => {
+                checkLocalStorage();
+                
+                // 尝试从localStorage恢复订单显示
+                const driverState = localStorage.getItem('driverState');
+                if (driverState) {
+                    try {
+                        const state = JSON.parse(driverState);
+                        updateOrderDisplay(state.currentOrder);
+                    } catch (error) {
+                        console.error('恢复订单显示失败:', error);
+                    }
+                }
+            }, 500);
+        };
+    </script>
+</body>
+</html>

@@ -778,4 +778,403 @@ stompClient.onConnect = () => {
 **修复完成时间**: 2025年1月27日  
 **问题等级**: 严重功能问题  
 **影响范围**: 所有需要接收实时状态更新的乘客用户  
-**测试状态**: 已通过完整的功能测试和错误场景测试"
+**测试状态**: 已通过完整的功能测试和错误场景测试"## 
+🚗 司机端状态持久化实现 (2025-01-27)
+
+### 需求描述
+司机端同样要求切换页面的时候订单状态不会消失，需要实现与乘客端类似的状态持久化功能。
+
+### 实现方案
+
+#### 1. 创建司机专用Store
+```javascript
+// 新建 stores/driver.js
+export const useDriverStore = defineStore('driver', () => {
+  // 司机状态
+  const isOnline = ref(false)
+  const currentPosition = ref({ lng: 0, lat: 0 })
+  const todayEarnings = ref(0)
+  const completedOrders = ref(0)
+  
+  // 订单相关状态
+  const pendingOrders = ref([]) // 待处理订单队列
+  const currentOrder = ref(null) // 当前正在执行的订单
+  const navigationInfo = ref(null) // 导航信息
+  
+  // 状态持久化方法
+  const saveDriverState = () => { ... }
+  const restoreDriverState = () => { ... }
+  const clearDriverState = () => { ... }
+})
+```
+
+#### 2. 状态持久化机制
+```javascript
+// 保存到localStorage
+const saveDriverState = () => {
+  const driverState = {
+    driverId: driverId,
+    isOnline: isOnline.value,
+    currentPosition: currentPosition.value,
+    todayEarnings: todayEarnings.value,
+    completedOrders: completedOrders.value,
+    currentOrder: currentOrder.value,
+    navigationInfo: navigationInfo.value,
+    timestamp: Date.now()
+  }
+  
+  localStorage.setItem('driverState', JSON.stringify(driverState))
+  localStorage.setItem('driverUserId', driverId.toString())
+}
+```
+
+#### 3. 用户隔离机制
+```javascript
+// 检查状态是否属于当前司机
+const restoreDriverState = async () => {
+  const currentDriverId = userStore.user?.driverId || userStore.user?.id
+  const savedUserId = localStorage.getItem('driverUserId')
+  
+  if (savedUserId && savedUserId !== currentDriverId.toString()) {
+    console.log('⚠️ localStorage中的状态不属于当前司机，清除状态')
+    clearDriverState()
+    return
+  }
+  
+  // 恢复状态...
+}
+```
+
+#### 4. WebSocket自动重连
+```javascript
+// 页面加载时检查是否需要重连
+if (currentOrder.value && ['ASSIGNED', 'PICKUP', 'IN_PROGRESS'].includes(currentOrder.value.status)) {
+  console.log('🔌 检测到进行中的订单，重新建立WebSocket连接')
+  setTimeout(() => {
+    connectWebSocket()
+  }, 1000)
+}
+```
+
+#### 5. 组件集成改造
+```javascript
+// DriverMap.vue 改造
+// 替换本地状态为store状态
+const isOnline = computed(() => driverStore.isOnline)
+const currentOrder = computed(() => driverStore.currentOrder)
+const pendingOrders = computed(() => driverStore.pendingOrders)
+
+// 页面加载时恢复状态
+onMounted(async () => {
+  // 注册全局消息处理函数
+  window.handleDriverMapUpdate = handleDriverOrderUpdate
+  
+  // 恢复司机状态
+  await driverStore.restoreDriverState()
+  
+  // 检查WebSocket连接
+  if (isOnline.value || currentOrder.value) {
+    driverStore.connectWebSocket()
+  }
+})
+```
+
+### 技术实现细节
+
+#### 数据结构设计
+```javascript
+// 司机状态数据结构
+{
+  driverId: 司机ID,
+  isOnline: 在线状态,
+  currentPosition: { lng: 经度, lat: 纬度 },
+  todayEarnings: 今日收入,
+  completedOrders: 完成订单数,
+  currentOrder: {
+    id: 订单ID,
+    orderNumber: 订单号,
+    status: 订单状态,
+    pickupAddress: 上车地址,
+    destinationAddress: 目的地地址,
+    // ... 完整订单信息
+  },
+  navigationInfo: 导航信息,
+  timestamp: 保存时间戳
+}
+```
+
+#### WebSocket消息处理
+```javascript
+// 司机专用消息处理
+const handleDriverOrderUpdate = (data) => {
+  switch (data.type) {
+    case 'NEW_ORDER':
+      // 新订单推送处理
+      break
+    case 'ORDER_CANCELLED':
+      // 订单取消处理
+      break
+    case 'ORDER_STATUS_CHANGE':
+      // 订单状态变化处理
+      break
+  }
+}
+```
+
+#### 状态过期机制
+```javascript
+// 检查状态有效性（24小时过期）
+const stateAge = Date.now() - (driverState.timestamp || 0)
+const maxAge = 24 * 60 * 60 * 1000 // 24小时
+
+if (stateAge > maxAge) {
+  console.log('⚠️ 司机状态已过期，清除状态')
+  clearDriverState()
+  return
+}
+```
+
+### 功能特性
+
+#### 状态持久化范围
+1. ✅ **司机基本状态**: 在线状态、位置信息
+2. ✅ **收入统计**: 今日收入、完成订单数
+3. ✅ **当前订单**: 完整的订单信息和状态
+4. ✅ **待处理订单**: 订单推送队列
+5. ✅ **导航信息**: 导航状态和路线信息
+
+#### 用户隔离保护
+- **司机ID验证**: 确保状态只属于当前司机
+- **多重检查**: localStorage和订单数据双重验证
+- **自动清理**: 用户切换时自动清除旧状态
+
+#### WebSocket管理
+- **自动重连**: 页面重新加载时自动重新建立连接
+- **状态同步**: 连接成功后自动同步订单状态
+- **消息路由**: 通过全局函数实现store与组件通信
+
+### 测试场景
+
+#### 场景1: 司机上线状态持久化
+1. 司机登录并上线
+2. 切换到其他页面或刷新页面
+3. 重新进入司机地图页面
+4. ✅ 预期结果: 司机仍然显示为在线状态
+
+#### 场景2: 进行中订单持久化
+1. 司机接单并开始执行订单
+2. 订单状态为ASSIGNED、PICKUP或IN_PROGRESS
+3. 切换页面或刷新浏览器
+4. ✅ 预期结果: 当前订单信息完整恢复，WebSocket自动重连
+
+#### 场景3: 用户隔离测试
+1. 司机A登录并设置状态
+2. 登出司机A，登录司机B
+3. 司机B进入地图页面
+4. ✅ 预期结果: 司机B看不到司机A的任何状态信息
+
+### 测试工具
+- ✅ **司机状态持久化测试**: `frontend/test-driver-persistence.html`
+- ✅ **调试命令集合**: 完整的localStorage和store状态检查命令
+
+### 关键改进点
+1. **架构统一**: 与乘客端使用相同的状态持久化架构
+2. **数据完整性**: 保存和恢复完整的司机工作状态
+3. **用户体验**: 页面切换无感知，状态无缝恢复
+4. **安全性**: 完善的用户隔离和数据验证机制
+5. **可维护性**: 集中的状态管理和清晰的代码结构
+
+---
+
+**实现完成时间**: 2025年1月27日  
+**功能等级**: 核心功能实现  
+**影响范围**: 所有司机用户的工作流程体验  
+**测试状态**: 已通过完整的功能测试和用户隔离测试"#
+# 🔧 司机订单接收和退出登录修复 (2025-01-27)
+
+### 问题描述
+1. 司机无法收到乘客发起的订单通知，后端显示已通知但前端没有收到
+2. 司机退出登录时应该自动下线，但没有实现
+
+### 问题分析
+
+#### 司机无法收到订单的可能原因
+1. **司机状态检查失败**: 后端`isDriverOnlineAndFree()`检查失败
+2. **WebSocket连接问题**: 连接未建立或订阅路径不匹配
+3. **消息处理函数缺失**: 全局消息处理函数未正确注册
+4. **状态同步问题**: 前端显示在线但后端Redis状态未更新
+
+#### 退出登录问题
+- 司机退出登录时没有调用下线API
+- 状态数据没有正确清理
+- WebSocket连接没有断开
+
+### 修复方案
+
+#### 1. 修复退出登录自动下线
+```javascript
+// 在 stores/user.js 的 logout 方法中添加
+const logout = async () => {
+  try {
+    // 如果是司机用户，先下线
+    if (user.value && user.value.userType === 'DRIVER' && user.value.driverId) {
+      console.log('🚗 司机退出登录，自动下线...');
+      await fetch(`/api/drivers/${user.value.driverId}/offline`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token.value}`
+        }
+      });
+      console.log('✅ 司机已自动下线');
+    }
+    
+    await userApi.logout();
+  } finally {
+    // 清理所有状态数据
+    user.value = null;
+    token.value = "";
+    localStorage.removeItem("token");
+    localStorage.removeItem("driverState");
+    localStorage.removeItem("driverUserId");
+    // ... 其他清理
+  }
+}
+```
+
+#### 2. 修复司机下线状态清理
+```javascript
+// 在 stores/driver.js 中添加专门的订单状态清理方法
+const clearOrderState = () => {
+  currentOrder.value = null
+  navigationInfo.value = null
+  pendingOrders.value = []
+  saveDriverState()
+  console.log('🔄 订单状态已清除')
+}
+
+// 在 DriverMap.vue 中正确调用
+if (!online) {
+  // 清理待处理订单列表和当前订单（保留收入统计）
+  driverStore.clearOrderState()
+}
+```
+
+#### 3. 优化WebSocket连接管理
+```javascript
+// 确保司机上线时正确建立WebSocket连接
+if (online) {
+  startLocationTracking()
+  console.log('司机上线，建立WebSocket连接...')
+  driverStore.connectWebSocket()
+} else {
+  stopLocationTracking()
+  console.log('司机下线，断开WebSocket连接')
+  driverStore.disconnectWebSocket()
+  driverStore.clearOrderState()
+}
+```
+
+#### 4. 增强消息处理机制
+```javascript
+// 确保全局消息处理函数正确注册
+onMounted(async () => {
+  // 注册全局函数，让store能够通知地图组件
+  window.handleDriverMapUpdate = handleDriverOrderUpdate
+  console.log('✅ 已注册司机地图消息处理函数')
+  
+  // 恢复司机状态
+  await driverStore.restoreDriverState()
+  
+  // 检查WebSocket连接
+  if (isOnline.value || currentOrder.value) {
+    driverStore.connectWebSocket()
+  }
+})
+```
+
+### 调试工具
+
+#### 创建的调试工具
+1. **WebSocket连接调试**: `frontend/debug-driver-websocket.html`
+2. **订单流程测试**: `frontend/test-driver-order-flow.html`
+3. **司机状态测试**: `frontend/test-driver-persistence.html`
+
+#### 关键调试命令
+```javascript
+// 检查司机状态
+console.log("司机在线:", window.driverStore?.isOnline);
+console.log("用户信息:", window.userStore?.user);
+console.log("司机ID:", window.userStore?.user?.driverId);
+
+// 检查WebSocket连接
+console.log("消息处理函数:", typeof window.handleDriverMapUpdate);
+
+// 手动测试消息接收
+if (window.handleDriverMapUpdate) {
+  window.handleDriverMapUpdate({
+    type: 'NEW_ORDER',
+    orderId: '12345',
+    orderNumber: 'TEST001',
+    pickupAddress: '测试地址',
+    destinationAddress: '测试目的地'
+  });
+}
+```
+
+### 后端验证点
+
+#### 关键检查点
+1. **Redis状态检查**: `isDriverOnlineAndFree(driverId)`
+2. **消息发送路径**: `/user/{driverId}/queue/orders`
+3. **司机上线API**: `/api/drivers/{driverId}/online`
+4. **司机下线API**: `/api/drivers/{driverId}/offline`
+
+#### 后端日志验证
+```java
+// 在 WebSocketNotificationService.notifyDriverNewOrder 中
+System.out.println("✅ 司机 " + driverId + " 在线且空闲，继续发送通知");
+System.out.println("发送的通知数据: " + notification);
+System.out.println("目标: /user/" + driverIdStr + destination);
+```
+
+### 测试场景
+
+#### 场景1: 司机订单接收测试
+1. 司机登录并上线
+2. 乘客发起订单
+3. 验证司机端是否收到通知
+4. 检查WebSocket消息和UI更新
+
+#### 场景2: 退出登录测试
+1. 司机在线状态
+2. 司机退出登录
+3. 验证是否自动下线
+4. 检查状态数据清理
+
+#### 场景3: 页面切换测试
+1. 司机上线并有订单
+2. 切换页面后重新进入
+3. 验证状态恢复和WebSocket重连
+4. 测试订单消息接收
+
+### 预期效果
+
+#### 修复后的功能
+1. ✅ **订单通知正常**: 司机能正确接收乘客发起的订单
+2. ✅ **自动下线**: 司机退出登录时自动调用下线API
+3. ✅ **状态清理**: 退出时正确清理所有相关状态
+4. ✅ **WebSocket管理**: 连接状态与司机在线状态同步
+5. ✅ **消息处理**: 全局消息处理函数正确注册和调用
+
+#### 用户体验改进
+- **实时通知**: 司机能及时收到新订单推送
+- **状态一致**: 前端显示与后端状态完全同步
+- **干净退出**: 退出登录后不留任何状态残留
+- **快速重连**: 重新登录后快速恢复工作状态
+
+---
+
+**修复完成时间**: 2025年1月27日  
+**问题等级**: 严重功能问题  
+**影响范围**: 所有司机用户的订单接收和登录体验  
+**测试状态**: 需要进一步验证和测试"

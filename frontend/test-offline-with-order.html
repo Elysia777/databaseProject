@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机下线订单保持测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.warning {
+            background: #e6a23c;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .scenario {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📴 司机下线订单保持测试</h1>
+        <p>测试司机下线时是否正确保持进行中的订单</p>
+    </div>
+
+    <div class="container">
+        <h2>🔧 修复说明</h2>
+        <div class="test-section">
+            <h3>问题描述</h3>
+            <p>司机下线后，司机端就没有这个订单了，但实际上司机下线应该只决定能否接到新订单推送，而不是直接关闭WebSocket连接。</p>
+            
+            <h3>修复方案</h3>
+            <ul>
+                <li><strong>有进行中订单时：</strong>司机下线只清理待处理订单，保持WebSocket连接和当前订单</li>
+                <li><strong>无进行中订单时：</strong>司机下线正常断开WebSocket连接</li>
+                <li><strong>页面刷新时：</strong>如果有进行中订单，即使司机下线也要连接WebSocket</li>
+            </ul>
+            
+            <h3>业务逻辑</h3>
+            <div class="scenario">
+                <h4>场景1：司机有进行中订单时下线</h4>
+                <ul>
+                    <li>✅ 保持WebSocket连接（接收订单状态更新）</li>
+                    <li>✅ 保持当前订单显示</li>
+                    <li>✅ 清理待处理订单列表</li>
+                    <li>✅ 停止接收新订单推送</li>
+                    <li>✅ 显示警告提示</li>
+                </ul>
+            </div>
+            
+            <div class="scenario">
+                <h4>场景2：司机无进行中订单时下线</h4>
+                <ul>
+                    <li>✅ 断开WebSocket连接</li>
+                    <li>✅ 清理待处理订单列表</li>
+                    <li>✅ 停止位置追踪</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 模拟司机接单</h3>
+            <button onclick="createAndAcceptOrder()">创建订单并接单</button>
+            <button onclick="checkCurrentOrder()">检查当前订单</button>
+            
+            <div id="orderResult" class="result-display">
+                点击按钮模拟司机接单...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 测试有订单时下线</h3>
+            <button onclick="testOfflineWithOrder()" class="warning">司机下线（有订单）</button>
+            <button onclick="checkWebSocketStatus()">检查WebSocket状态</button>
+            
+            <div id="offlineResult" class="result-display">
+                点击按钮测试有订单时下线...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 测试订单状态更新</h3>
+            <button onclick="updateOrderStatus()">更新订单状态</button>
+            <button onclick="cancelOrderTest()">取消订单测试</button>
+            
+            <div id="updateResult" class="result-display">
+                点击按钮测试订单状态更新...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 测试无订单时下线</h3>
+            <button onclick="completeOrderAndOffline()">完成订单后下线</button>
+            <button onclick="testOfflineWithoutOrder()" class="danger">司机下线（无订单）</button>
+            
+            <div id="noOrderResult" class="result-display">
+                点击按钮测试无订单时下线...
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📋 测试检查清单</h2>
+        <div class="test-section">
+            <h3>验证要点</h3>
+            <ul>
+                <li>□ 司机有进行中订单时下线，订单仍然显示</li>
+                <li>□ 司机下线后仍能收到订单状态更新通知</li>
+                <li>□ 司机下线后仍能收到乘客取消订单通知</li>
+                <li>□ 司机下线后不会收到新订单推送</li>
+                <li>□ 司机无订单时下线，WebSocket正常断开</li>
+                <li>□ 页面刷新后，有订单的下线司机仍能恢复连接</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let testOrderId = null;
+        let wsMonitor = null;
+
+        function log(message, containerId) {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        async function createAndAcceptOrder() {
+            const resultDiv = document.getElementById('orderResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('📋 创建测试订单...', 'orderResult');
+            
+            try {
+                // 1. 创建订单
+                const orderData = {
+                    passengerId: 1,
+                    pickupAddress: '下线测试订单 - 大连理工大学',
+                    pickupLatitude: 39.044237,
+                    pickupLongitude: 121.749849,
+                    destinationAddress: '测试目的地 - 大连火车站',
+                    destinationLatitude: 39.054237,
+                    destinationLongitude: 121.759849
+                };
+                
+                const orderResponse = await fetch('/api/orders/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (orderResponse.ok) {
+                    const orderResult = await orderResponse.json();
+                    testOrderId = orderResult.data;
+                    log(`✅ 订单创建成功，ID: ${testOrderId}`, 'orderResult');
+                    
+                    // 2. 司机接单
+                    log('🚗 司机接单...', 'orderResult');
+                    const acceptResponse = await fetch(`/api/drivers/1/accept-order/${testOrderId}`, {
+                        method: 'POST'
+                    });
+                    
+                    if (acceptResponse.ok) {
+                        log('✅ 司机接单成功', 'orderResult');
+                        log('订单状态: ASSIGNED', 'orderResult');
+                        resultDiv.className = 'result-display status-good';
+                    } else {
+                        log(`❌ 司机接单失败: ${acceptResponse.status}`, 'orderResult');
+                        resultDiv.className = 'result-display status-error';
+                    }
+                } else {
+                    log(`❌ 订单创建失败: ${orderResponse.status}`, 'orderResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 操作异常: ${error.message}`, 'orderResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function checkCurrentOrder() {
+            log('🔍 检查当前订单状态...', 'orderResult');
+            
+            if (!testOrderId) {
+                log('❌ 请先创建并接单', 'orderResult');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/orders/${testOrderId}`);
+                if (response.ok) {
+                    const result = await response.json();
+                    const order = result.data;
+                    log(`订单状态: ${order.status}`, 'orderResult');
+                    log(`司机ID: ${order.driverId}`, 'orderResult');
+                    log(`订单号: ${order.orderNumber}`, 'orderResult');
+                } else {
+                    log(`❌ 检查订单失败: ${response.status}`, 'orderResult');
+                }
+            } catch (error) {
+                log(`❌ 检查订单异常: ${error.message}`, 'orderResult');
+            }
+        }
+
+        async function testOfflineWithOrder() {
+            const resultDiv = document.getElementById('offlineResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('📴 测试有订单时司机下线...', 'offlineResult');
+            
+            if (!testOrderId) {
+                log('❌ 请先创建并接单', 'offlineResult');
+                resultDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            try {
+                // 司机下线
+                const response = await fetch('/api/drivers/1/offline', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 司机下线成功', 'offlineResult');
+                    log('\\n预期行为:', 'offlineResult');
+                    log('- WebSocket连接应该保持', 'offlineResult');
+                    log('- 当前订单应该保留', 'offlineResult');
+                    log('- 待处理订单列表应该清空', 'offlineResult');
+                    log('- 应该显示警告提示', 'offlineResult');
+                    
+                    resultDiv.className = 'result-display status-warning';
+                } else {
+                    log(`❌ 司机下线失败: ${response.status}`, 'offlineResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 下线操作异常: ${error.message}`, 'offlineResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        function checkWebSocketStatus() {
+            log('\\n🔌 检查WebSocket连接状态...', 'offlineResult');
+            
+            // 这里可以通过开发者工具的Network标签查看WebSocket连接
+            log('请检查浏览器开发者工具的Network标签', 'offlineResult');
+            log('应该能看到WebSocket连接仍然存在', 'offlineResult');
+            
+            // 尝试建立测试连接
+            try {
+                const testWs = new WebSocket('ws://localhost:8080/ws/driver/1');
+                
+                testWs.onopen = function() {
+                    log('✅ WebSocket测试连接成功', 'offlineResult');
+                    testWs.close();
+                };
+                
+                testWs.onerror = function() {
+                    log('❌ WebSocket测试连接失败', 'offlineResult');
+                };
+                
+            } catch (error) {
+                log(`❌ WebSocket测试异常: ${error.message}`, 'offlineResult');
+            }
+        }
+
+        async function updateOrderStatus() {
+            const resultDiv = document.getElementById('updateResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔄 测试订单状态更新...', 'updateResult');
+            
+            if (!testOrderId) {
+                log('❌ 请先创建并接单', 'updateResult');
+                resultDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            try {
+                // 模拟确认到达
+                const response = await fetch(`/api/orders/${testOrderId}/pickup`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 订单状态更新为PICKUP', 'updateResult');
+                    log('司机端应该收到状态更新通知', 'updateResult');
+                    resultDiv.className = 'result-display status-good';
+                } else {
+                    log(`❌ 状态更新失败: ${response.status}`, 'updateResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 状态更新异常: ${error.message}`, 'updateResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function cancelOrderTest() {
+            log('\\n❌ 测试乘客取消订单...', 'updateResult');
+            
+            if (!testOrderId) {
+                log('❌ 请先创建并接单', 'updateResult');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/orders/${testOrderId}/cancel`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 乘客取消订单成功', 'updateResult');
+                    log('司机端应该收到取消通知', 'updateResult');
+                    log('订单状态应该被清理', 'updateResult');
+                } else {
+                    log(`❌ 取消订单失败: ${response.status}`, 'updateResult');
+                }
+            } catch (error) {
+                log(`❌ 取消订单异常: ${error.message}`, 'updateResult');
+            }
+        }
+
+        async function completeOrderAndOffline() {
+            const resultDiv = document.getElementById('noOrderResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('✅ 模拟完成订单...', 'noOrderResult');
+            
+            if (!testOrderId) {
+                log('❌ 请先创建并接单', 'noOrderResult');
+                resultDiv.className = 'result-display status-error';
+                return;
+            }
+            
+            try {
+                // 完成订单
+                const response = await fetch(`/api/orders/${testOrderId}/complete`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 订单完成', 'noOrderResult');
+                    testOrderId = null; // 清除测试订单ID
+                    resultDiv.className = 'result-display status-good';
+                } else {
+                    log(`❌ 完成订单失败: ${response.status}`, 'noOrderResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 完成订单异常: ${error.message}`, 'noOrderResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function testOfflineWithoutOrder() {
+            log('\\n📴 测试无订单时司机下线...', 'noOrderResult');
+            
+            try {
+                const response = await fetch('/api/drivers/1/offline', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    log('✅ 司机下线成功', 'noOrderResult');
+                    log('\\n预期行为:', 'noOrderResult');
+                    log('- WebSocket连接应该断开', 'noOrderResult');
+                    log('- 待处理订单列表应该清空', 'noOrderResult');
+                    log('- 位置追踪应该停止', 'noOrderResult');
+                    
+                    document.getElementById('noOrderResult').className = 'result-display status-good';
+                } else {
+                    log(`❌ 司机下线失败: ${response.status}`, 'noOrderResult');
+                    document.getElementById('noOrderResult').className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 下线操作异常: ${error.message}`, 'noOrderResult');
+                document.getElementById('noOrderResult').className = 'result-display status-error';
+            }
+        }
+
+        // 页面加载时的说明
+        window.onload = function() {
+            log('页面加载完成，请按顺序进行测试', 'orderResult');
+            log('1. 先创建订单并接单', 'orderResult');
+            log('2. 然后测试有订单时下线', 'orderResult');
+            log('3. 验证订单状态更新功能', 'orderResult');
+            log('4. 最后测试无订单时下线', 'orderResult');
+        };
+    </script>
+</body>
+</html>

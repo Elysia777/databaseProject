@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机订单流程测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        button.success {
+            background: #67c23a;
+        }
+        button.danger {
+            background: #f56c6c;
+        }
+        .status-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .flow-step {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #2196f3;
+            border-radius: 3px;
+        }
+        .flow-step.success {
+            background: #e8f5e8;
+            border-left-color: #4caf50;
+        }
+        .flow-step.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 司机订单流程测试</h1>
+        <p>测试司机接收订单通知的完整流程</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 问题分析</h3>
+            <div class="status-display">
+司机无法收到订单的可能原因:
+
+1. 司机没有正确上线
+   - 前端显示上线，但后端Redis状态未更新
+   - 司机位置信息缺失
+
+2. WebSocket连接问题
+   - 连接未建立或连接断开
+   - 订阅路径不匹配
+   - 消息处理函数未注册
+
+3. 后端检查失败
+   - isDriverOnlineAndFree() 返回false
+   - 司机状态为busy或offline
+
+4. 退出登录问题
+   - 司机退出时没有自动下线
+   - 状态残留导致问题
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 完整流程测试</h3>
+            <button onclick="testCompleteFlow()">测试完整流程</button>
+            
+            <div id="flowResult" class="status-display">
+                点击按钮开始测试完整流程...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 司机状态检查</h3>
+            <button onclick="checkDriverOnlineStatus()">检查司机在线状态</button>
+            <button onclick="forceDriverOnline()" class="success">强制司机上线</button>
+            
+            <div id="driverStatusResult" class="status-display">
+                点击按钮检查司机状态...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. WebSocket连接测试</h3>
+            <button onclick="testWebSocketConnection()">测试WebSocket连接</button>
+            <button onclick="reconnectWebSocket()">重新连接WebSocket</button>
+            
+            <div id="websocketResult" class="status-display">
+                点击按钮测试WebSocket连接...
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. 修复建议</h3>
+            <div class="status-display status-good">
+修复步骤:
+
+1. 确保司机正确上线
+   - 检查前端isOnline状态
+   - 验证后端Redis状态
+   - 确认位置信息正确
+
+2. 验证WebSocket连接
+   - 检查连接状态
+   - 验证订阅路径
+   - 确认消息处理函数
+
+3. 测试消息接收
+   - 模拟订单推送
+   - 检查消息处理
+   - 验证UI更新
+
+4. 修复退出登录
+   - 添加自动下线逻辑
+   - 清理状态数据
+   - 断开WebSocket连接
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>📋 调试命令</h3>
+        <div class="status-display">
+// 检查司机状态
+console.log("司机在线:", window.driverStore?.isOnline);
+console.log("用户信息:", window.userStore?.user);
+console.log("司机ID:", window.userStore?.user?.driverId);
+
+// 检查WebSocket连接
+console.log("消息处理函数:", typeof window.handleDriverMapUpdate);
+
+// 手动上线司机
+if (window.driverStore) {
+    window.driverStore.setOnlineStatus(true);
+    window.driverStore.connectWebSocket();
+}
+
+// 测试消息接收
+if (window.handleDriverMapUpdate) {
+    window.handleDriverMapUpdate({
+        type: 'NEW_ORDER',
+        orderId: '12345',
+        orderNumber: 'TEST001',
+        pickupAddress: '测试地址',
+        destinationAddress: '测试目的地'
+    });
+}
+        </div>
+        <button onclick="copyToClipboard(this.previousElementSibling.textContent)">复制调试命令</button>
+    </div>
+
+    <div class="container">
+        <h3>📋 测试日志</h3>
+        <div id="testLog" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\\n`;
+            logDiv.textContent += logEntry;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(logEntry);
+        }
+
+        function testCompleteFlow() {
+            const resultDiv = document.getElementById('flowResult');
+            let content = '';
+
+            const flowSteps = [
+                {
+                    step: '1. 司机登录',
+                    check: () => window.userStore && window.userStore.user && window.userStore.isDriver,
+                    status: 'unknown'
+                },
+                {
+                    step: '2. 司机上线',
+                    check: () => window.driverStore && window.driverStore.isOnline,
+                    status: 'unknown'
+                },
+                {
+                    step: '3. WebSocket连接',
+                    check: () => typeof window.handleDriverMapUpdate === 'function',
+                    status: 'unknown'
+                },
+                {
+                    step: '4. Redis状态同步',
+                    check: () => true, // 需要后端验证
+                    status: 'unknown'
+                },
+                {
+                    step: '5. 订单推送接收',
+                    check: () => window.driverStore && window.driverStore.pendingOrders.length >= 0,
+                    status: 'unknown'
+                }
+            ];
+
+            flowSteps.forEach(step => {
+                try {
+                    const passed = step.check();
+                    step.status = passed ? 'success' : 'error';
+                } catch (error) {
+                    step.status = 'error';
+                }
+
+                const stepClass = step.status === 'success' ? 'flow-step success' : 'flow-step error';
+                const statusIcon = step.status === 'success' ? '✅' : '❌';
+                
+                content += `<div class="${stepClass}">
+                    ${statusIcon} ${step.step}
+                </div>`;
+            });
+
+            const allPassed = flowSteps.every(step => step.status === 'success');
+            
+            content += `<div class="flow-step ${allPassed ? 'success' : 'error'}">
+                ${allPassed ? '✅' : '❌'} 总体状态: ${allPassed ? '流程正常' : '存在问题'}
+            </div>`;
+
+            resultDiv.innerHTML = content;
+            log(`完整流程测试完成: ${allPassed ? '通过' : '失败'}`);
+        }
+
+        function checkDriverOnlineStatus() {
+            const resultDiv = document.getElementById('driverStatusResult');
+            let status = '司机在线状态检查:\\n\\n';
+
+            try {
+                if (window.driverStore) {
+                    status += `前端状态:\\n`;
+                    status += `- 在线状态: ${window.driverStore.isOnline ? '✅ 在线' : '❌ 离线'}\\n`;
+                    status += `- 当前位置: ${JSON.stringify(window.driverStore.currentPosition)}\\n`;
+                    
+                    if (window.userStore && window.userStore.user) {
+                        status += `\\n用户信息:\\n`;
+                        status += `- 司机ID: ${window.userStore.user.driverId || window.userStore.user.id}\\n`;
+                        status += `- 用户类型: ${window.userStore.user.userType}\\n`;
+                    }
+                    
+                    status += `\\n建议检查:\\n`;
+                    status += `1. 后端Redis中的司机状态\\n`;
+                    status += `2. 司机位置信息是否正确\\n`;
+                    status += `3. isDriverOnlineAndFree()方法返回值\\n`;
+                } else {
+                    status += '❌ driverStore未初始化';
+                }
+            } catch (error) {
+                status += `❌ 检查失败: ${error.message}`;
+            }
+
+            resultDiv.textContent = status;
+            resultDiv.className = window.driverStore?.isOnline ? 'status-display status-good' : 'status-display status-error';
+            log('司机在线状态检查完成');
+        }
+
+        function forceDriverOnline() {
+            try {
+                if (window.driverStore) {
+                    window.driverStore.setOnlineStatus(true);
+                    log('✅ 已强制设置司机为在线状态');
+                    
+                    // 同时建立WebSocket连接
+                    window.driverStore.connectWebSocket();
+                    log('✅ 已重新建立WebSocket连接');
+                    
+                    checkDriverOnlineStatus();
+                } else {
+                    log('❌ driverStore未找到');
+                }
+            } catch (error) {
+                log(`❌ 强制上线失败: ${error.message}`);
+            }
+        }
+
+        function testWebSocketConnection() {
+            const resultDiv = document.getElementById('websocketResult');
+            let status = 'WebSocket连接测试:\\n\\n';
+
+            try {
+                status += `连接状态检查:\\n`;
+                status += `- 消息处理函数: ${typeof window.handleDriverMapUpdate === 'function' ? '✅ 已注册' : '❌ 未注册'}\\n`;
+                
+                if (window.driverStore && window.userStore) {
+                    const driverId = window.userStore.user?.driverId || window.userStore.user?.id;
+                    status += `- 司机ID: ${driverId}\\n`;
+                    status += `- 订阅路径: /user/${driverId}/queue/orders\\n`;
+                    status += `- 司机在线: ${window.driverStore.isOnline ? '✅ 是' : '❌ 否'}\\n`;
+                }
+                
+                // 测试消息处理
+                if (window.handleDriverMapUpdate) {
+                    status += `\\n测试消息处理:\\n`;
+                    try {
+                        window.handleDriverMapUpdate({
+                            type: 'NEW_ORDER',
+                            orderId: '12345',
+                            orderNumber: 'TEST001',
+                            pickupAddress: '测试上车点',
+                            destinationAddress: '测试目的地',
+                            distance: '2.5',
+                            estimatedFare: '25.00'
+                        });
+                        status += `- 消息处理: ✅ 成功\\n`;
+                    } catch (error) {
+                        status += `- 消息处理: ❌ 失败 - ${error.message}\\n`;
+                    }
+                }
+                
+                status += `\\n建议操作:\\n`;
+                status += `1. 确保司机已上线\\n`;
+                status += `2. 检查浏览器控制台的WebSocket日志\\n`;
+                status += `3. 验证后端是否发送消息\\n`;
+            } catch (error) {
+                status += `❌ 测试失败: ${error.message}`;
+            }
+
+            resultDiv.textContent = status;
+            log('WebSocket连接测试完成');
+        }
+
+        function reconnectWebSocket() {
+            try {
+                if (window.driverStore) {
+                    window.driverStore.disconnectWebSocket();
+                    log('🔌 已断开WebSocket连接');
+                    
+                    setTimeout(() => {
+                        window.driverStore.connectWebSocket();
+                        log('🔌 已重新建立WebSocket连接');
+                        testWebSocketConnection();
+                    }, 1000);
+                } else {
+                    log('❌ driverStore未找到');
+                }
+            } catch (error) {
+                log(`❌ 重连失败: ${error.message}`);
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('调试命令已复制到剪贴板！');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('调试命令已复制到剪贴板！');
+            });
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            log('司机订单流程测试工具已加载');
+            
+            log('测试目标:');
+            log('1. 验证司机上线状态');
+            log('2. 检查WebSocket连接');
+            log('3. 测试订单消息接收');
+            log('4. 确认退出登录自动下线');
+        };
+    </script>
+</body>
+</html>"

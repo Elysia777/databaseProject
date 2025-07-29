@@ -38,4 +38,7 @@ public interface OrderMapper {
 
     /** 根据状态查询订单 */
     List<Order> selectByStatus(@Param("status") String status);
+
+    /** 查询司机当前进行中的订单 */
+    Order selectCurrentOrderByDriverId(@Param("driverId") Long driverId);
 }

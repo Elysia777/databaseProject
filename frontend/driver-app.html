@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>网约车司机端</title>
-    <script src="https://webapi.amap.com/maps?v=2.0&key=8b011259082e987043911232b625e2ca&plugin=AMap.PlaceSearch,AMap.Autocomplete,AMap.Driving,AMap.Geolocation"></script>
+    <script
+        src="https://webapi.amap.com/maps?v=2.0&key=8b011259082e987043911232b625e2ca&plugin=AMap.PlaceSearch,AMap.Autocomplete,AMap.Driving,AMap.Geolocation"></script>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
     <style>
@@ -39,7 +41,7 @@
         .control-panel {
             width: 350px;
             background: white;
-            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
             display: flex;
             flex-direction: column;
             z-index: 1000;
@@ -149,7 +151,7 @@
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         .btn:disabled {
@@ -164,7 +166,7 @@
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 15px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             animation: slideIn 0.3s ease-out;
         }
 
@@ -174,13 +176,27 @@
         }
 
         @keyframes slideIn {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
 
         @keyframes pulse {
-            0%, 100% { background-color: white; }
-            50% { background-color: #fff5f5; }
+
+            0%,
+            100% {
+                background-color: white;
+            }
+
+            50% {
+                background-color: #fff5f5;
+            }
         }
 
         .notification-header {
@@ -236,7 +252,7 @@
 
         .notification-btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         .notification-btn:disabled {
@@ -289,7 +305,7 @@
             justify-content: center;
             font-size: 20px;
             color: #28a745;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             z-index: 1000;
         }
 
@@ -306,7 +322,7 @@
             background: white;
             border-radius: 15px;
             padding: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
             display: none;
             z-index: 1000;
         }
@@ -339,13 +355,13 @@
             .app-container {
                 flex-direction: column;
             }
-            
+
             .control-panel {
                 width: 100%;
                 height: 40%;
                 order: 2;
             }
-            
+
             .map-container {
                 height: 60%;
                 order: 1;
@@ -353,12 +369,13 @@
         }
     </style>
 </head>
+
 <body>
     <div class="app-container">
         <!-- 地图容器 -->
         <div class="map-container">
             <div id="map"></div>
-            
+
             <!-- 定位按钮 -->
             <div class="location-btn" onclick="locateMe()" title="定位到我的位置">
                 📍
@@ -403,7 +420,8 @@
                         <input type="text" id="currentLocation" class="form-input" placeholder="点击定位获取位置" readonly>
                     </div>
                     <button class="btn btn-success" onclick="goOnline()" id="onlineBtn">🟢 上线接单</button>
-                    <button class="btn btn-danger" onclick="goOffline()" id="offlineBtn" style="display: none;">🔴 下线</button>
+                    <button class="btn btn-danger" onclick="goOffline()" id="offlineBtn" style="display: none;">🔴
+                        下线</button>
                 </div>
 
                 <!-- 订单通知 -->
@@ -447,8 +465,10 @@
                             </div>
                         </div>
                         <button class="btn btn-primary" onclick="confirmPickup()" id="pickupBtn">📍 确认到达</button>
-                        <button class="btn btn-success" onclick="startTrip()" id="startBtn" style="display: none;">🚀 开始行程</button>
-                        <button class="btn btn-warning" onclick="completeTrip()" id="completeBtn" style="display: none;">✅ 完成订单</button>
+                        <button class="btn btn-success" onclick="startTrip()" id="startBtn" style="display: none;">🚀
+                            开始行程</button>
+                        <button class="btn btn-warning" onclick="completeTrip()" id="completeBtn"
+                            style="display: none;">✅ 完成订单</button>
                     </div>
                 </div>
 
@@ -512,24 +532,24 @@
 
         // 定位到当前位置
         function locateMe() {
-            geolocation.getCurrentPosition(function(status, result) {
+            geolocation.getCurrentPosition(function (status, result) {
                 if (status === 'complete') {
                     currentPosition = [result.position.lng, result.position.lat];
                     map.setCenter(currentPosition);
-                    
+
                     // 更新司机位置标记
                     updateDriverMarker(result.position.lat, result.position.lng);
-                    
+
                     // 逆地理编码获取地址
-                    AMap.plugin('AMap.Geocoder', function() {
+                    AMap.plugin('AMap.Geocoder', function () {
                         const geocoder = new AMap.Geocoder();
-                        geocoder.getAddress(currentPosition, function(status, result) {
+                        geocoder.getAddress(currentPosition, function (status, result) {
                             if (status === 'complete' && result.regeocode) {
                                 document.getElementById('currentLocation').value = result.regeocode.formattedAddress;
                             }
                         });
                     });
-                    
+
                     showMessage('✅ 定位成功');
                 } else {
                     showMessage('❌ 定位失败: ' + result.message, true);
@@ -670,14 +690,14 @@
                 const socket = new SockJS(`${API_BASE_URL}/ws`);
                 stompClient = new StompJs.Client({
                     webSocketFactory: () => socket,
-                    debug: () => {}
+                    debug: () => { }
                 });
 
-                stompClient.onConnect = function(frame) {
+                stompClient.onConnect = function (frame) {
                     console.log('WebSocket连接成功');
-                    
+
                     const driverId = document.getElementById('driverId').value;
-                    
+
                     // 发送司机连接消息
                     stompClient.publish({
                         destination: '/app/driver/connect',
@@ -685,19 +705,19 @@
                     });
 
                     // 订阅订单队列
-                    stompClient.subscribe(`/user/${driverId}/queue/orders`, function(message) {
+                    stompClient.subscribe(`/user/${driverId}/queue/orders`, function (message) {
                         const orderData = JSON.parse(message.body);
                         handleOrderPush(orderData);
                     });
 
                     // 订阅通知队列
-                    stompClient.subscribe(`/user/${driverId}/queue/notifications`, function(message) {
+                    stompClient.subscribe(`/user/${driverId}/queue/notifications`, function (message) {
                         const data = JSON.parse(message.body);
                         showMessage(`📢 ${data.message}`);
                     });
                 };
 
-                stompClient.onStompError = function(frame) {
+                stompClient.onStompError = function (frame) {
                     console.error('WebSocket连接失败:', frame);
                 };
 
@@ -718,7 +738,7 @@
         // 处理订单推送
         function handleOrderPush(orderData) {
             console.log('收到订单推送:', orderData);
-            
+
             if (orderData.type === 'NEW_ORDER') {
                 addOrderNotification(orderData);
                 playNotificationSound();
@@ -786,7 +806,7 @@
                 if (response.ok) {
                     showMessage(`✅ 接单成功！订单 ${orderId}`);
                     notification.remove();
-                    
+
                     // 获取订单详情并开始导航
                     await loadOrderDetails(orderId);
                 } else {
@@ -826,7 +846,7 @@
         function showCurrentOrder(order) {
             document.getElementById('currentOrderSection').style.display = 'block';
             document.getElementById('statusSection').style.display = 'block';
-            
+
             document.getElementById('currentOrderNumber').textContent = order.orderNumber || order.id;
             document.getElementById('currentPassenger').textContent = `乘客${order.passengerId}`;
             document.getElementById('currentPickup').textContent = order.pickupAddress;
@@ -840,7 +860,7 @@
             if (!currentOrder || !currentPosition) return;
 
             const pickupPos = [currentOrder.pickupLongitude, currentOrder.pickupLatitude];
-            
+
             // 添加上车点标记
             if (pickupMarker) {
                 map.remove(pickupMarker);
@@ -859,7 +879,7 @@
             map.add(pickupMarker);
 
             // 规划路线
-            driving.search(currentPosition, pickupPos, function(status, result) {
+            driving.search(currentPosition, pickupPos, function (status, result) {
                 if (status === 'complete') {
                     const route = result.routes[0];
                     const distance = (route.distance / 1000).toFixed(1);
@@ -884,7 +904,7 @@
                     locateMe();
                     updateNavigationInfo();
                 }, 5000);
-                
+
                 document.getElementById('navBtn').textContent = '停止导航';
                 showMessage('🧭 导航已开始');
             } else {
@@ -939,7 +959,7 @@
                     showMessage('✅ 已确认到达上车点');
                     document.getElementById('pickupBtn').style.display = 'none';
                     document.getElementById('startBtn').style.display = 'block';
-                    
+
                     // 规划到目的地的路线
                     planRouteToDestination();
                 } else {
@@ -965,7 +985,7 @@
                     showMessage('✅ 行程已开始');
                     document.getElementById('startBtn').style.display = 'none';
                     document.getElementById('completeBtn').style.display = 'block';
-                    
+
                     document.getElementById('navInstruction').textContent = '前往目的地';
                 } else {
                     showMessage('❌ 开始行程失败: ' + (result.message || '未知错误'), true);
@@ -980,7 +1000,7 @@
             if (!currentOrder || !currentPosition) return;
 
             const destPos = [currentOrder.destinationLongitude, currentOrder.destinationLatitude];
-            
+
             // 添加目的地标记
             if (destinationMarker) {
                 map.remove(destinationMarker);
@@ -999,7 +1019,7 @@
             map.add(destinationMarker);
 
             // 规划路线
-            driving.search(currentPosition, destPos, function(status, result) {
+            driving.search(currentPosition, destPos, function (status, result) {
                 if (status === 'complete') {
                     const route = result.routes[0];
                     const distance = (route.distance / 1000).toFixed(1);
@@ -1031,9 +1051,7 @@
                 } else {
                     showMessage('❌ 完成订单失败: ' + (result.message || '未知错误'), true);
                 }
-            } catch (error) {
-                showMessage('❌ 网络错误: ' + error.message, true);
-            }
+            } 
         }
 
         // 重置订单
@@ -1041,7 +1059,7 @@
             currentOrder = null;
             document.getElementById('currentOrderSection').style.display = 'none';
             document.getElementById('navigationPanel').style.display = 'none';
-            
+
             // 清除地图标记
             if (pickupMarker) {
                 map.remove(pickupMarker);
@@ -1055,13 +1073,13 @@
                 map.remove(routePolyline);
                 routePolyline = null;
             }
-            
+
             // 停止导航
             if (navigationInterval) {
                 clearInterval(navigationInterval);
                 navigationInterval = null;
             }
-            
+
             // 重置按钮状态
             document.getElementById('pickupBtn').style.display = 'block';
             document.getElementById('startBtn').style.display = 'none';
@@ -1074,16 +1092,16 @@
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
-                
+
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
-                
+
                 oscillator.frequency.value = 800;
                 oscillator.type = 'sine';
-                
+
                 gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
+
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.5);
             } catch (error) {
@@ -1095,7 +1113,7 @@
         function showMessage(message, isError = false) {
             const statusDiv = document.getElementById('statusMessages');
             if (!statusDiv) return;
-            
+
             const messageEl = document.createElement('div');
             messageEl.style.cssText = `
                 padding: 10px;
@@ -1106,15 +1124,16 @@
                 border: 1px solid ${isError ? '#f5c6cb' : '#c3e6cb'};
             `;
             messageEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            
+
             statusDiv.appendChild(messageEl);
             statusDiv.scrollTop = statusDiv.scrollHeight;
         }
 
         // 页面加载完成后初始化
-        window.onload = function() {
+        window.onload = function () {
             initMap();
         };
     </script>
 </body>
+
 </html>
