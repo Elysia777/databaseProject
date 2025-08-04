@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>订单距离费用信息修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .problem-analysis {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .fix-highlight {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .before, .after {
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .before { 
+            background: #fff3cd; 
+            border-left: 4px solid #ffc107;
+        }
+        .after { 
+            background: #d4edda; 
+            border-left: 4px solid #28a745;
+        }
+        .data-flow {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+            margin: 15px 0;
+        }
+        .flow-step {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 3px;
+            border-left: 3px solid #007bff;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .field-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .field-table th, .field-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .field-table th {
+            background-color: #f8f9fa;
+        }
+        .status-missing { color: #dc3545; font-weight: bold; }
+        .status-fixed { color: #28a745; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🔧 订单距离费用信息修复测试</h1>
+
+    <div class=\"test-section\">
+        <h3>🐛 问题发现</h3>
+        <div class=\"problem-analysis\">
+            <strong>问题描述：</strong><br>
+            乘客发起订单时可以看到距离和费用，但通知司机时没有显示，数据库也没有记录相关信息。
+            <br><br>
+            <strong>影响：</strong><br>
+            • 司机收到的订单通知缺少距离和费用信息<br>
+            • 数据库中订单记录不完整<br>
+            • 影响司机接单决策<br>
+            • 后续费用计算可能不准确
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>📊 数据流分析</h3>
+        
+        <div class=\"data-flow\">
+            <h4>订单数据流转过程</h4>
+            
+            <div class=\"flow-step\">
+                <strong>步骤1：</strong> 乘客端计算路线信息
+                <div class=\"code-block\">
+routeInfo.value = {
+    distance: 8500,  // 8.5公里（米）
+    duration: 1200   // 20分钟（秒）
+}
+                </div>
+            </div>
+            
+            <div class=\"flow-step\">
+                <strong>步骤2：</strong> 乘客端创建订单数据
+                <div class=\"code-block\">
+const orderData = {
+    // ❌ 修复前：缺少距离和时长信息
+    estimatedFare: getPrice(selectedCarType.value)
+    
+    // ✅ 修复后：包含完整信息
+    estimatedDistance: (routeInfo.value.distance / 1000).toFixed(2), // 8.50
+    estimatedDuration: Math.round(routeInfo.value.duration / 60),     // 20
+    estimatedFare: getPrice(selectedCarType.value)                    // 25.00
+}
+                </div>
+            </div>
+            
+            <div class=\"flow-step\">
+                <strong>步骤3：</strong> 后端保存订单信息
+                <div class=\"code-block\">
+// ✅ 修复后：保存完整的订单信息
+order.setEstimatedDistance(request.getEstimatedDistance());
+order.setEstimatedDuration(request.getEstimatedDuration());
+order.setEstimatedFare(request.getEstimatedFare());
+                </div>
+            </div>
+            
+            <div class=\"flow-step\">
+                <strong>步骤4：</strong> WebSocket通知司机
+                <div class=\"code-block\">
+// ✅ 通知中包含完整信息
+notification.put(\"distance\", order.getEstimatedDistance());
+notification.put(\"duration\", order.getEstimatedDuration());
+notification.put(\"estimatedFare\", order.getEstimatedFare());
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔍 修复内容对比</h3>
+        
+        <div class=\"comparison\">
+            <div class=\"before\">
+                <h4>❌ 修复前的数据结构</h4>
+                
+                <h5>前端订单数据：</h5>
+                <div class=\"code-block\">
+const orderData = {
+    passengerId: 1,
+    pickupAddress: \"起点地址\",
+    destinationAddress: \"终点地址\",
+    // ❌ 缺少距离信息
+    // ❌ 缺少时长信息
+    estimatedFare: 25.00
+};
+                </div>
+                
+                <h5>后端DTO类：</h5>
+                <div class=\"code-block\">
+public class CreateOrderRequest {
+    private String pickupAddress;
+    private String destinationAddress;
+    // ❌ 缺少 estimatedDistance
+    // ❌ 缺少 estimatedDuration
+    // ❌ 缺少 estimatedFare
+}
+                </div>
+            </div>
+            
+            <div class=\"after\">
+                <h4>✅ 修复后的数据结构</h4>
+                
+                <h5>前端订单数据：</h5>
+                <div class=\"code-block\">
+const orderData = {
+    passengerId: 1,
+    pickupAddress: \"起点地址\",
+    destinationAddress: \"终点地址\",
+    // ✅ 添加距离信息（公里）
+    estimatedDistance: 8.50,
+    // ✅ 添加时长信息（分钟）
+    estimatedDuration: 20,
+    estimatedFare: 25.00
+};
+                </div>
+                
+                <h5>后端DTO类：</h5>
+                <div class=\"code-block\">
+public class CreateOrderRequest {
+    private String pickupAddress;
+    private String destinationAddress;
+    // ✅ 添加距离字段
+    private BigDecimal estimatedDistance;
+    // ✅ 添加时长字段
+    private Integer estimatedDuration;
+    // ✅ 添加费用字段
+    private BigDecimal estimatedFare;
+}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🛠️ 具体修复内容</h3>
+        
+        <div class=\"fix-highlight\">
+            <strong>1. 前端数据完善（PassengerMap.vue）</strong><br>
+            • 在创建订单时添加 estimatedDistance 字段<br>
+            • 在创建订单时添加 estimatedDuration 字段<br>
+            • 利用现有的 routeInfo 数据进行计算
+        </div>
+        
+        <div class=\"fix-highlight\">
+            <strong>2. 后端DTO类扩展</strong><br>
+            • CreateOrderRequest 添加距离、时长、费用字段<br>
+            • CreateScheduledOrderRequest 添加相同字段<br>
+            • 添加对应的 getter/setter 方法
+        </div>
+        
+        <div class=\"fix-highlight\">
+            <strong>3. 后端控制器修复</strong><br>
+            • OrderController 保存距离和时长信息<br>
+            • ScheduledOrderController 保存距离和时长信息<br>
+            • 确保数据库记录完整
+        </div>
+        
+        <div class=\"fix-highlight\">
+            <strong>4. WebSocket通知增强</strong><br>
+            • 通知中包含准确的距离信息<br>
+            • 通知中包含预估时长信息<br>
+            • 司机能看到完整的订单信息
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>📋 字段对比表</h3>
+        
+        <table class=\"field-table\">
+            <thead>
+                <tr>
+                    <th>字段名</th>
+                    <th>类型</th>
+                    <th>修复前状态</th>
+                    <th>修复后状态</th>
+                    <th>说明</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>estimatedDistance</td>
+                    <td>BigDecimal</td>
+                    <td class=\"status-missing\">❌ 缺失</td>
+                    <td class=\"status-fixed\">✅ 已添加</td>
+                    <td>预估距离（公里）</td>
+                </tr>
+                <tr>
+                    <td>estimatedDuration</td>
+                    <td>Integer</td>
+                    <td class=\"status-missing\">❌ 缺失</td>
+                    <td class=\"status-fixed\">✅ 已添加</td>
+                    <td>预估时长（分钟）</td>
+                </tr>
+                <tr>
+                    <td>estimatedFare</td>
+                    <td>BigDecimal</td>
+                    <td class=\"status-missing\">❌ 部分缺失</td>
+                    <td class=\"status-fixed\">✅ 已完善</td>
+                    <td>预估费用（元）</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🧪 测试验证步骤</h3>
+        
+        <div class=\"result info\">
+            <strong>测试场景1：实时订单</strong><br>
+            1. 乘客创建实时订单<br>
+            2. 检查数据库订单记录是否包含距离、时长、费用<br>
+            3. 检查司机收到的通知是否显示完整信息<br>
+            4. 验证信息的准确性
+        </div>
+        
+        <div class=\"result info\">
+            <strong>测试场景2：预约订单</strong><br>
+            1. 乘客创建预约订单<br>
+            2. 检查数据库订单记录是否包含距离、时长、费用<br>
+            3. 预约单激活后检查司机通知<br>
+            4. 验证预约单信息完整性
+        </div>
+        
+        <div class=\"result info\">
+            <strong>测试场景3：司机端显示</strong><br>
+            1. 司机接收订单通知<br>
+            2. 检查通知中是否显示距离信息<br>
+            3. 检查通知中是否显示预估费用<br>
+            4. 验证信息有助于司机决策
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔍 验证检查点</h3>
+        
+        <div class=\"result warning\">
+            <strong>数据库检查：</strong><br>
+            • 查询 orders 表的 estimated_distance 字段<br>
+            • 查询 orders 表的 estimated_duration 字段<br>
+            • 查询 orders 表的 estimated_fare 字段<br>
+            • 确认字段值不为 NULL 且合理
+        </div>
+        
+        <div class=\"result warning\">
+            <strong>前端检查：</strong><br>
+            • 乘客端创建订单时的请求数据<br>
+            • 司机端收到的 WebSocket 通知内容<br>
+            • 订单详情页面的信息显示
+        </div>
+        
+        <div class=\"result warning\">
+            <strong>后端日志检查：</strong><br>
+            • 订单创建时的字段设置日志<br>
+            • WebSocket 通知发送的数据内容<br>
+            • 确认没有空值或异常
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🚀 开始测试</h3>
+        <p>使用以下链接进行订单距离费用信息测试：</p>
+        
+        <div style=\"margin: 20px 0;\">
+            <a href=\"/passenger-app.html\" target=\"_blank\">
+                <button>乘客端（创建订单）</button>
+            </a>
+            <a href=\"/driver-app.html\" target=\"_blank\">
+                <button>司机端（接收通知）</button>
+            </a>
+        </div>
+
+        <div class=\"result info\">
+            <strong>测试重点：</strong><br>
+            1. 创建订单后检查数据库记录<br>
+            2. 司机收到通知时检查显示内容<br>
+            3. 对比修复前后的信息完整性<br>
+            4. 验证距离和费用的准确性
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>✅ 预期修复效果</h3>
+        <div class=\"result success\">
+            <strong>修复完成后应该实现：</strong><br>
+            • 订单创建时保存完整的距离、时长、费用信息 ✅<br>
+            • 司机收到的通知包含详细的订单信息 ✅<br>
+            • 数据库记录完整，便于后续分析和计费 ✅<br>
+            • 司机能基于完整信息做出接单决策 ✅<br>
+            • 实时单和预约单都有完整的信息记录 ✅
+        </div>
+    </div>
+</body>
+</html>

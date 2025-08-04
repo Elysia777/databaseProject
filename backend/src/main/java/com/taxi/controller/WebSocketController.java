@@ -9,6 +9,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket控制器
@@ -22,6 +23,12 @@ public class WebSocketController {
     
     @Autowired
     private OrderDispatchService orderDispatchService;
+    
+    // 司机会话映射表，用于管理司机ID与WebSocket会话的关系
+    private final Map<String, String> driverSessionMap = new ConcurrentHashMap<>();
+    
+    // 乘客会话映射表
+    private final Map<String, String> passengerSessionMap = new ConcurrentHashMap<>();
 
     /**
      * 处理司机连接
@@ -41,16 +48,33 @@ public class WebSocketController {
                 return;
             }
             
-            System.out.println("司机 " + driverId + " 已连接WebSocket");
+            String currentSessionId = headerAccessor.getSessionId();
+            System.out.println("司机 " + driverId + " 请求WebSocket连接，会话ID: " + currentSessionId);
+            
+            // 检查是否已有该司机的会话
+            String oldSessionId = driverSessionMap.get(driverId);
+            if (oldSessionId != null && !oldSessionId.equals(currentSessionId)) {
+                System.out.println("⚠️ 司机 " + driverId + " 已有旧会话 " + oldSessionId + "，将被新会话 " + currentSessionId + " 替换");
+                // 清除旧会话映射
+                driverSessionMap.remove(driverId);
+            }
+            
+            // 建立新的会话映射
+            driverSessionMap.put(driverId, currentSessionId);
             
             // 将司机ID存储到session中
             headerAccessor.getSessionAttributes().put("driverId", driverId);
             headerAccessor.getSessionAttributes().put("userType", "DRIVER");
+            headerAccessor.getSessionAttributes().put("sessionId", currentSessionId);
+            headerAccessor.getSessionAttributes().put("connectTime", System.currentTimeMillis());
+            
+            System.out.println("✅ 司机 " + driverId + " WebSocket会话已建立，会话ID: " + currentSessionId);
             
             // 发送连接成功消息
             Map<String, Object> response = Map.of(
                 "status", "connected", 
                 "message", "WebSocket连接成功，司机ID: " + driverId,
+                "sessionId", currentSessionId,
                 "timestamp", System.currentTimeMillis()
             );
             
@@ -63,7 +87,7 @@ public class WebSocketController {
                 response
             );
             
-            System.out.println("已向司机 " + driverId + " 发送连接成功消息");
+            System.out.println("✅ 已向司机 " + driverId + " 发送连接成功消息");
             
             // WebSocket连接成功后，延迟查询并推送周围的待分配订单
             new Thread(() -> {
@@ -104,17 +128,38 @@ public class WebSocketController {
                 return;
             }
             
-            System.out.println("乘客 " + passengerId + " 已连接WebSocket");
+            String currentSessionId = headerAccessor.getSessionId();
+            System.out.println("乘客 " + passengerId + " 请求WebSocket连接，会话ID: " + currentSessionId);
+            
+            // 检查是否已有该乘客的会话
+            String oldSessionId = passengerSessionMap.get(passengerId);
+            if (oldSessionId != null && !oldSessionId.equals(currentSessionId)) {
+                System.out.println("⚠️ 乘客 " + passengerId + " 已有旧会话 " + oldSessionId + "，将被新会话 " + currentSessionId + " 替换");
+                // 清除旧会话映射
+                passengerSessionMap.remove(passengerId);
+            }
+            
+            // 建立新的会话映射
+            passengerSessionMap.put(passengerId, currentSessionId);
             
             // 将乘客ID存储到session中
             headerAccessor.getSessionAttributes().put("passengerId", passengerId);
             headerAccessor.getSessionAttributes().put("userType", "PASSENGER");
+            headerAccessor.getSessionAttributes().put("sessionId", currentSessionId);
+            headerAccessor.getSessionAttributes().put("connectTime", System.currentTimeMillis());
+            
+            System.out.println("✅ 乘客 " + passengerId + " WebSocket会话已建立，会话ID: " + currentSessionId);
             
             // 发送连接成功消息
             messagingTemplate.convertAndSendToUser(
                 passengerId, 
                 "/queue/connection", 
-                Map.of("status", "connected", "message", "WebSocket连接成功")
+                Map.of(
+                    "status", "connected", 
+                    "message", "WebSocket连接成功",
+                    "sessionId", currentSessionId,
+                    "timestamp", System.currentTimeMillis()
+                )
             );
             
         } catch (Exception e) {

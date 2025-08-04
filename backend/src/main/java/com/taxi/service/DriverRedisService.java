@@ -226,11 +226,16 @@ public class DriverRedisService {
      */
     public void markDriverFree(Long driverId) {
         try {
+            // 设置司机为空闲状态
             redisTemplate.opsForHash().put(DRIVER_STATUS_KEY + driverId, "busy", false);
             redisTemplate.opsForHash().put(DRIVER_STATUS_KEY + driverId, "lastUpdate", System.currentTimeMillis());
-            System.out.println("司机 " + driverId + " 已标记为空闲");
+            
+            // 🔧 关键修复：清除司机的当前订单，停止位置推送
+            setDriverCurrentOrder(driverId, null);
+            
+            System.out.println("✅ 司机 " + driverId + " 已标记为空闲，当前订单已清除");
         } catch (Exception e) {
-            System.err.println("标记司机空闲失败: " + e.getMessage());
+            System.err.println("❌ 标记司机空闲失败: " + e.getMessage());
         }
     }
 

@@ -31,7 +31,10 @@
         :style="{ top: (pendingOrders.indexOf(order) * 180 + 20) + 'px' }"
       >
         <div class="notification-header">
-          <h3>🚗 新订单 #{{ order.orderNumber?.slice(-4) }}</h3>
+          <h3>
+            {{ order.orderType === 'RESERVATION' ? '📅 预约单' : '🚗 新订单' }} 
+            #{{ order.orderNumber?.slice(-4) }}
+          </h3>
           <div class="countdown" :class="{ warning: order.countdown <= 5 }">
             {{ order.countdown }}s
           </div>
@@ -50,6 +53,10 @@
           <div class="order-meta">
             <span class="distance">{{ parseFloat(order.distance || 0).toFixed(2) }}km</span>
             <span class="price">¥{{ order.estimatedFare || '待计算' }}</span>
+            <div v-if="order.orderType === 'RESERVATION' && order.scheduledTime" class="scheduled-time">
+              <span class="label">预约时间:</span>
+              <span class="time">{{ formatScheduledTime(order.scheduledTime) }}</span>
+            </div>
           </div>
         </div>
         <div class="notification-actions">
@@ -85,6 +92,15 @@
           <span>乘客: {{ currentOrder.passengerName || '乘客' + currentOrder.passengerId }}</span>
           <span>电话: {{ currentOrder.passengerPhone || '***' }}</span>
         </div>
+        
+        <!-- 预约单显示预约时间 -->
+        <div v-if="currentOrder.orderType === 'RESERVATION' && currentOrder.scheduledTime" class="scheduled-info">
+          <div class="scheduled-time-info">
+            <span class="icon">📅</span>
+            <span>预约时间: {{ formatScheduledTime(currentOrder.scheduledTime) }}</span>
+          </div>
+        </div>
+        
         <div class="route-details">
           <div class="route-item">
             <span class="icon">📍</span>
@@ -765,6 +781,7 @@ const acceptOrder = async (orderId) => {
         id: orderData.id || queueOrder.orderId,
         orderId: orderData.id || queueOrder.orderId,
         orderNumber: orderData.orderNumber || queueOrder.orderNumber,
+        orderType: orderData.orderType || queueOrder.orderType, // 添加订单类型
         pickupAddress: orderData.pickupAddress || queueOrder.pickupAddress,
         destinationAddress: orderData.destinationAddress || queueOrder.destinationAddress,
         pickupLatitude: orderData.pickupLatitude || queueOrder.pickupLatitude,
@@ -775,6 +792,7 @@ const acceptOrder = async (orderId) => {
         passengerId: orderData.passengerId || queueOrder.passengerId,
         passengerName: orderData.passengerName || queueOrder.passengerName,
         passengerPhone: orderData.passengerPhone || queueOrder.passengerPhone,
+        scheduledTime: orderData.scheduledTime || queueOrder.scheduledTime, // 添加预约时间
         status: 'ASSIGNED'
       }
       
@@ -1618,6 +1636,17 @@ const getOrderStatusType = (status) => {
 
 // 获取订单状态文本
 const getOrderStatusText = (status) => {
+  // 如果是预约单，显示特殊文本
+  if (currentOrder.value && currentOrder.value.orderType === 'RESERVATION') {
+    const texts = {
+      'ASSIGNED': '预约单已接单，请于预约时间前到达',
+      'PICKUP': '已到达上车点，等待乘客',
+      'IN_PROGRESS': '预约行程进行中'
+    }
+    return texts[status] || status
+  }
+  
+  // 实时单的状态文本
   const texts = {
     'ASSIGNED': '已接单',
     'PICKUP': '已到达',
@@ -1625,6 +1654,29 @@ const getOrderStatusText = (status) => {
   }
   return texts[status] || status
 }
+
+// 格式化预约时间
+const formatScheduledTime = (scheduledTime) => {
+  if (!scheduledTime) return '';
+  
+  const date = new Date(scheduledTime);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const isTomorrow = date.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+  
+  let dateStr;
+  if (isToday) {
+    dateStr = '今天';
+  } else if (isTomorrow) {
+    dateStr = '明天';
+  } else {
+    dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+  
+  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  
+  return `${dateStr} ${timeStr}`;
+};
 
 // 播放通知音
 const playNotificationSound = () => {
@@ -1789,9 +1841,12 @@ const playNotificationSound = () => {
 .order-meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 10px;
   background: #f8f9fa;
   border-radius: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .distance {
@@ -1802,6 +1857,27 @@ const playNotificationSound = () => {
   color: #28a745;
   font-weight: bold;
   font-size: 16px;
+}
+
+.scheduled-time {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  padding-top: 8px;
+  border-top: 1px solid #e9ecef;
+}
+
+.scheduled-time .label {
+  color: #666;
+  font-size: 12px;
+}
+
+.scheduled-time .time {
+  color: #007bff;
+  font-weight: bold;
+  font-size: 14px;
 }
 
 .notification-actions {
@@ -1844,6 +1920,27 @@ const playNotificationSound = () => {
   margin-bottom: 15px;
   font-size: 14px;
   color: #666;
+}
+
+.scheduled-info {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+}
+
+.scheduled-time-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.scheduled-time-info .icon {
+  font-size: 16px;
 }
 
 .route-details {

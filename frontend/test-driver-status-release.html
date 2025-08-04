@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang=\"zh-CN\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>司机状态释放测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .status-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 司机状态释放测试</h1>
+
+    <div class=\"test-section\">
+        <h3>✅ 修复确认</h3>
+        <div class=\"result success\">
+            <strong>编译错误已修复：</strong><br>
+            • 在 ScheduledOrderService 中添加了 DriverRedisService 依赖注入 ✅<br>
+            • 预约单取消时现在可以正确调用 driverRedisService.markDriverFree() ✅<br>
+            • markDriverFree() 方法已增强，会清除司机当前订单 ✅
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🧪 快速验证测试</h3>
+        <p>按照以下步骤测试修复效果：</p>
+        
+        <div class=\"result info\">
+            <strong>测试步骤：</strong><br>
+            1. 乘客创建预约单<br>
+            2. 司机接单并确认到达<br>
+            3. 乘客取消订单<br>
+            4. 检查司机是否能立即接收新订单
+        </div>
+
+        <div class=\"result warning\">
+            <strong>关键验证点：</strong><br>
+            • 后端日志应显示：\"✅ 已释放司机状态: driverId=X\"<br>
+            • 后端日志应显示：\"✅ 司机 X 已标记为空闲，当前订单已清除\"<br>
+            • 司机应能立即接收新的订单通知<br>
+            • 不再有\"推送司机位置给乘客\"的日志
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🚀 开始测试</h3>
+        <div style=\"margin: 20px 0;\">
+            <a href=\"/passenger-app.html\" target=\"_blank\">
+                <button>乘客端</button>
+            </a>
+            <a href=\"/driver-app.html\" target=\"_blank\">
+                <button>司机端</button>
+            </a>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>📋 修复总结</h3>
+        <div class=\"status-display\">
+问题：预约单取消后司机无法接收新订单
+原因：缺少司机状态释放逻辑
+修复：
+1. 添加 DriverRedisService 依赖注入
+2. 预约单取消时调用 markDriverFree()
+3. 增强 markDriverFree() 清除当前订单
+结果：司机状态正确释放，可以接收新订单
+        </div>
+    </div>
+</body>
+</html>

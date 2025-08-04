@@ -44,7 +44,9 @@ public class WebSocketNotificationService {
             System.out.println("  订单号: " + order.getOrderNumber());
             System.out.println("  上车地址: " + order.getPickupAddress());
             System.out.println("  目的地地址: " + order.getDestinationAddress());
-            System.out.println("  距离: " + distance + " 米");
+            System.out.println("  司机距离: " + distance + " 米");
+            System.out.println("  订单距离: " + order.getEstimatedDistance() + " 公里");
+            System.out.println("  预估时长: " + order.getEstimatedDuration() + " 分钟");
             System.out.println("  预估费用: " + order.getEstimatedFare());
             
             // 数据验证和处理
@@ -52,13 +54,23 @@ public class WebSocketNotificationService {
             String orderNumber = order.getOrderNumber() != null ? order.getOrderNumber() : "未知订单号";
             String pickupAddress = order.getPickupAddress() != null ? order.getPickupAddress() : "未知上车地址";
             String destinationAddress = order.getDestinationAddress() != null ? order.getDestinationAddress() : "未知目的地";
-            String distanceStr = String.format("%.2f", distance / 1000); // 转换为公里
+            
+            // 优先使用订单中保存的距离信息，如果没有则使用司机距离
+            String distanceStr;
+            if (order.getEstimatedDistance() != null) {
+                distanceStr = order.getEstimatedDistance().toString();
+            } else {
+                distanceStr = String.format("%.2f", distance / 1000); // 转换为公里
+            }
+            
+            String durationStr = order.getEstimatedDuration() != null ? order.getEstimatedDuration().toString() : "待计算";
             String estimatedFare = order.getEstimatedFare() != null ? order.getEstimatedFare().toString() : "待计算";
             
             Map<String, Object> notification = new HashMap<>();
             notification.put("type", "NEW_ORDER");
             notification.put("orderId", orderIdStr);
             notification.put("orderNumber", orderNumber);
+            notification.put("orderType", order.getOrderType()); // 添加订单类型
             notification.put("pickupAddress", pickupAddress);
             notification.put("destinationAddress", destinationAddress);
             notification.put("pickupLatitude", order.getPickupLatitude());
@@ -67,7 +79,10 @@ public class WebSocketNotificationService {
             notification.put("destinationLongitude", order.getDestinationLongitude());
             notification.put("passengerId", order.getPassengerId());
             notification.put("distance", distanceStr);
+            notification.put("estimatedDistance", distanceStr); // 添加预估距离字段
+            notification.put("estimatedDuration", durationStr); // 添加预估时长字段
             notification.put("estimatedFare", estimatedFare);
+            notification.put("scheduledTime", order.getScheduledTime()); // 添加预约时间
             notification.put("timestamp", System.currentTimeMillis());
             
             String driverIdStr = driverId.toString();
@@ -335,27 +350,67 @@ public class WebSocketNotificationService {
     }
 
     /**
-     * 通知司机订单已被取消
+     * 通知司机订单已被取消（增强版，多重通知确保送达）
      */
     public void notifyDriverOrderCancelled(Long driverId, Long orderId, String reason) {
         try {
+            System.out.println("=== 开始通知司机订单取消 ===");
+            System.out.println("司机ID: " + driverId);
+            System.out.println("订单ID: " + orderId);
+            System.out.println("取消原因: " + reason);
+            
             Map<String, Object> notification = new HashMap<>();
             notification.put("type", "ORDER_CANCELLED");
             notification.put("orderId", orderId);
             notification.put("reason", reason);
+            notification.put("priority", "HIGH"); // 高优先级通知
             notification.put("timestamp", System.currentTimeMillis());
             
-            messagingTemplate.convertAndSendToUser(
-                driverId.toString(), 
-                "/queue/notifications", 
-                notification
-            );
+            String driverIdStr = driverId.toString();
             
-            System.out.println("✅ 已通知司机 " + driverId + " 订单 " + orderId + " 已取消: " + reason);
+            // 方式1：发送到司机通知队列
+            try {
+                messagingTemplate.convertAndSendToUser(
+                    driverIdStr, 
+                    "/queue/notifications", 
+                    notification
+                );
+                System.out.println("✅ 方式1：已发送到司机通知队列 /user/" + driverIdStr + "/queue/notifications");
+            } catch (Exception e) {
+                System.err.println("❌ 方式1发送失败: " + e.getMessage());
+            }
+            
+            // 方式2：发送到司机订单队列（备用）
+            try {
+                messagingTemplate.convertAndSendToUser(
+                    driverIdStr, 
+                    "/queue/orders", 
+                    notification
+                );
+                System.out.println("✅ 方式2：已发送到司机订单队列 /user/" + driverIdStr + "/queue/orders");
+            } catch (Exception e) {
+                System.err.println("❌ 方式2发送失败: " + e.getMessage());
+            }
+            
+            // 方式3：广播到司机主题（最后备用）
+            try {
+                messagingTemplate.convertAndSend(
+                    "/topic/driver/" + driverIdStr, 
+                    notification
+                );
+                System.out.println("✅ 方式3：已广播到司机主题 /topic/driver/" + driverIdStr);
+            } catch (Exception e) {
+                System.err.println("❌ 方式3发送失败: " + e.getMessage());
+            }
+            
+            System.out.println("✅ 已通过多种方式通知司机 " + driverId + " 订单 " + orderId + " 已取消");
             
         } catch (Exception e) {
             System.err.println("❌ 通知司机订单取消失败: " + e.getMessage());
             e.printStackTrace();
+            
+            // 如果WebSocket通知失败，可以考虑其他通知方式
+            System.err.println("⚠️ 考虑使用其他通知方式（短信、推送等）");
         }
     }
 }

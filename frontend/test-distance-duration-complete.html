@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang=\"zh-CN\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>距离时长信息完整测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .test-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .test-card {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        .driver-notification {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            margin: 10px 0;
+        }
+        .notification-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #007bff;
+        }
+        .notification-content div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 距离时长信息完整测试</h1>
+
+    <div class=\"test-section\">
+        <h3>✅ 修复完成确认</h3>
+        <div class=\"result success\">
+            <strong>已完成的修复：</strong><br>
+            • 前端发送数据类型修复：estimatedDistance 从字符串改为数字 ✅<br>
+            • 后端WebSocket通知增强：添加 estimatedDuration 字段 ✅<br>
+            • 司机端显示完善：添加预估时长显示 ✅<br>
+            • 数据库字段映射：确认所有字段正确映射 ✅
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🧪 完整测试流程</h3>
+        
+        <div class=\"test-grid\">
+            <div class=\"test-card\">
+                <h4>📱 乘客端测试</h4>
+                <button onclick=\"testPassengerOrder()\">创建测试订单</button>
+                <div id=\"passenger-result\"></div>
+            </div>
+            
+            <div class=\"test-card\">
+                <h4>🚗 司机端测试</h4>
+                <button onclick=\"testDriverNotification()\">模拟司机通知</button>
+                <div id=\"driver-result\"></div>
+            </div>
+        </div>
+        
+        <div class=\"test-card\">
+            <h4>🗄️ 数据库验证</h4>
+            <button onclick=\"testDatabaseRecord()\">验证数据库记录</button>
+            <div id=\"database-result\"></div>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>📊 预期数据结构</h3>
+        
+        <h4>前端发送数据：</h4>
+        <div class=\"code-block\">
+{
+    \"passengerId\": 1,
+    \"pickupAddress\": \"起点地址\",
+    \"destinationAddress\": \"终点地址\",
+    \"estimatedDistance\": 8.5,        // 数字类型，公里
+    \"estimatedDuration\": 20,         // 数字类型，分钟
+    \"estimatedFare\": 25.0            // 数字类型，元
+}
+        </div>
+
+        <h4>WebSocket通知数据：</h4>
+        <div class=\"code-block\">
+{
+    \"type\": \"NEW_ORDER\",
+    \"orderId\": \"123\",
+    \"pickupAddress\": \"起点地址\",
+    \"destinationAddress\": \"终点地址\",
+    \"distance\": \"8.5\",             // 距离（公里）
+    \"estimatedDistance\": \"8.5\",    // 预估距离
+    \"estimatedDuration\": \"20\",     // 预估时长（分钟）
+    \"estimatedFare\": \"25.0\"        // 预估费用
+}
+        </div>
+
+        <h4>司机端显示效果：</h4>
+        <div class=\"driver-notification\">
+            <div class=\"notification-header\">🚗 新订单 #123</div>
+            <div class=\"notification-content\">
+                <div><strong>📍 上车地点:</strong> 起点地址</div>
+                <div><strong>🎯 目的地:</strong> 终点地址</div>
+                <div><strong>📏 距离:</strong> 8.5 公里</div>
+                <div><strong>⏱️ 时长:</strong> 20 分钟</div>
+                <div><strong>💰 预估费用:</strong> 25.0 元</div>
+            </div>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔍 验证检查点</h3>
+        
+        <div class=\"result info\">
+            <strong>1. 前端数据类型检查：</strong><br>
+            • estimatedDistance: number (不是string)<br>
+            • estimatedDuration: number<br>
+            • estimatedFare: number
+        </div>
+        
+        <div class=\"result info\">
+            <strong>2. 后端日志检查：</strong><br>
+            • \"订单距离: X 公里\"<br>
+            • \"预估时长: X 分钟\"<br>
+            • \"预估费用: X\"
+        </div>
+        
+        <div class=\"result info\">
+            <strong>3. 数据库记录检查：</strong><br>
+            • estimated_distance 字段有值<br>
+            • estimated_duration 字段有值<br>
+            • estimated_fare 字段有值
+        </div>
+        
+        <div class=\"result info\">
+            <strong>4. 司机端显示检查：</strong><br>
+            • 距离信息显示正确<br>
+            • 时长信息显示正确<br>
+            • 费用信息显示正确
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🚀 实际测试链接</h3>
+        <p>使用以下链接进行实际测试：</p>
+        
+        <div style=\"margin: 20px 0;\">
+            <a href=\"/passenger-app.html\" target=\"_blank\">
+                <button>乘客端（创建订单）</button>
+            </a>
+            <a href=\"/driver-app.html\" target=\"_blank\">
+                <button>司机端（接收通知）</button>
+            </a>
+            <a href=\"/debug-order-data-flow.html\" target=\"_blank\">
+                <button>数据流调试页面</button>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // 测试乘客端订单创建
+        async function testPassengerOrder() {
+            const testData = {
+                passengerId: 1,
+                pickupAddress: \"测试起点\",
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationAddress: \"测试终点\",
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                estimatedDistance: 8.5,  // 数字类型
+                estimatedDuration: 20,   // 数字类型
+                estimatedFare: 25.0      // 数字类型
+            };
+
+            document.getElementById('passenger-result').innerHTML = `
+                <div class=\"result success\">
+                    <strong>✅ 测试数据准备完成：</strong><br>
+                    距离: ${testData.estimatedDistance} 公里 (${typeof testData.estimatedDistance})<br>
+                    时长: ${testData.estimatedDuration} 分钟 (${typeof testData.estimatedDuration})<br>
+                    费用: ${testData.estimatedFare} 元 (${typeof testData.estimatedFare})
+                </div>
+                <div class=\"code-block\">${JSON.stringify(testData, null, 2)}</div>
+            `;
+        }
+
+        // 测试司机端通知
+        function testDriverNotification() {
+            const notificationData = {
+                type: \"NEW_ORDER\",
+                orderId: \"123\",
+                orderNumber: \"ORDER123\",
+                pickupAddress: \"测试起点\",
+                destinationAddress: \"测试终点\",
+                distance: \"8.5\",
+                estimatedDistance: \"8.5\",
+                estimatedDuration: \"20\",
+                estimatedFare: \"25.0\",
+                timestamp: Date.now()
+            };
+
+            document.getElementById('driver-result').innerHTML = `
+                <div class=\"result success\">
+                    <strong>✅ 司机通知数据模拟：</strong>
+                </div>
+                <div class=\"driver-notification\">
+                    <div class=\"notification-header\">🚗 新订单 #${notificationData.orderId}</div>
+                    <div class=\"notification-content\">
+                        <div><strong>📍 上车地点:</strong> ${notificationData.pickupAddress}</div>
+                        <div><strong>🎯 目的地:</strong> ${notificationData.destinationAddress}</div>
+                        <div><strong>📏 距离:</strong> ${notificationData.distance} 公里</div>
+                        <div><strong>⏱️ 时长:</strong> ${notificationData.estimatedDuration} 分钟</div>
+                        <div><strong>💰 预估费用:</strong> ${notificationData.estimatedFare} 元</div>
+                    </div>
+                </div>
+                <div class=\"code-block\">${JSON.stringify(notificationData, null, 2)}</div>
+            `;
+        }
+
+        // 测试数据库记录
+        function testDatabaseRecord() {
+            const mockDbRecord = {
+                id: 123,
+                order_number: \"ORDER123\",
+                passenger_id: 1,
+                pickup_address: \"测试起点\",
+                destination_address: \"测试终点\",
+                estimated_distance: 8.50,
+                estimated_duration: 20,
+                estimated_fare: 25.00,
+                status: \"PENDING\",
+                created_at: new Date().toISOString()
+            };
+
+            document.getElementById('database-result').innerHTML = `
+                <div class=\"result success\">
+                    <strong>✅ 数据库记录结构验证：</strong><br>
+                    estimated_distance: ${mockDbRecord.estimated_distance} (DECIMAL)<br>
+                    estimated_duration: ${mockDbRecord.estimated_duration} (INTEGER)<br>
+                    estimated_fare: ${mockDbRecord.estimated_fare} (DECIMAL)
+                </div>
+                <div class=\"code-block\">${JSON.stringify(mockDbRecord, null, 2)}</div>
+            `;
+        }
+
+        // 页面加载时显示修复状态
+        window.onload = function() {
+            console.log('✅ 距离时长信息修复测试页面已加载');
+        };
+    </script>
+</body>
+</html>

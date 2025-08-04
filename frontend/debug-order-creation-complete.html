@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang=\"zh-CN\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>订单创建完整调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .data-display {
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 订单创建完整调试</h1>
+
+    <div class=\"debug-section\">
+        <h3>🧪 完整测试流程</h3>
+        
+        <div class=\"step\">
+            <strong>步骤1：</strong> 创建实时订单
+            <button onclick=\"createRealTimeOrder()\">创建实时订单</button>
+            <div id=\"realtime-result\" class=\"data-display\"></div>
+        </div>
+
+        <div class=\"step\">
+            <strong>步骤2：</strong> 创建预约订单
+            <button onclick=\"createScheduledOrder()\">创建预约订单</button>
+            <div id=\"scheduled-result\" class=\"data-display\"></div>
+        </div>
+
+        <div class=\"step\">
+            <strong>步骤3：</strong> 查询订单详情
+            <button onclick=\"queryOrderDetails()\">查询最新订单</button>
+            <div id=\"query-result\" class=\"data-display\"></div>
+        </div>
+    </div>
+
+    <div class=\"debug-section\">
+        <h3>📊 数据验证</h3>
+        <div id=\"validation-result\" class=\"data-display\">
+            等待测试数据...
+        </div>
+    </div>
+
+    <script>
+        let lastOrderId = null;
+
+        // 创建实时订单
+        async function createRealTimeOrder() {
+            const orderData = {
+                passengerId: 1,
+                pickupAddress: \"测试起点地址\",
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationAddress: \"测试终点地址\",
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                estimatedDistance: 8.5,  // 数字类型
+                estimatedDuration: 20,   // 数字类型
+                estimatedFare: 25.0      // 数字类型
+            };
+
+            try {
+                console.log('🚀 创建实时订单:', orderData);
+
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+                console.log('📡 实时订单响应:', result);
+
+                if (result.code === 200) {
+                    lastOrderId = result.data;
+                    document.getElementById('realtime-result').innerHTML = `
+                        <div class=\"result success\">
+                            <strong>✅ 实时订单创建成功：</strong><br>
+                            订单ID: ${lastOrderId}<br>
+                            发送数据类型检查:<br>
+                            - estimatedDistance: ${orderData.estimatedDistance} (${typeof orderData.estimatedDistance})<br>
+                            - estimatedDuration: ${orderData.estimatedDuration} (${typeof orderData.estimatedDuration})<br>
+                            - estimatedFare: ${orderData.estimatedFare} (${typeof orderData.estimatedFare})
+                        </div>
+                        <div class=\"code-block\">请求数据: ${JSON.stringify(orderData, null, 2)}
+
+响应数据: ${JSON.stringify(result, null, 2)}</div>
+                    `;
+                } else {
+                    document.getElementById('realtime-result').innerHTML = `
+                        <div class=\"result error\">
+                            <strong>❌ 实时订单创建失败：</strong>
+                        </div>
+                        <div class=\"code-block\">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 创建实时订单失败:', error);
+                document.getElementById('realtime-result').innerHTML = `
+                    <div class=\"result error\">
+                        <strong>❌ 请求失败：</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 创建预约订单
+        async function createScheduledOrder() {
+            // 创建一个1小时后的预约时间
+            const scheduledTime = new Date();
+            scheduledTime.setHours(scheduledTime.getHours() + 1);
+            
+            const orderData = {
+                passengerId: 1,
+                pickupAddress: \"预约起点地址\",
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationAddress: \"预约终点地址\",
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                scheduledTime: scheduledTime.toISOString().slice(0, 19).replace('T', ' '),
+                estimatedDistance: 12.3,  // 数字类型
+                estimatedDuration: 30,    // 数字类型
+                estimatedFare: 35.0       // 数字类型
+            };
+
+            try {
+                console.log('🚀 创建预约订单:', orderData);
+
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+                console.log('📡 预约订单响应:', result);
+
+                if (result.code === 200) {
+                    lastOrderId = result.data.id;
+                    document.getElementById('scheduled-result').innerHTML = `
+                        <div class=\"result success\">
+                            <strong>✅ 预约订单创建成功：</strong><br>
+                            订单ID: ${lastOrderId}<br>
+                            发送数据类型检查:<br>
+                            - estimatedDistance: ${orderData.estimatedDistance} (${typeof orderData.estimatedDistance})<br>
+                            - estimatedDuration: ${orderData.estimatedDuration} (${typeof orderData.estimatedDuration})<br>
+                            - estimatedFare: ${orderData.estimatedFare} (${typeof orderData.estimatedFare})
+                        </div>
+                        <div class=\"code-block\">请求数据: ${JSON.stringify(orderData, null, 2)}
+
+响应数据: ${JSON.stringify(result, null, 2)}</div>
+                    `;
+                } else {
+                    document.getElementById('scheduled-result').innerHTML = `
+                        <div class=\"result error\">
+                            <strong>❌ 预约订单创建失败：</strong>
+                        </div>
+                        <div class=\"code-block\">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 创建预约订单失败:', error);
+                document.getElementById('scheduled-result').innerHTML = `
+                    <div class=\"result error\">
+                        <strong>❌ 请求失败：</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 查询订单详情
+        async function queryOrderDetails() {
+            if (!lastOrderId) {
+                alert('请先创建订单');
+                return;
+            }
+
+            try {
+                console.log('🔍 查询订单详情:', lastOrderId);
+
+                const response = await fetch(`/api/orders/${lastOrderId}`);
+                const result = await response.json();
+                console.log('📋 订单详情:', result);
+
+                if (result.code === 200) {
+                    const order = result.data;
+                    
+                    // 验证关键字段
+                    const hasDistance = order.estimatedDistance !== null && order.estimatedDistance !== undefined;
+                    const hasDuration = order.estimatedDuration !== null && order.estimatedDuration !== undefined;
+                    const hasFare = order.estimatedFare !== null && order.estimatedFare !== undefined;
+
+                    document.getElementById('query-result').innerHTML = `
+                        <div class=\"result ${hasDistance && hasDuration && hasFare ? 'success' : 'error'}\">
+                            <strong>📋 数据库记录验证：</strong><br>
+                            订单ID: ${order.id}<br>
+                            估算距离: ${order.estimatedDistance} 公里 ${hasDistance ? '✅' : '❌'}<br>
+                            估算时长: ${order.estimatedDuration} 分钟 ${hasDuration ? '✅' : '❌'}<br>
+                            估算费用: ${order.estimatedFare} 元 ${hasFare ? '✅' : '❌'}
+                        </div>
+                        <div class=\"code-block\">完整订单数据: ${JSON.stringify(order, null, 2)}</div>
+                    `;
+
+                    // 更新验证结果
+                    updateValidationResult(order);
+                } else {
+                    document.getElementById('query-result').innerHTML = `
+                        <div class=\"result error\">
+                            <strong>❌ 查询失败：</strong>
+                        </div>
+                        <div class=\"code-block\">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 查询订单详情失败:', error);
+                document.getElementById('query-result').innerHTML = `
+                    <div class=\"result error\">
+                        <strong>❌ 查询失败：</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // 更新验证结果
+        function updateValidationResult(order) {
+            const hasDistance = order.estimatedDistance !== null && order.estimatedDistance !== undefined;
+            const hasDuration = order.estimatedDuration !== null && order.estimatedDuration !== undefined;
+            const hasFare = order.estimatedFare !== null && order.estimatedFare !== undefined;
+
+            const allFieldsPresent = hasDistance && hasDuration && hasFare;
+
+            document.getElementById('validation-result').innerHTML = `
+                <div class=\"result ${allFieldsPresent ? 'success' : 'error'}\">
+                    <strong>🔍 数据完整性验证：</strong><br>
+                    ${allFieldsPresent ? '✅ 所有字段都已正确保存到数据库' : '❌ 部分字段缺失'}
+                </div>
+                <div class=\"code-block\">字段检查结果:
+- estimatedDistance: ${order.estimatedDistance} ${hasDistance ? '✅' : '❌ 缺失'}
+- estimatedDuration: ${order.estimatedDuration} ${hasDuration ? '✅' : '❌ 缺失'}  
+- estimatedFare: ${order.estimatedFare} ${hasFare ? '✅' : '❌ 缺失'}
+
+${allFieldsPresent ? 
+'数据库保存正常，如果司机端不显示，问题可能在：
+1. WebSocket通知数据
+2. 司机端显示逻辑
+3. 前端数据解析' : 
+'数据库保存异常，问题可能在：
+1. 前端发送的数据格式
+2. 后端DTO映射
+3. 数据库字段映射'}
+                </div>
+            `;
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('🔍 订单创建调试页面已加载');
+        };
+    </script>
+</body>
+</html>

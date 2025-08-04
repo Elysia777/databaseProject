@@ -73,11 +73,13 @@
         INSERT INTO orders (
             order_number, passenger_id, driver_id, vehicle_id, order_type, status,
             pickup_address, pickup_latitude, pickup_longitude, destination_address, destination_latitude, destination_longitude,
+            estimated_distance, estimated_duration, estimated_fare, actual_distance, actual_duration, actual_fare,
             service_fee, total_fare, payment_method, payment_status, scheduled_time, pickup_time, completion_time,
             cancel_reason, created_at, updated_at
         ) VALUES (
             #{orderNumber}, #{passengerId}, #{driverId}, #{vehicleId}, #{orderType}, #{status},
             #{pickupAddress}, #{pickupLatitude}, #{pickupLongitude}, #{destinationAddress}, #{destinationLatitude}, #{destinationLongitude},
+            #{estimatedDistance}, #{estimatedDuration}, #{estimatedFare}, #{actualDistance}, #{actualDuration}, #{actualFare},
             #{serviceFee}, #{totalFare}, #{paymentMethod}, #{paymentStatus}, #{scheduledTime}, #{pickupTime}, #{completionTime},
             #{cancelReason}, #{createdAt}, #{updatedAt}
         )
@@ -139,6 +141,50 @@
         AND status IN ('ASSIGNED', 'PICKUP', 'IN_PROGRESS')
         ORDER BY created_at DESC
         LIMIT 1
+    </select>
+
+    <select id="selectCurrentOrderByPassengerId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE passenger_id = #{passengerId}
+        AND status IN ('SCHEDULED', 'PENDING', 'ASSIGNED', 'PICKUP', 'IN_PROGRESS')
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectPendingScheduledOrders" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE order_type = 'RESERVATION'
+        AND status = 'SCHEDULED'
+        AND scheduled_time IS NOT NULL
+        ORDER BY scheduled_time ASC
+    </select>
+
+    <select id="selectScheduledOrdersByPassengerId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE passenger_id = #{passengerId}
+        AND order_type = 'RESERVATION'
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectAvailableScheduledOrders" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE order_type = 'RESERVATION'
+        AND status = 'PENDING'
+        AND scheduled_time BETWEEN #{startTime} AND #{endTime}
+        ORDER BY scheduled_time ASC
+    </select>
+
+    <select id="selectActivatedScheduledOrders" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE order_type = 'RESERVATION'
+        AND status = 'PENDING'
+        AND scheduled_time BETWEEN #{startTime} AND #{endTime}
+        ORDER BY scheduled_time ASC
     </select>
 
 </mapper> 

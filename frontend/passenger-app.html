@@ -605,16 +605,26 @@
                     const time = Math.ceil(route.time / 60);
                     const price = calculatePrice(route.distance);
 
+                    // 保存路线信息供下单使用
+                    window.routeInfo = {
+                        distance: route.distance,  // 米
+                        duration: route.time,      // 秒
+                        price: price
+                    };
+
                     // 显示路线信息
                     document.getElementById('routeDistance').textContent = distance + ' 公里';
                     document.getElementById('routeTime').textContent = `预计时间: ${time} 分钟`;
                     document.getElementById('estimatedPrice').textContent = `¥ ${price}`;
                     document.getElementById('routePanel').style.display = 'block';
 
+                    console.log('🗺️ 路线规划成功:', window.routeInfo);
+
                     // 调整地图视野
                     map.setFitView([startMarker, endMarker]);
                 } else {
                     showMessage('❌ 路线规划失败', true);
+                    window.routeInfo = null;
                 }
             });
         }
@@ -640,6 +650,17 @@
             const startAddress = document.getElementById('startLocation').value;
             const endAddress = document.getElementById('endLocation').value;
 
+            // 获取路线信息（如果存在）
+            let estimatedDistance = 0;
+            let estimatedDuration = 0;
+            let estimatedFare = 0;
+            
+            if (window.routeInfo) {
+                estimatedDistance = parseFloat((window.routeInfo.distance / 1000).toFixed(2));
+                estimatedDuration = Math.round(window.routeInfo.duration / 60);
+                estimatedFare = parseFloat(document.getElementById('estimatedPrice').textContent.replace('¥ ', '').replace('--', '0'));
+            }
+
             const orderData = {
                 passengerId: parseInt(passengerId),
                 pickupAddress: startAddress,
@@ -648,8 +669,13 @@
                 destinationAddress: endAddress,
                 destinationLatitude: endPos.lat,
                 destinationLongitude: endPos.lng,
+                estimatedDistance: estimatedDistance,
+                estimatedDuration: estimatedDuration,
+                estimatedFare: estimatedFare,
                 orderType: 'REAL_TIME'
             };
+            
+            console.log('🚀 发送订单数据:', orderData);
 
             try {
                 const response = await fetch(`${API_BASE_URL}/api/orders/create`, {

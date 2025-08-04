@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机WebSocket会话修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .problem-analysis {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .solution {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+        .test-steps {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .timeline {
+            border-left: 3px solid #007bff;
+            padding-left: 20px;
+            margin: 20px 0;
+        }
+        .timeline-item {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 司机WebSocket会话修复测试</h1>
+
+    <div class=\"test-section\">
+        <h3>🐛 问题描述</h3>
+        <div class=\"problem-analysis\">
+            <strong>现象：</strong><br>
+            司机2接单后退出登录，然后登录司机1，再重新登录司机2时，乘客端取消订单司机2收不到通知。
+            <br><br>
+            <strong>问题分析：</strong><br>
+            1. WebSocket会话没有正确地与司机ID绑定<br>
+            2. 司机重新登录时WebSocket会话可能被其他司机的会话覆盖<br>
+            3. 后端WebSocket会话管理存在并发问题
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔍 问题重现步骤</h3>
+        <div class=\"timeline\">
+            <div class=\"timeline-item\">
+                <strong>步骤1：</strong> 司机2登录并接单（WebSocket连接正常）
+            </div>
+            <div class=\"timeline-item\">
+                <strong>步骤2：</strong> 司机2退出登录（WebSocket连接断开）
+            </div>
+            <div class=\"timeline-item\">
+                <strong>步骤3：</strong> 司机1登录（建立新的WebSocket连接）
+            </div>
+            <div class=\"timeline-item\">
+                <strong>步骤4：</strong> 司机2重新登录（重新建立WebSocket连接）
+            </div>
+            <div class=\"timeline-item\">
+                <strong>步骤5：</strong> 乘客取消订单（通知可能发送到错误的会话）
+            </div>
+            <div class=\"timeline-item\">
+                <strong>结果：</strong> 司机2收不到取消通知 ❌
+            </div>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔧 修复方案</h3>
+        <div class=\"solution\">
+            <strong>方案1：增强WebSocket会话管理</strong><br>
+            • 在WebSocket连接时强制清除旧会话<br>
+            • 使用司机ID作为唯一标识符管理会话<br>
+            • 添加会话验证机制
+        </div>
+        <div class=\"solution\">
+            <strong>方案2：增加连接确认机制</strong><br>
+            • 司机登录后发送连接确认消息<br>
+            • 后端验证并确认会话绑定<br>
+            • 定期发送心跳检测会话状态
+        </div>
+        <div class=\"solution\">
+            <strong>方案3：订单取消通知增强</strong><br>
+            • 使用多种方式发送取消通知<br>
+            • 添加通知确认机制<br>
+            • 失败时重试发送
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🛠️ 具体修复代码</h3>
+        
+        <h4>1. 后端WebSocket控制器增强</h4>
+        <div class=\"code-block\">
+@MessageMapping(\"/driver/connect\")
+public void handleDriverConnect(@Payload Map&lt;String, Object&gt; message, SimpMessageHeaderAccessor headerAccessor) {
+    String driverId = message.get(\"driverId\").toString();
+    
+    // 强制清除该司机的旧会话
+    clearOldDriverSessions(driverId);
+    
+    // 建立新会话
+    headerAccessor.getSessionAttributes().put(\"driverId\", driverId);
+    headerAccessor.getSessionAttributes().put(\"userType\", \"DRIVER\");
+    headerAccessor.getSessionAttributes().put(\"sessionId\", headerAccessor.getSessionId());
+    
+    // 记录会话映射
+    driverSessionMap.put(driverId, headerAccessor.getSessionId());
+    
+    // 发送连接确认
+    messagingTemplate.convertAndSendToUser(driverId, \"/queue/connection\", 
+        Map.of(\"status\", \"connected\", \"sessionId\", headerAccessor.getSessionId()));
+}
+        </div>
+
+        <h4>2. 前端WebSocket连接增强</h4>
+        <div class=\"code-block\">
+const connectWebSocket = () => {
+  // 如果已有连接，强制断开
+  if (stompClient && stompClient.connected) {
+    console.log(\"🔌 强制断开现有WebSocket连接\");
+    stompClient.deactivate();
+    stompClient = null;
+  }
+
+  const socket = new SockJS(\"/ws\");
+  stompClient = new Client({
+    webSocketFactory: () => socket,
+    reconnectDelay: 5000,
+    heartbeatIncoming: 4000,
+    heartbeatOutgoing: 4000,
+  });
+
+  stompClient.onConnect = () => {
+    const driverId = userStore.user.driverId || userStore.user.id;
+    
+    // 发送连接请求，包含时间戳确保唯一性
+    stompClient.publish({
+      destination: \"/app/driver/connect\",
+      body: JSON.stringify({
+        driverId: driverId.toString(),
+        timestamp: Date.now(),
+        sessionType: \"DRIVER_SESSION\"
+      }),
+    });
+
+    // 订阅司机专用队列
+    stompClient.subscribe(`/user/${driverId}/queue/orders`, handleOrderMessage);
+    stompClient.subscribe(`/user/${driverId}/queue/notifications`, handleNotificationMessage);
+    
+    console.log(\"✅ 司机WebSocket连接和订阅完成\");
+  };
+};
+        </div>
+
+        <h4>3. 订单取消通知增强</h4>
+        <div class=\"code-block\">
+public void notifyDriverOrderCancelled(Long driverId, Long orderId, String reason) {
+    try {
+        Map&lt;String, Object&gt; notification = new HashMap&lt;&gt;();
+        notification.put(\"type\", \"ORDER_CANCELLED\");
+        notification.put(\"orderId\", orderId);
+        notification.put(\"reason\", reason);
+        notification.put(\"timestamp\", System.currentTimeMillis());
+        notification.put(\"priority\", \"HIGH\"); // 高优先级通知
+        
+        // 方式1：发送到司机专用队列
+        messagingTemplate.convertAndSendToUser(
+            driverId.toString(), 
+            \"/queue/notifications\", 
+            notification
+        );
+        
+        // 方式2：发送到订单队列（备用）
+        messagingTemplate.convertAndSendToUser(
+            driverId.toString(), 
+            \"/queue/orders\", 
+            notification
+        );
+        
+        // 方式3：广播到司机主题（最后备用）
+        messagingTemplate.convertAndSend(
+            \"/topic/driver/\" + driverId, 
+            notification
+        );
+        
+        System.out.println(\"✅ 已通过多种方式通知司机订单取消\");
+        
+    } catch (Exception e) {
+        System.err.println(\"❌ 通知司机订单取消失败: \" + e.getMessage());
+        // 可以考虑使用其他通知方式，如短信或推送
+    }
+}
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🧪 测试验证步骤</h3>
+        <div class=\"test-steps\">
+            <h4>测试场景1：正常流程</h4>
+            <ol>
+                <li>司机2登录并接单</li>
+                <li>乘客取消订单</li>
+                <li>验证司机2收到取消通知 ✅</li>
+            </ol>
+
+            <h4>测试场景2：重新登录流程</h4>
+            <ol>
+                <li>司机2登录并接单</li>
+                <li>司机2退出登录</li>
+                <li>司机2重新登录</li>
+                <li>乘客取消订单</li>
+                <li>验证司机2收到取消通知 ✅</li>
+            </ol>
+
+            <h4>测试场景3：多司机切换流程（问题场景）</h4>
+            <ol>
+                <li>司机2登录并接单</li>
+                <li>司机2退出登录</li>
+                <li>司机1登录</li>
+                <li>司机2重新登录</li>
+                <li>乘客取消订单</li>
+                <li>验证司机2收到取消通知 ✅</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🔍 调试工具</h3>
+        <div class=\"result info\">
+            <strong>浏览器控制台检查：</strong><br>
+            • 检查WebSocket连接状态<br>
+            • 查看订阅的队列名称<br>
+            • 监控收到的消息类型
+        </div>
+        <div class=\"result info\">
+            <strong>后端日志检查：</strong><br>
+            • WebSocket连接和断开日志<br>
+            • 会话管理日志<br>
+            • 消息发送日志
+        </div>
+        <div class=\"result info\">
+            <strong>Redis检查：</strong><br>
+            • 司机在线状态<br>
+            • 会话映射关系<br>
+            • 订单状态
+        </div>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>🚀 测试链接</h3>
+        <p>使用以下链接进行测试：</p>
+        <a href=\"/driver-app.html\" target=\"_blank\">
+            <button>司机端测试</button>
+        </a>
+        <a href=\"/passenger-app.html\" target=\"_blank\">
+            <button>乘客端测试</button>
+        </a>
+        <a href=\"/multi-driver-test.html\" target=\"_blank\">
+            <button>多司机测试</button>
+        </a>
+    </div>
+
+    <div class=\"test-section\">
+        <h3>📋 预期修复效果</h3>
+        <div class=\"result success\">
+            <strong>✅ 修复后应该实现：</strong><br>
+            • 司机重新登录后WebSocket会话正确绑定<br>
+            • 多司机切换不会影响其他司机的会话<br>
+            • 订单取消通知能够准确送达对应司机<br>
+            • WebSocket连接更加稳定和可靠
+        </div>
+    </div>
+</body>
+</html>

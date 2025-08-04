@@ -308,6 +308,7 @@ const isUnpaid = (order) => {
 // 获取状态样式类
 const getStatusClass = (status) => {
   const statusMap = {
+    'SCHEDULED': 'scheduled',
     'PENDING': 'pending',
     'ASSIGNED': 'assigned', 
     'PICKUP': 'pickup',
@@ -321,6 +322,7 @@ const getStatusClass = (status) => {
 // 获取状态文本
 const getStatusText = (status) => {
   const statusMap = {
+    'SCHEDULED': '预约中',
     'PENDING': '等待接单',
     'ASSIGNED': '司机已接单',
     'PICKUP': '司机已到达',
@@ -612,6 +614,11 @@ const confirmPayment = async () => {
   border-radius: 12px;
   font-size: 12px;
   font-weight: bold;
+}
+
+.status-badge.scheduled {
+  background: #e2e3ff;
+  color: #5a67d8;
 }
 
 .status-badge.pending {

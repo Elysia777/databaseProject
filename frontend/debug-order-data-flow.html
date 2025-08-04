@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang=\"zh-CN\">
+<head>
+    <meta charset=\"UTF-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <title>订单数据流调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .data-display {
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 订单数据流调试</h1>
+
+    <div class=\"debug-section\">
+        <h3>📋 测试步骤</h3>
+        <div class=\"step\">
+            <strong>步骤1：</strong> 模拟创建订单数据
+            <button onclick=\"createTestOrder()\">创建测试订单</button>
+            <div id=\"step1-result\" class=\"data-display\"></div>
+        </div>
+
+        <div class=\"step\">
+            <strong>步骤2：</strong> 发送到后端
+            <button onclick=\"sendToBackend()\">发送到后端</button>
+            <div id=\"step2-result\" class=\"data-display\"></div>
+        </div>
+
+        <div class=\"step\">
+            <strong>步骤3：</strong> 查询数据库记录
+            <button onclick=\"queryDatabase()\">查询数据库</button>
+            <div id=\"step3-result\" class=\"data-display\"></div>
+        </div>
+
+        <div class=\"step\">
+            <strong>步骤4：</strong> 模拟司机通知
+            <button onclick=\"simulateDriverNotification()\">模拟司机通知</button>
+            <div id=\"step4-result\" class=\"data-display\"></div>
+        </div>
+    </div>
+
+    <div class=\"debug-section\">
+        <h3>📊 实时数据监控</h3>
+        <div id=\"realtime-data\" class=\"data-display\">
+            等待数据...
+        </div>
+    </div>
+
+    <script>
+        let testOrderData = null;
+        let createdOrderId = null;
+
+        // 步骤1：创建测试订单数据
+        function createTestOrder() {
+            // 模拟路线信息
+            const routeInfo = {
+                distance: 8500,  // 8.5公里（米）
+                duration: 1200   // 20分钟（秒）
+            };
+
+            testOrderData = {
+                passengerId: 1,
+                pickupAddress: \"测试起点地址\",
+                pickupLatitude: 39.044237,
+                pickupLongitude: 121.749849,
+                destinationAddress: \"测试终点地址\",
+                destinationLatitude: 39.054237,
+                destinationLongitude: 121.759849,
+                estimatedDistance: (routeInfo.distance / 1000).toFixed(2), // 8.50
+                estimatedDuration: Math.round(routeInfo.duration / 60),     // 20
+                estimatedFare: 25.00
+            };
+
+            document.getElementById('step1-result').innerHTML = `
+                <strong>✅ 测试订单数据创建成功：</strong>
+                <div class=\"code-block\">${JSON.stringify(testOrderData, null, 2)}</div>
+            `;
+
+            updateRealtimeData('步骤1完成', testOrderData);
+        }
+
+        // 步骤2：发送到后端
+        async function sendToBackend() {
+            if (!testOrderData) {
+                alert('请先创建测试订单数据');
+                return;
+            }
+
+            try {
+                console.log('🚀 发送订单数据到后端:', testOrderData);
+
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer test-token'
+                    },
+                    body: JSON.stringify(testOrderData)
+                });
+
+                const result = await response.json();
+                console.log('📡 后端响应:', result);
+
+                if (result.code === 200) {
+                    createdOrderId = result.data;
+                    document.getElementById('step2-result').innerHTML = `
+                        <strong>✅ 订单创建成功：</strong>
+                        <div class=\"code-block\">订单ID: ${createdOrderId}
+响应数据: ${JSON.stringify(result, null, 2)}</div>
+                    `;
+                    updateRealtimeData('步骤2完成', { orderId: createdOrderId, response: result });
+                } else {
+                    document.getElementById('step2-result').innerHTML = `
+                        <strong>❌ 订单创建失败：</strong>
+                        <div class=\"code-block\">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 发送失败:', error);
+                document.getElementById('step2-result').innerHTML = `
+                    <strong>❌ 发送失败：</strong>
+                    <div class=\"code-block\">${error.message}</div>
+                `;
+            }
+        }
+
+        // 步骤3：查询数据库记录
+        async function queryDatabase() {
+            if (!createdOrderId) {
+                alert('请先创建订单');
+                return;
+            }
+
+            try {
+                console.log('🔍 查询订单详情:', createdOrderId);
+
+                const response = await fetch(`/api/orders/${createdOrderId}`, {
+                    headers: {
+                        'Authorization': 'Bearer test-token'
+                    }
+                });
+
+                const result = await response.json();
+                console.log('📋 订单详情:', result);
+
+                if (result.code === 200) {
+                    const order = result.data;
+                    document.getElementById('step3-result').innerHTML = `
+                        <strong>✅ 数据库记录查询成功：</strong>
+                        <div class=\"code-block\">订单ID: ${order.id}
+预估距离: ${order.estimatedDistance} 公里
+预估时长: ${order.estimatedDuration} 分钟
+预估费用: ${order.estimatedFare} 元
+完整数据: ${JSON.stringify(order, null, 2)}</div>
+                    `;
+                    updateRealtimeData('步骤3完成', order);
+                } else {
+                    document.getElementById('step3-result').innerHTML = `
+                        <strong>❌ 查询失败：</strong>
+                        <div class=\"code-block\">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ 查询失败:', error);
+                document.getElementById('step3-result').innerHTML = `
+                    <strong>❌ 查询失败：</strong>
+                    <div class=\"code-block\">${error.message}</div>
+                `;
+            }
+        }
+
+        // 步骤4：模拟司机通知
+        function simulateDriverNotification() {
+            if (!createdOrderId) {
+                alert('请先创建订单');
+                return;
+            }
+
+            // 模拟WebSocket通知数据
+            const notificationData = {
+                type: \"NEW_ORDER\",
+                orderId: createdOrderId,
+                orderNumber: `ORDER${createdOrderId}`,
+                orderType: \"REAL_TIME\",
+                pickupAddress: testOrderData.pickupAddress,
+                destinationAddress: testOrderData.destinationAddress,
+                pickupLatitude: testOrderData.pickupLatitude,
+                pickupLongitude: testOrderData.pickupLongitude,
+                destinationLatitude: testOrderData.destinationLatitude,
+                destinationLongitude: testOrderData.destinationLongitude,
+                passengerId: testOrderData.passengerId,
+                distance: testOrderData.estimatedDistance,
+                estimatedDistance: testOrderData.estimatedDistance,
+                estimatedDuration: testOrderData.estimatedDuration,
+                estimatedFare: testOrderData.estimatedFare,
+                timestamp: Date.now()
+            };
+
+            document.getElementById('step4-result').innerHTML = `
+                <strong>✅ 司机通知数据模拟：</strong>
+                <div class=\"code-block\">${JSON.stringify(notificationData, null, 2)}</div>
+                <div style=\"margin-top: 10px; padding: 10px; background: #e7f3ff; border-radius: 3px;\">
+                    <strong>司机端显示效果：</strong><br>
+                    📍 上车地点: ${notificationData.pickupAddress}<br>
+                    🎯 目的地: ${notificationData.destinationAddress}<br>
+                    📏 距离: ${notificationData.distance} 公里<br>
+                    ⏱️ 时长: ${notificationData.estimatedDuration} 分钟<br>
+                    💰 预估费用: ${notificationData.estimatedFare} 元
+                </div>
+            `;
+
+            updateRealtimeData('步骤4完成', notificationData);
+        }
+
+        // 更新实时数据显示
+        function updateRealtimeData(step, data) {
+            const realtimeDiv = document.getElementById('realtime-data');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            realtimeDiv.innerHTML = `
+                <strong>📊 最新状态：</strong> ${step} (${timestamp})<br>
+                <div class=\"code-block\">${JSON.stringify(data, null, 2)}</div>
+            `;
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('🔍 订单数据流调试页面已加载');
+            updateRealtimeData('页面已加载', { message: '准备开始调试' });
+        };
+    </script>
+</body>
+</html>

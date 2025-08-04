@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预约单通知调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>预约单通知调试</h1>
+
+    <div class="step">
+        <h3>步骤1: 创建预约单</h3>
+        <button onclick="createReservation()">创建30分钟后的预约单</button>
+        <div id="step1Result" class="result"></div>
+    </div>
+
+    <div class="step">
+        <h3>步骤2: 激活预约单（等待20分钟或手动激活）</h3>
+        <p>预约单会在预约时间前20分钟自动激活，或者你可以手动激活来测试</p>
+        <button onclick="manualActivate()">手动激活最新预约单</button>
+        <div id="step2Result" class="result"></div>
+    </div>
+
+    <div class="step">
+        <h3>步骤3: 司机上线接收通知</h3>
+        <button onclick="driverOnline()">司机上线</button>
+        <div id="step3Result" class="result"></div>
+    </div>
+
+    <div class="step">
+        <h3>步骤4: 检查通知内容</h3>
+        <p>请到司机端页面查看是否显示：</p>
+        <ul>
+            <li>✅ "📅 预约单" 而不是 "🚗 新订单"</li>
+            <li>✅ 显示预约时间信息</li>
+        </ul>
+        <a href="/driver-app.html" target="_blank">
+            <button>打开司机端页面</button>
+        </a>
+    </div>
+
+    <script>
+        let lastOrderId = null;
+
+        async function createReservation() {
+            const resultDiv = document.getElementById('step1Result');
+            resultDiv.innerHTML = '<div class="info">🔄 创建预约单...</div>';
+
+            const scheduledTime = new Date();
+            scheduledTime.setTime(scheduledTime.getTime() + 30 * 60 * 1000);
+            
+            const orderData = {
+                passengerId: 1,
+                pickupAddress: "调试预约单上车地址",
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: "调试预约单目的地",
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: formatDateTime(scheduledTime),
+                estimatedFare: 45.00
+            };
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    lastOrderId = result.data.id;
+                    resultDiv.innerHTML = `<div class="success">✅ 预约单创建成功！<br>
+                        订单ID: ${result.data.id}<br>
+                        类型: ${result.data.orderType}<br>
+                        状态: ${result.data.status}<br>
+                        预约时间: ${result.data.scheduledTime}
+                    </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 创建失败: ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error.message}</div>`;
+            }
+        }
+
+        async function manualActivate() {
+            const resultDiv = document.getElementById('step2Result');
+            
+            if (!lastOrderId) {
+                resultDiv.innerHTML = '<div class="error">❌ 请先创建预约单</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="info">🔄 手动激活预约单...</div>';
+
+            try {
+                // 这里我们通过修改订单状态来模拟激活
+                // 实际上应该调用激活接口，但为了测试方便，我们直接修改状态
+                const response = await fetch(`/api/orders/${lastOrderId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        status: 'PENDING'
+                    })
+                });
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = '<div class="success">✅ 预约单已激活为PENDING状态</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ 激活失败</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 激活错误: ${error.message}</div>`;
+            }
+        }
+
+        async function driverOnline() {
+            const resultDiv = document.getElementById('step3Result');
+            resultDiv.innerHTML = '<div class="info">🔄 司机上线...</div>';
+
+            try {
+                const response = await fetch('/api/drivers/1/online', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        latitude: 38.914677,
+                        longitude: 121.619643
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    resultDiv.innerHTML = `<div class="success">✅ 司机上线成功！<br>
+                        现在请到司机端页面查看是否收到预约单通知<br>
+                        <strong>应该显示 "📅 预约单" 而不是 "🚗 新订单"</strong>
+                    </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ 上线失败: ${result.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ 网络错误: ${error.message}</div>`;
+            }
+        }
+
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+    </script>
+</body>
+</html>

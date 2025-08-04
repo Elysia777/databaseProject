@@ -48,6 +48,15 @@ public class OrderController {
         System.out.println("请求参数: " + request);
         
         try {
+            System.out.println("=== 创建实时订单请求 ===");
+            System.out.println("接收到的请求数据:");
+            System.out.println("  乘客ID: " + request.getPassengerId());
+            System.out.println("  起点: " + request.getPickupAddress());
+            System.out.println("  终点: " + request.getDestinationAddress());
+            System.out.println("  预估距离: " + request.getEstimatedDistance());
+            System.out.println("  预估时长: " + request.getEstimatedDuration());
+            System.out.println("  预估费用: " + request.getEstimatedFare());
+            
             Order order = new Order();
             order.setOrderNumber(generateOrderNumber());
             order.setPassengerId(request.getPassengerId());
@@ -58,6 +67,16 @@ public class OrderController {
             order.setDestinationAddress(request.getDestinationAddress());
             order.setDestinationLatitude(request.getDestinationLatitude());
             order.setDestinationLongitude(request.getDestinationLongitude());
+            
+            // 设置距离、时长和费用信息
+            order.setEstimatedDistance(request.getEstimatedDistance());
+            order.setEstimatedDuration(request.getEstimatedDuration());
+            order.setEstimatedFare(request.getEstimatedFare());
+            
+            System.out.println("设置到Order对象的数据:");
+            System.out.println("  预估距离: " + order.getEstimatedDistance());
+            System.out.println("  预估时长: " + order.getEstimatedDuration());
+            System.out.println("  预估费用: " + order.getEstimatedFare());
             
             order.setOrderType("REAL_TIME");
             order.setCreatedAt(LocalDateTime.now());
@@ -376,9 +395,10 @@ public class OrderController {
             
             List<Order> orders = orderMapper.selectByPassengerId(passengerId);
             
-            // 查找进行中的订单（状态为PENDING, ASSIGNED, PICKUP, IN_PROGRESS）
+            // 查找进行中的订单（状态为SCHEDULED, PENDING, ASSIGNED, PICKUP, IN_PROGRESS）
             Order currentOrder = orders.stream()
-                .filter(order -> "PENDING".equals(order.getStatus()) || 
+                .filter(order -> "SCHEDULED".equals(order.getStatus()) ||
+                               "PENDING".equals(order.getStatus()) || 
                                "ASSIGNED".equals(order.getStatus()) ||
                                "PICKUP".equals(order.getStatus()) ||
                                "IN_PROGRESS".equals(order.getStatus()))

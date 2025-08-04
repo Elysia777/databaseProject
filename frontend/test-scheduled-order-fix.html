@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预约单修复验证</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .order-card {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .status-scheduled { border-left: 4px solid #5a67d8; background-color: #f7fafc; }
+        .status-pending { border-left: 4px solid #ffc107; }
+        .status-assigned { border-left: 4px solid #28a745; }
+        .two-column {
+            display: flex;
+            gap: 20px;
+        }
+        .column {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <h1>预约单修复验证测试</h1>
+
+    <div class="test-section">
+        <h3>🔧 修复内容</h3>
+        <ul>
+            <li>✅ 添加了SCHEDULED状态的前端显示支持</li>
+            <li>✅ 修复了历史订单中"未知状态"的问题</li>
+            <li>✅ 修复了预约单不被识别为活跃订单的问题</li>
+            <li>✅ 添加了SCHEDULED状态的CSS样式</li>
+        </ul>
+    </div>
+
+    <div class="two-column">
+        <div class="column">
+            <div class="test-section">
+                <h3>📝 测试步骤</h3>
+                <ol>
+                    <li>创建预约单</li>
+                    <li>检查是否被识别为活跃订单</li>
+                    <li>查看历史订单状态显示</li>
+                    <li>验证不能创建新订单</li>
+                </ol>
+                <button onclick="runFullTest()">运行完整测试</button>
+                <div id="testProgress" class="result"></div>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="test-section">
+                <h3>🎯 单项测试</h3>
+                <button onclick="testCreateScheduledOrder()">1. 创建预约单</button>
+                <button onclick="testCheckActiveOrder()">2. 检查活跃订单</button>
+                <button onclick="testOrderHistory()">3. 查看历史订单</button>
+                <button onclick="testCannotCreateNew()">4. 验证不能创建新订单</button>
+                <div id="singleTestResult" class="result"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 测试结果</h3>
+        <div id="overallResult" class="result"></div>
+    </div>
+
+    <script>
+        const PASSENGER_ID = 1;
+        let createdOrderId = null;
+
+        // 运行完整测试
+        async function runFullTest() {
+            const progressDiv = document.getElementById('testProgress');
+            const resultDiv = document.getElementById('overallResult');
+            
+            progressDiv.innerHTML = '<div class="info">🔄 开始运行完整测试...</div>';
+            
+            const results = [];
+            
+            try {
+                // 步骤1: 创建预约单
+                progressDiv.innerHTML = '<div class="info">🔄 步骤1: 创建预约单...</div>';
+                const createResult = await createScheduledOrder();
+                results.push({ step: '创建预约单', success: createResult.success, message: createResult.message });
+                
+                if (!createResult.success) {
+                    throw new Error('创建预约单失败，停止测试');
+                }
+                
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // 步骤2: 检查活跃订单
+                progressDiv.innerHTML = '<div class="info">🔄 步骤2: 检查活跃订单...</div>';
+                const activeResult = await checkActiveOrder();
+                results.push({ step: '检查活跃订单', success: activeResult.success, message: activeResult.message });
+                
+                // 步骤3: 查看历史订单
+                progressDiv.innerHTML = '<div class="info">🔄 步骤3: 查看历史订单状态...</div>';
+                const historyResult = await checkOrderHistory();
+                results.push({ step: '历史订单状态', success: historyResult.success, message: historyResult.message });
+                
+                // 步骤4: 验证不能创建新订单
+                progressDiv.innerHTML = '<div class="info">🔄 步骤4: 验证不能创建新订单...</div>';
+                const blockResult = await testOrderBlocking();
+                results.push({ step: '订单阻塞验证', success: blockResult.success, message: blockResult.message });
+                
+                // 显示最终结果
+                const successCount = results.filter(r => r.success).length;
+                const totalCount = results.length;
+                
+                let html = `<div class="${successCount === totalCount ? 'success' : 'warning'}">`;
+                html += `<h4>测试完成: ${successCount}/${totalCount} 项通过</h4>`;
+                
+                results.forEach(result => {
+                    const icon = result.success ? '✅' : '❌';
+                    html += `<div>${icon} ${result.step}: ${result.message}</div>`;
+                });
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                progressDiv.innerHTML = '<div class="success">✅ 测试完成</div>';
+                
+            } catch (error) {
+                progressDiv.innerHTML = `<div class="error">❌ 测试中断: ${error.message}</div>`;
+                resultDiv.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+            }
+        }
+
+        // 创建预约单
+        async function createScheduledOrder() {
+            const scheduledTime = new Date();
+            scheduledTime.setHours(scheduledTime.getHours() + 1);
+            scheduledTime.setMinutes(0);
+            scheduledTime.setSeconds(0);
+            
+            const orderData = {
+                passengerId: PASSENGER_ID,
+                pickupAddress: "测试上车地址",
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: "测试目的地",
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: formatDateTime(scheduledTime),
+                estimatedFare: 25.00
+            };
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    createdOrderId = result.data.id;
+                    return { 
+                        success: true, 
+                        message: `预约单创建成功，ID: ${result.data.id}, 状态: ${result.data.status}` 
+                    };
+                } else {
+                    return { 
+                        success: false, 
+                        message: `创建失败: ${result.message}` 
+                    };
+                }
+            } catch (error) {
+                return { 
+                    success: false, 
+                    message: `网络错误: ${error.message}` 
+                };
+            }
+        }
+
+        // 检查活跃订单
+        async function checkActiveOrder() {
+            try {
+                const response = await fetch(`/api/orders/passenger/${PASSENGER_ID}/has-active`);
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    const hasActive = result.data;
+                    return {
+                        success: hasActive,
+                        message: hasActive ? '✅ 预约单被正确识别为活跃订单' : '❌ 预约单未被识别为活跃订单'
+                    };
+                } else {
+                    return {
+                        success: false,
+                        message: `检查失败: ${result.message}`
+                    };
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `网络错误: ${error.message}`
+                };
+            }
+        }
+
+        // 检查历史订单状态
+        async function checkOrderHistory() {
+            try {
+                const response = await fetch(`/api/orders/passenger/${PASSENGER_ID}/scheduled`);
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    const orders = result.data;
+                    const recentOrder = orders.find(o => o.id === createdOrderId);
+                    
+                    if (recentOrder) {
+                        const hasValidStatus = recentOrder.status === 'SCHEDULED';
+                        return {
+                            success: hasValidStatus,
+                            message: hasValidStatus 
+                                ? `✅ 历史订单状态正确显示: ${recentOrder.status}` 
+                                : `❌ 历史订单状态异常: ${recentOrder.status}`
+                        };
+                    } else {
+                        return {
+                            success: false,
+                            message: '❌ 在历史订单中未找到刚创建的预约单'
+                        };
+                    }
+                } else {
+                    return {
+                        success: false,
+                        message: `获取历史订单失败: ${result.message}`
+                    };
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `网络错误: ${error.message}`
+                };
+            }
+        }
+
+        // 测试订单阻塞
+        async function testOrderBlocking() {
+            // 尝试创建另一个预约单，应该被阻止
+            const scheduledTime = new Date();
+            scheduledTime.setHours(scheduledTime.getHours() + 2);
+            
+            const orderData = {
+                passengerId: PASSENGER_ID,
+                pickupAddress: "测试上车地址2",
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: "测试目的地2",
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: formatDateTime(scheduledTime),
+                estimatedFare: 30.00
+            };
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    return {
+                        success: false,
+                        message: '❌ 系统允许创建多个预约单，应该被阻止'
+                    };
+                } else {
+                    return {
+                        success: true,
+                        message: `✅ 系统正确阻止了新订单创建: ${result.message}`
+                    };
+                }
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `网络错误: ${error.message}`
+                };
+            }
+        }
+
+        // 单项测试函数
+        async function testCreateScheduledOrder() {
+            const result = await createScheduledOrder();
+            document.getElementById('singleTestResult').innerHTML = 
+                `<div class="${result.success ? 'success' : 'error'}">${result.message}</div>`;
+        }
+
+        async function testCheckActiveOrder() {
+            const result = await checkActiveOrder();
+            document.getElementById('singleTestResult').innerHTML = 
+                `<div class="${result.success ? 'success' : 'error'}">${result.message}</div>`;
+        }
+
+        async function testOrderHistory() {
+            const result = await checkOrderHistory();
+            document.getElementById('singleTestResult').innerHTML = 
+                `<div class="${result.success ? 'success' : 'error'}">${result.message}</div>`;
+        }
+
+        async function testCannotCreateNew() {
+            const result = await testOrderBlocking();
+            document.getElementById('singleTestResult').innerHTML = 
+                `<div class="${result.success ? 'success' : 'error'}">${result.message}</div>`;
+        }
+
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+    </script>
+</body>
+</html>

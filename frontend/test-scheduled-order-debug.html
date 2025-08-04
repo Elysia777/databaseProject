@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预约单调试测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        input, select {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>预约单功能调试测试</h1>
+
+    <div class="test-section">
+        <h3>1. 时间格式测试</h3>
+        <div class="form-group">
+            <label>选择日期:</label>
+            <input type="date" id="testDate" />
+        </div>
+        <div class="form-group">
+            <label>选择时间:</label>
+            <input type="time" id="testTime" />
+        </div>
+        <button onclick="testTimeFormat()">测试时间格式</button>
+        <div id="timeFormatResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. 预约单创建测试</h3>
+        <div class="form-group">
+            <label>乘客ID:</label>
+            <input type="number" id="passengerId" value="1" />
+        </div>
+        <div class="form-group">
+            <label>上车地址:</label>
+            <input type="text" id="pickupAddress" value="测试上车地址" />
+        </div>
+        <div class="form-group">
+            <label>目的地:</label>
+            <input type="text" id="destinationAddress" value="测试目的地" />
+        </div>
+        <div class="form-group">
+            <label>预约时间:</label>
+            <input type="datetime-local" id="scheduledDateTime" />
+        </div>
+        <button onclick="testCreateScheduledOrder()">创建预约单</button>
+        <div id="createOrderResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 时间验证逻辑测试</h3>
+        <button onclick="testTimeValidation()">测试时间验证</button>
+        <div id="timeValidationResult" class="result"></div>
+    </div>
+
+    <script>
+        // 设置默认的预约时间为明天这个时候
+        function setDefaultScheduledTime() {
+            const now = new Date();
+            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            const dateStr = tomorrow.toISOString().slice(0, 16);
+            document.getElementById('scheduledDateTime').value = dateStr;
+            
+            // 设置日期和时间输入框
+            document.getElementById('testDate').value = tomorrow.toISOString().slice(0, 10);
+            document.getElementById('testTime').value = tomorrow.toTimeString().slice(0, 5);
+        }
+
+        function testTimeFormat() {
+            const date = document.getElementById('testDate').value;
+            const time = document.getElementById('testTime').value;
+            const resultDiv = document.getElementById('timeFormatResult');
+            
+            if (!date || !time) {
+                resultDiv.innerHTML = '<div class="error">请选择日期和时间</div>';
+                return;
+            }
+            
+            const dateTime = new Date(`${date}T${time}`);
+            const formats = {
+                'ISO String': dateTime.toISOString(),
+                'Local String': dateTime.toLocaleString(),
+                'YYYY-MM-DD HH:mm:ss': formatDateTime(dateTime),
+                'Timestamp': dateTime.getTime()
+            };
+            
+            let html = '<div class="info">时间格式测试结果:</div>';
+            for (const [format, value] of Object.entries(formats)) {
+                html += `<div><strong>${format}:</strong> ${value}</div>`;
+            }
+            
+            resultDiv.innerHTML = html;
+        }
+
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        async function testCreateScheduledOrder() {
+            const resultDiv = document.getElementById('createOrderResult');
+            
+            const passengerId = document.getElementById('passengerId').value;
+            const pickupAddress = document.getElementById('pickupAddress').value;
+            const destinationAddress = document.getElementById('destinationAddress').value;
+            const scheduledDateTime = document.getElementById('scheduledDateTime').value;
+            
+            if (!scheduledDateTime) {
+                resultDiv.innerHTML = '<div class="error">请选择预约时间</div>';
+                return;
+            }
+            
+            const scheduledTime = formatDateTime(new Date(scheduledDateTime));
+            
+            const orderData = {
+                passengerId: parseInt(passengerId),
+                pickupAddress: pickupAddress,
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: destinationAddress,
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: scheduledTime,
+                estimatedFare: 25.00
+            };
+            
+            console.log('发送预约单数据:', orderData);
+            resultDiv.innerHTML = '<div class="info">正在创建预约单...</div>';
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                console.log('预约单创建结果:', result);
+                
+                if (response.ok && result.code === 200) {
+                    resultDiv.innerHTML = `<div class="success">预约单创建成功！<br>订单ID: ${result.data.id}<br>订单号: ${result.data.orderNumber}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">预约单创建失败: ${result.message || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                console.error('预约单创建错误:', error);
+                resultDiv.innerHTML = `<div class="error">网络错误: ${error.message}</div>`;
+            }
+        }
+
+        function testTimeValidation() {
+            const resultDiv = document.getElementById('timeValidationResult');
+            const now = new Date();
+            
+            // 测试不同时间的验证逻辑
+            const testCases = [
+                { name: '当前时间', time: now },
+                { name: '30分钟后', time: new Date(now.getTime() + 30 * 60 * 1000) },
+                { name: '1小时后', time: new Date(now.getTime() + 60 * 60 * 1000) },
+                { name: '明天同一时间', time: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+                { name: '昨天同一时间', time: new Date(now.getTime() - 24 * 60 * 60 * 1000) }
+            ];
+            
+            let html = '<div class="info">时间验证测试结果:</div>';
+            
+            testCases.forEach(testCase => {
+                const isValid = validateScheduledTime(testCase.time);
+                const status = isValid ? '✅ 有效' : '❌ 无效';
+                html += `<div><strong>${testCase.name}:</strong> ${formatDateTime(testCase.time)} - ${status}</div>`;
+            });
+            
+            resultDiv.innerHTML = html;
+        }
+
+        function validateScheduledTime(scheduledTime) {
+            const now = new Date();
+            const minTime = new Date(now.getTime() + 30 * 60 * 1000); // 至少30分钟后
+            
+            return scheduledTime >= minTime;
+        }
+
+        // 页面加载时设置默认值
+        window.onload = function() {
+            setDefaultScheduledTime();
+        };
+    </script>
+</body>
+</html>

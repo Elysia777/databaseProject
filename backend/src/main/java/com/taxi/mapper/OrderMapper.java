@@ -4,6 +4,7 @@ import com.taxi.entity.Order;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -41,4 +42,21 @@ public interface OrderMapper {
 
     /** 查询司机当前进行中的订单 */
     Order selectCurrentOrderByDriverId(@Param("driverId") Long driverId);
+    
+    /** 查询乘客当前进行中的订单 */
+    Order selectCurrentOrderByPassengerId(@Param("passengerId") Long passengerId);
+    
+    /** 查询待激活的预约单 */
+    List<Order> selectPendingScheduledOrders();
+    
+    /** 查询乘客的预约单列表 */
+    List<Order> selectScheduledOrdersByPassengerId(@Param("passengerId") Long passengerId);
+    
+    /** 查询可用的预约单（司机端） */
+    List<Order> selectAvailableScheduledOrders(@Param("startTime") LocalDateTime startTime, 
+                                              @Param("endTime") LocalDateTime endTime);
+    
+    /** 查询已激活的预约单（司机端） */
+    List<Order> selectActivatedScheduledOrders(@Param("startTime") LocalDateTime startTime, 
+                                              @Param("endTime") LocalDateTime endTime);
 }

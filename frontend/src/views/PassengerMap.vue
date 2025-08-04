@@ -41,6 +41,89 @@
 
     <!-- 底部车型选择面板 -->
     <div v-if="!currentOrder" class="bottom-panel">
+      <!-- 订单类型选择 -->
+      <div class="booking-type-selector">
+        <el-radio-group v-model="bookingType" @change="handleBookingTypeChange">
+          <el-radio-button label="immediate" :disabled="hasActiveOrder">立即叫车</el-radio-button>
+          <el-radio-button label="scheduled" :disabled="hasActiveOrder">预约用车</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <!-- 预约时间选择 -->
+      <div v-if="bookingType === 'scheduled'" class="scheduled-time-selector">
+        <div class="time-picker-container">
+          <div class="time-display">
+            <span v-if="scheduledTime">{{ formatDisplayTime(scheduledTime) }}</span>
+            <span v-else class="placeholder">请选择预约时间</span>
+          </div>
+          <button type="button" class="time-picker-btn" @click="showTimePicker = true">
+            选择时间
+          </button>
+        </div>
+
+        <!-- 自定义滚轮时间选择器 -->
+        <div v-if="showTimePicker" class="time-picker-overlay" @click="closeTimePicker">
+          <div class="time-picker-modal" @click.stop>
+            <div class="time-picker-header">
+              <h3>选择预约时间</h3>
+              <button class="close-btn" @click="closeTimePicker">×</button>
+            </div>
+            
+            <div class="time-picker-wheels">
+              <!-- 日期选择 -->
+              <div class="wheel-container">
+                <div class="wheel-label">日期</div>
+                <div class="wheel" ref="dateWheel">
+                  <div 
+                    v-for="(date, index) in availableDates" 
+                    :key="index"
+                    :class="['wheel-item', { active: selectedDateIndex === index }]"
+                    @click="selectDate(index)"
+                  >
+                    {{ date.label }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 小时选择 -->
+              <div class="wheel-container">
+                <div class="wheel-label">小时</div>
+                <div class="wheel" ref="hourWheel">
+                  <div 
+                    v-for="hour in availableHours" 
+                    :key="hour"
+                    :class="['wheel-item', { active: selectedHour === hour }]"
+                    @click="selectHour(hour)"
+                  >
+                    {{ String(hour).padStart(2, '0') }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 分钟选择 -->
+              <div class="wheel-container">
+                <div class="wheel-label">分钟</div>
+                <div class="wheel" ref="minuteWheel">
+                  <div 
+                    v-for="minute in availableMinutes" 
+                    :key="minute"
+                    :class="['wheel-item', { active: selectedMinute === minute }]"
+                    @click="selectMinute(minute)"
+                  >
+                    {{ String(minute).padStart(2, '0') }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="time-picker-footer">
+              <button class="cancel-btn" @click="closeTimePicker">取消</button>
+              <button class="confirm-btn" @click="confirmTime">确定</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="route-info" v-if="routeInfo">
         <div class="route-details">
           <span class="distance"
@@ -57,9 +140,9 @@
           class="car-type-item"
           :class="{
             active: selectedCarType === 'economy',
-            disabled: currentOrder !== null,
+            disabled: currentOrder !== null || hasActiveOrder,
           }"
-          @click="currentOrder ? null : selectCarType('economy')"
+          @click="(currentOrder || hasActiveOrder) ? null : selectCarType('economy')"
         >
           <div class="car-icon">🚗</div>
           <div class="car-info">
@@ -72,7 +155,7 @@
       <el-button
         type="primary"
         class="call-car-btn"
-        :disabled="!canOrder || currentOrder !== null || hasUnpaidOrders"
+        :disabled="!canOrder || currentOrder !== null || hasUnpaidOrders || hasActiveOrder || (bookingType === 'scheduled' && !scheduledTime)"
         @click="hasUnpaidOrders ? goToMyTrips() : handleCallCar()"
         size="large"
       >
@@ -83,7 +166,7 @@
     <!-- 订单状态面板 -->
     <div v-if="currentOrder" class="order-panel">
       <div class="order-status">
-        <div class="status-text">{{ getStatusText() }}</div>
+        <div class="status-text">{{ orderStore.getStatusText() }}</div>
         <div
           v-if="
             driverInfo &&
@@ -147,6 +230,20 @@ const routeInfo = ref(null);
 const selectedCarType = ref("economy");
 const canOrder = ref(false);
 const isCalling = ref(false);
+
+// 预约单相关数据
+const bookingType = ref("immediate"); // "immediate" | "scheduled"
+const scheduledTime = ref(null);
+const hasActiveOrder = ref(false);
+
+// 时间选择器相关数据
+const showTimePicker = ref(false);
+const selectedDateIndex = ref(0);
+const selectedHour = ref(null);
+const selectedMinute = ref(null);
+const availableDates = ref([]);
+const availableHours = ref([]);
+const availableMinutes = ref([]);
 
 // 订单状态相关（使用全局store）
 const cancelLoading = ref(false);
@@ -219,30 +316,16 @@ const getPrice = (type) => {
 const callCarText = computed(() => {
   if (hasUnpaidOrders.value) return "请先完成支付";
   if (currentOrder.value) return "订单进行中";
-  if (isCalling.value) return "正在叫车...";
+  if (hasActiveOrder.value) return "您已有进行中的订单";
+  if (isCalling.value) {
+    return bookingType.value === "scheduled" ? "正在创建预约单..." : "正在叫车...";
+  }
   if (!canOrder.value) return "请选择目的地";
-  return "立即叫车";
+  if (bookingType.value === "scheduled" && !scheduledTime.value) return "请选择预约时间";
+  return bookingType.value === "scheduled" ? "创建预约单" : "立即叫车";
 });
 
-// 获取订单状态文本
-const getStatusText = () => {
-  switch (orderStatus.value) {
-    case "PENDING":
-      return "正在为您寻找司机...";
-    case "ASSIGNED":
-      return "司机已接单，正在前往上车点";
-    case "PICKUP":
-      return "司机已到达上车点，请准备上车";
-    case "IN_PROGRESS":
-      return "行程进行中，前往目的地";
-    case "COMPLETED":
-      return "行程已完成";
-    case "CANCELLED":
-      return "订单已取消";
-    default:
-      return "未知状态";
-  }
-};
+// getStatusText 方法已移至 orderStore 中统一管理
 
 
 
@@ -265,17 +348,21 @@ const handleCancelOrder = async () => {
 
     console.log("🚫 准备取消订单:", currentOrder.value);
     console.log("🆔 订单ID:", currentOrder.value.id);
-    console.log("📞 请求URL:", `/api/orders/${currentOrder.value.id}/cancel`);
+    console.log("📋 订单类型:", currentOrder.value.orderType);
+    
+    // 根据订单类型选择不同的取消接口
+    const cancelUrl = currentOrder.value.orderType === "RESERVATION" 
+      ? `/api/orders/${currentOrder.value.id}/cancel-scheduled`
+      : `/api/orders/${currentOrder.value.id}/cancel`;
+    
+    console.log("📞 请求URL:", cancelUrl);
 
-    const response = await fetch(
-      `/api/orders/${currentOrder.value.id}/cancel`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${userStore.token}`,
-        },
-      }
-    );
+    const response = await fetch(cancelUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${userStore.token}`,
+      },
+    });
 
     const result = await response.json();
 
@@ -284,6 +371,9 @@ const handleCancelOrder = async () => {
     if (response.ok && result.code === 200) {
       ElMessage.success("订单已取消");
       resetOrderState();
+      
+      // 刷新活跃订单状态，确保UI正确更新
+      await checkActiveOrder();
     } else {
       console.error("❌ 取消订单失败:", result);
       ElMessage.error("取消失败: " + (result.message || "未知错误"));
@@ -297,6 +387,205 @@ const handleCancelOrder = async () => {
     cancelLoading.value = false;
   }
 };
+
+// 检查乘客是否有活跃订单
+const checkActiveOrder = async () => {
+  try {
+    const passengerId = userStore.user?.passengerId || userStore.user?.id;
+    if (!passengerId) return;
+
+    const response = await fetch(`/api/orders/passenger/${passengerId}/has-active`, {
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      hasActiveOrder.value = result.data || false;
+    }
+  } catch (error) {
+    console.error('检查活跃订单失败:', error);
+  }
+};
+
+// 处理订单类型切换
+const handleBookingTypeChange = (type) => {
+  console.log('订单类型切换:', type);
+  if (type === 'scheduled') {
+    scheduledTime.value = null;
+    initializeTimePicker();
+  }
+};
+
+// 初始化时间选择器
+const initializeTimePicker = () => {
+  const now = new Date();
+  
+  // 生成可选日期（今天和未来6天）
+  availableDates.value = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(now);
+    date.setDate(date.getDate() + i);
+    
+    let label;
+    if (i === 0) {
+      label = '今天';
+    } else if (i === 1) {
+      label = '明天';
+    } else {
+      label = `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    
+    availableDates.value.push({
+      date: date,
+      label: label,
+      isToday: i === 0
+    });
+  }
+  
+  // 默认选择今天
+  selectedDateIndex.value = 0;
+  updateAvailableHours();
+};
+
+// 更新可选小时
+const updateAvailableHours = () => {
+  const selectedDate = availableDates.value[selectedDateIndex.value];
+  const now = new Date();
+  
+  availableHours.value = [];
+  
+  if (selectedDate.isToday) {
+    // 今天：从当前时间+30分钟后开始
+    const minTime = new Date(now.getTime() + 30 * 60 * 1000);
+    const startHour = minTime.getHours();
+    
+    for (let hour = startHour; hour <= 23; hour++) {
+      availableHours.value.push(hour);
+    }
+    
+    // 默认选择第一个可用小时
+    if (availableHours.value.length > 0) {
+      selectedHour.value = availableHours.value[0];
+    }
+  } else {
+    // 其他日期：全天可选
+    for (let hour = 0; hour <= 23; hour++) {
+      availableHours.value.push(hour);
+    }
+    
+    // 默认选择9点
+    selectedHour.value = 9;
+  }
+  
+  updateAvailableMinutes();
+};
+
+// 更新可选分钟
+const updateAvailableMinutes = () => {
+  const selectedDate = availableDates.value[selectedDateIndex.value];
+  const now = new Date();
+  
+  availableMinutes.value = [];
+  
+  if (selectedDate.isToday && selectedHour.value === now.getHours()) {
+    // 今天的当前小时：从当前分钟+30分钟后开始
+    const minTime = new Date(now.getTime() + 30 * 60 * 1000);
+    const startMinute = Math.ceil(minTime.getMinutes() / 15) * 15; // 向上取整到15分钟倍数
+    
+    for (let minute = startMinute; minute <= 45; minute += 15) {
+      availableMinutes.value.push(minute);
+    }
+  } else {
+    // 其他情况：每15分钟一个选项
+    for (let minute = 0; minute <= 45; minute += 15) {
+      availableMinutes.value.push(minute);
+    }
+  }
+  
+  // 默认选择第一个可用分钟
+  if (availableMinutes.value.length > 0) {
+    selectedMinute.value = availableMinutes.value[0];
+  } else {
+    selectedMinute.value = 0;
+  }
+};
+
+// 选择日期
+const selectDate = (index) => {
+  selectedDateIndex.value = index;
+  updateAvailableHours();
+};
+
+// 选择小时
+const selectHour = (hour) => {
+  selectedHour.value = hour;
+  updateAvailableMinutes();
+};
+
+// 选择分钟
+const selectMinute = (minute) => {
+  selectedMinute.value = minute;
+};
+
+// 确认时间选择
+const confirmTime = () => {
+  if (selectedHour.value === null || selectedMinute.value === null) {
+    ElMessage.warning('请选择完整的时间');
+    return;
+  }
+  
+  const selectedDate = availableDates.value[selectedDateIndex.value];
+  const dateTime = new Date(selectedDate.date);
+  dateTime.setHours(selectedHour.value, selectedMinute.value, 0, 0);
+  
+  scheduledTime.value = dateTime;
+  showTimePicker.value = false;
+};
+
+// 关闭时间选择器
+const closeTimePicker = () => {
+  showTimePicker.value = false;
+};
+
+// 格式化显示时间
+const formatDisplayTime = (date) => {
+  if (!date) return '';
+  
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const isTomorrow = date.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+  
+  let dateStr;
+  if (isToday) {
+    dateStr = '今天';
+  } else if (isTomorrow) {
+    dateStr = '明天';
+  } else {
+    dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+  
+  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  
+  return `${dateStr} ${timeStr}`;
+};
+
+// 格式化时间给后端
+const formatDateTimeForBackend = (date) => {
+  if (!date) return '';
+  
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+// 旧的时间验证方法已移除，使用新的滚轮选择器
 // 初始化地图
 onMounted(async () => {
   console.log("🚀 开始初始化乘客地图页面...");
@@ -305,10 +594,16 @@ onMounted(async () => {
   window.handleMapOrderUpdate = handleOrderUpdate;
   console.log("✅ 已注册全局地图消息处理函数");
 
+  // 初始化时间选择器
+  initializeTimePicker();
+
   // 初始化订单状态（包括检查未支付订单和当前订单）
   console.log("🔄 开始初始化订单状态...");
   await orderStore.initOrderState();
   console.log("✅ 订单状态初始化完成");
+  
+  // 检查是否有活跃订单
+  await checkActiveOrder();
 
   // 延迟初始化地图，确保DOM完全加载
   setTimeout(() => {
@@ -818,8 +1113,14 @@ const handleRoutePlanningFallback = (destLng, destLat) => {
 const handleCallCar = async () => {
   if (!canOrder.value) return;
 
-  if (currentOrder.value) {
+  if (currentOrder.value || hasActiveOrder.value) {
     ElMessage.warning("您已有进行中的订单，请等待完成后再下单");
+    return;
+  }
+
+  // 预约单需要选择时间
+  if (bookingType.value === 'scheduled' && !scheduledTime.value) {
+    ElMessage.warning("请选择预约时间");
     return;
   }
 
@@ -839,65 +1140,108 @@ const handleCallCar = async () => {
     }
 
     const orderData = {
-      passengerId: userStore.user.passengerId,
+      passengerId: userStore.user.passengerId || userStore.user.id,
       pickupAddress: pickupAddress.value,
       pickupLatitude: currentPosition.value.lat,
       pickupLongitude: currentPosition.value.lng,
       destinationAddress: destination.value.name,
       destinationLatitude: destLat,
       destinationLongitude: destLng,
-      orderType: "REAL_TIME",
-      carType: selectedCarType.value,
+      estimatedDistance: routeInfo.value ? parseFloat((routeInfo.value.distance / 1000).toFixed(2)) : 0, // 添加距离信息（公里），默认0
+      estimatedDuration: routeInfo.value ? Math.round(routeInfo.value.duration / 60) : 0, // 添加预估时长（分钟），默认0
       estimatedFare: getPrice(selectedCarType.value),
     };
 
-    console.log("发送订单数据:", orderData);
+    let response, result;
 
-    const response = await fetch("/api/orders/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${userStore.token}`,
-      },
-      body: JSON.stringify(orderData),
-    });
+    if (bookingType.value === 'scheduled') {
+      // 创建预约单
+      orderData.scheduledTime = formatDateTimeForBackend(scheduledTime.value);
+      
+      console.log("发送预约单数据:", orderData);
 
-    const result = await response.json();
+      response = await fetch("/api/orders/scheduled", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userStore.token}`,
+        },
+        body: JSON.stringify(orderData),
+      });
+    } else {
+      // 创建实时单
+      orderData.orderType = "REAL_TIME";
+      orderData.carType = selectedCarType.value;
+      
+      console.log("发送实时单数据:", orderData);
+
+      response = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userStore.token}`,
+        },
+        body: JSON.stringify(orderData),
+      });
+    }
+
+    result = await response.json();
 
     if (response.ok && result.code === 200) {
-      const newOrder = {
-        id: result.data, // 现在后端返回的是订单ID
-        orderNumber: `ORDER${result.data}`, // 生成订单号用于显示
-        pickupAddress: pickupAddress.value,
-        destinationAddress: destination.value.name,
-        pickupLatitude: currentPosition.value.lat,
-        pickupLongitude: currentPosition.value.lng,
-        destinationLatitude: destLat,
-        destinationLongitude: destLng,
-        estimatedFare: getPrice(selectedCarType.value),
-        carType: selectedCarType.value,
-        status: "PENDING",
-      };
+      if (bookingType.value === 'scheduled') {
+        // 预约单创建成功
+        const scheduledOrder = result.data;
+        
+        ElMessage.success(`预约单创建成功！预约时间：${new Date(scheduledTime.value).toLocaleString()}`);
+        
+        // 设置为当前订单
+        orderStore.setCurrentOrder(scheduledOrder);
+        
+        // 重置表单
+        bookingType.value = 'immediate';
+        scheduledTime.value = null;
+        
+        // 刷新活跃订单状态
+        await checkActiveOrder();
+        
+      } else {
+        // 实时单创建成功
+        const newOrder = {
+          id: result.data,
+          orderNumber: `ORDER${result.data}`,
+          pickupAddress: pickupAddress.value,
+          destinationAddress: destination.value.name,
+          pickupLatitude: currentPosition.value.lat,
+          pickupLongitude: currentPosition.value.lng,
+          destinationLatitude: destLat,
+          destinationLongitude: destLng,
+          estimatedDistance: routeInfo.value ? parseFloat((routeInfo.value.distance / 1000).toFixed(2)) : 0, // 添加距离信息，默认0
+          estimatedDuration: routeInfo.value ? Math.round(routeInfo.value.duration / 60) : 0, // 添加预估时长，默认0
+          estimatedFare: getPrice(selectedCarType.value),
+          carType: selectedCarType.value,
+          status: "PENDING",
+        };
 
-      orderStore.setCurrentOrder(newOrder);
+        orderStore.setCurrentOrder(newOrder);
 
-      ElMessage.success(
-        `已为您呼叫${carTypes[selectedCarType.value].name}，正在为您寻找司机...`
-      );
+        ElMessage.success(
+          `已为您呼叫${carTypes[selectedCarType.value].name}，正在为您寻找司机...`
+        );
 
-      // WebSocket连接现在由全局store自动管理
-
-      // 更新UI状态，禁用相关操作
-      canOrder.value = false;
+        // 更新UI状态，禁用相关操作
+        canOrder.value = false;
+        updatePickupMarkerDraggable();
+      }
+      
       isCalling.value = false;
-      updatePickupMarkerDraggable();
+      
     } else {
-      ElMessage.error("下单失败: " + (result.message || "未知错误"));
+      ElMessage.error((bookingType.value === 'scheduled' ? "创建预约单失败: " : "下单失败: ") + (result.message || "未知错误"));
       isCalling.value = false;
     }
   } catch (error) {
     console.error("下单错误:", error);
-    ElMessage.error("叫车失败，请重试");
+    ElMessage.error(bookingType.value === 'scheduled' ? "创建预约单失败，请重试" : "叫车失败，请重试");
     isCalling.value = false;
   }
 };
@@ -1525,6 +1869,28 @@ const goToMyTrips = () => {
   z-index: 100;
 }
 
+.booking-type-selector {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.booking-type-selector .el-radio-group {
+  width: 100%;
+}
+
+.booking-type-selector .el-radio-button {
+  flex: 1;
+}
+
+.scheduled-time-selector {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.scheduled-time-selector .el-date-editor {
+  width: 100%;
+}
+
 .route-info {
   margin-bottom: 20px;
   padding: 15px;
@@ -1671,6 +2037,176 @@ const goToMyTrips = () => {
   border-top: 1px solid #eee;
 }
 
+/* 时间选择器样式 */
+.time-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: white;
+}
+
+.time-display {
+  flex: 1;
+  font-size: 14px;
+}
+
+.time-display .placeholder {
+  color: #c0c4cc;
+}
+
+.time-picker-btn {
+  padding: 8px 16px;
+  background: #409eff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.time-picker-btn:hover {
+  background: #337ecc;
+}
+
+.time-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.time-picker-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.time-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.time-picker-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #666;
+}
+
+.time-picker-wheels {
+  display: flex;
+  padding: 20px;
+  gap: 20px;
+}
+
+.wheel-container {
+  flex: 1;
+  text-align: center;
+}
+
+.wheel-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.wheel {
+  height: 200px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.wheel-item {
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.wheel-item:hover {
+  background: #f0f8ff;
+}
+
+.wheel-item.active {
+  background: #409eff;
+  color: white;
+  font-weight: bold;
+}
+
+.wheel-item:last-child {
+  border-bottom: none;
+}
+
+.time-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #eee;
+}
+
+.cancel-btn, .confirm-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.cancel-btn:hover {
+  background: #e8e8e8;
+}
+
+.confirm-btn {
+  background: #409eff;
+  color: white;
+}
+
+.confirm-btn:hover {
+  background: #337ecc;
+}
+
 @media (max-width: 768px) {
   .header {
     padding: 15px;
@@ -1695,6 +2231,20 @@ const goToMyTrips = () => {
   .route-details {
     flex-direction: column;
     gap: 10px;
+  }
+
+  .time-picker-modal {
+    width: 95%;
+    margin: 20px;
+  }
+
+  .time-picker-wheels {
+    gap: 10px;
+    padding: 15px;
+  }
+
+  .wheel {
+    height: 150px;
   }
 }
 </style>

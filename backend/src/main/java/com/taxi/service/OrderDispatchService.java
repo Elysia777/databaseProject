@@ -89,8 +89,8 @@ public class OrderDispatchService {
                 return;
             }
             
-            if (!"PENDING".equals(order.getStatus())) {
-                System.out.println("订单状态不是PENDING: " + order.getStatus());
+            if (!"PENDING".equals(order.getStatus())&&!"SCHEDULED".equals(order.getStatus())) {
+                System.out.println("订单状态不是PENDING或SHEDULED: " + order.getStatus());
                 return;
             }
             
@@ -163,7 +163,7 @@ public class OrderDispatchService {
             }
             
             // 4. 再次检查订单状态（双重检查）
-            if (!"PENDING".equals(order.getStatus())) {
+            if (!"PENDING".equals(order.getStatus())&&!"SCHEDULED".equals(order.getStatus())) {
                 System.out.println("订单已被其他司机接单，当前状态: " + order.getStatus());
                 return false;
             }
@@ -266,10 +266,12 @@ public class OrderDispatchService {
             rabbitMessage.put("driverId", driver.getId());
             rabbitMessage.put("orderId", order.getId());
             rabbitMessage.put("orderNumber", order.getOrderNumber());
+            rabbitMessage.put("orderType", order.getOrderType()); // 添加订单类型
             rabbitMessage.put("pickupAddress", order.getPickupAddress());
             rabbitMessage.put("destinationAddress", order.getDestinationAddress());
             rabbitMessage.put("distance", distance);
             rabbitMessage.put("estimatedFare", order.getEstimatedFare());
+            rabbitMessage.put("scheduledTime", order.getScheduledTime()); // 添加预约时间
             rabbitMessage.put("timestamp", System.currentTimeMillis());
             
             // 发送到司机通知队列

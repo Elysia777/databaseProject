@@ -22,22 +22,67 @@ export const useOrderStore = defineStore("order", () => {
 
   // 判断是否可以取消订单
   const canCancelOrder = computed(() => {
+    if (!currentOrder.value) return false;
+
+    // 预约单在预约时间前都可以取消
+    if (currentOrder.value.orderType === "RESERVATION") {
+      const scheduledTime = new Date(currentOrder.value.scheduledTime);
+      const now = new Date();
+      return scheduledTime > now;
+    }
+
+    // 实时单的取消逻辑
     return (
-      currentOrder.value &&
-      (orderStatus.value === "PENDING" ||
-        orderStatus.value === "ASSIGNED" ||
-        orderStatus.value === "PICKUP")
+      orderStatus.value === "PENDING" ||
+      orderStatus.value === "ASSIGNED" ||
+      orderStatus.value === "PICKUP"
     );
   });
 
   // 获取订单状态文本
   const getStatusText = () => {
     switch (orderStatus.value) {
+      case "SCHEDULED":
+        // 只有SCHEDULED状态才显示倒计时
+        if (
+          currentOrder.value &&
+          currentOrder.value.orderType === "RESERVATION"
+        ) {
+          const scheduledTime = new Date(currentOrder.value.scheduledTime);
+          const now = new Date();
+          const timeDiff = scheduledTime - now;
+
+          if (timeDiff > 0) {
+            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+            const minutes = Math.floor(
+              (timeDiff % (1000 * 60 * 60)) / (1000 * 60)
+            );
+            return `预约单等待中，预约时间：${scheduledTime.toLocaleString()}（还有${hours}小时${minutes}分钟）`;
+          }
+        }
+        return "预约单已创建，等待预约时间";
       case "PENDING":
-        return "正在为您寻找司机...";
+        return currentOrder.value &&
+          currentOrder.value.orderType === "RESERVATION"
+          ? "预约时间已到，正在为您寻找司机..."
+          : "正在为您寻找司机...";
       case "ASSIGNED":
+        if (
+          currentOrder.value &&
+          currentOrder.value.orderType === "RESERVATION"
+        ) {
+          const scheduledTime = new Date(currentOrder.value.scheduledTime);
+          return `司机已接单，将于预约时间（${scheduledTime.toLocaleString()}）前到达上车点`;
+        }
         return "司机已接单，正在前往上车点";
       case "PICKUP":
+        if (
+          currentOrder.value &&
+          currentOrder.value.orderType === "RESERVATION"
+        ) {
+          const scheduledTime = new Date(currentOrder.value.scheduledTime);
+          return `司机已到达上车点，预约时间：${scheduledTime.toLocaleString()}，请准备上车`;
+        }
         return "司机已到达上车点，请准备上车";
       case "IN_PROGRESS":
         return "行程进行中，前往目的地";
@@ -163,7 +208,7 @@ export const useOrderStore = defineStore("order", () => {
           "状态:",
           orderStatus.value
         );
-        
+
         // 注意：这里不立即建立连接，而是在initOrderState中统一建立
         console.log("📝 WebSocket连接将在initOrderState中统一建立");
       }
@@ -294,7 +339,7 @@ export const useOrderStore = defineStore("order", () => {
       }
 
       const userStore = useUserStore();
-      
+
       // 确保用户信息存在
       if (!userStore.user) {
         console.error("❌ 用户信息不存在，无法建立WebSocket连接");
@@ -352,7 +397,7 @@ export const useOrderStore = defineStore("order", () => {
         });
 
         console.log("✅ 全局WebSocket订阅完成");
-        
+
         // 将连接状态暴露到全局，方便调试
         window.stompClient = stompClient;
       };
@@ -367,10 +412,14 @@ export const useOrderStore = defineStore("order", () => {
 
       stompClient.onDisconnect = () => {
         console.log("⚠️ WebSocket连接断开");
-        
+
         // 如果有进行中的订单，尝试重连
-        if (currentOrder.value && 
-            ["PENDING", "ASSIGNED", "PICKUP", "IN_PROGRESS"].includes(orderStatus.value)) {
+        if (
+          currentOrder.value &&
+          ["PENDING", "ASSIGNED", "PICKUP", "IN_PROGRESS"].includes(
+            orderStatus.value
+          )
+        ) {
           console.log("🔄 检测到进行中的订单，3秒后尝试重连...");
           setTimeout(() => {
             if (!stompClient || !stompClient.connected) {
@@ -524,7 +573,7 @@ export const useOrderStore = defineStore("order", () => {
     // 确保WebSocket连接建立（无论是否有订单）
     console.log("🔌 确保WebSocket连接建立...");
     const orderId = currentOrder.value?.id || null;
-    
+
     // 延迟建立连接，确保页面完全加载
     setTimeout(() => {
       connectWebSocket(orderId);

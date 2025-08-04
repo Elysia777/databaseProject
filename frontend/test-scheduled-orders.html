@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预约单功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+        .json-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        input, select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>预约单功能测试</h1>
+        <p>测试简化版预约单功能，包括创建、查询、取消等操作</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>1. 检查乘客活跃订单</h3>
+            <button onclick="checkActiveOrder()">检查活跃订单</button>
+            <div id="activeOrderResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 创建预约单</h3>
+            <div class="form-group">
+                <label>乘客ID:</label>
+                <input type="number" id="passengerId" value="2" />
+            </div>
+            <div class="form-group">
+                <label>上车地址:</label>
+                <input type="text" id="pickupAddress" value="大连理工大学" />
+            </div>
+            <div class="form-group">
+                <label>目的地地址:</label>
+                <input type="text" id="destinationAddress" value="大连火车站" />
+            </div>
+            <div class="form-group">
+                <label>预约时间:</label>
+                <input type="datetime-local" id="scheduledTime" />
+            </div>
+            <div class="form-group">
+                <label>预估费用:</label>
+                <input type="number" id="estimatedFare" value="25" step="0.01" />
+            </div>
+            <button onclick="createScheduledOrder()">创建预约单</button>
+            <div id="createResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 查询乘客预约单</h3>
+            <button onclick="getPassengerScheduledOrders()">查询预约单列表</button>
+            <div id="listResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. 查询司机可接预约单</h3>
+            <div class="form-group">
+                <label>司机ID:</label>
+                <input type="number" id="driverId" value="1" />
+            </div>
+            <button onclick="getDriverScheduledOrders()">查询司机可接预约单</button>
+            <div id="driverOrdersResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. 取消预约单</h3>
+            <div class="form-group">
+                <label>订单ID:</label>
+                <input type="number" id="cancelOrderId" />
+            </div>
+            <button onclick="cancelScheduledOrder()">取消预约单</button>
+            <div id="cancelResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 设置默认预约时间（1小时后）
+        window.onload = function() {
+            const now = new Date();
+            now.setHours(now.getHours() + 1);
+            now.setMinutes(0);
+            now.setSeconds(0);
+            
+            const timeString = now.toISOString().slice(0, 16);
+            document.getElementById('scheduledTime').value = timeString;
+        };
+
+        // 检查乘客活跃订单
+        async function checkActiveOrder() {
+            const resultDiv = document.getElementById('activeOrderResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '检查中...';
+
+            try {
+                const passengerId = document.getElementById('passengerId').value;
+                
+                const response = await fetch(`/api/orders/passenger/${passengerId}/has-active`);
+                const result = await response.json();
+
+                if (response.ok) {
+                    const hasActive = result.data;
+                    resultDiv.innerHTML = `
+                        <span class="${hasActive ? 'warning' : 'success'}">
+                            ${hasActive ? '⚠️ 乘客有活跃订单' : '✅ 乘客无活跃订单'}
+                        </span>
+                        <div class="json-display">${JSON.stringify(result, null, 2)}</div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 检查失败: ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 检查失败: ${error.message}</span>`;
+            }
+        }
+
+        // 创建预约单
+        async function createScheduledOrder() {
+            const resultDiv = document.getElementById('createResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '创建中...';
+
+            try {
+                const orderData = {
+                    passengerId: parseInt(document.getElementById('passengerId').value),
+                    pickupAddress: document.getElementById('pickupAddress').value,
+                    pickupLatitude: 39.044237,
+                    pickupLongitude: 121.749849,
+                    destinationAddress: document.getElementById('destinationAddress').value,
+                    destinationLatitude: 39.054237,
+                    destinationLongitude: 121.759849,
+                    scheduledTime: document.getElementById('scheduledTime').value,
+                    estimatedFare: parseFloat(document.getElementById('estimatedFare').value)
+                };
+
+                console.log('发送预约单数据:', orderData);
+
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.code === 200) {
+                    resultDiv.innerHTML = `
+                        <span class="success">✅ 预约单创建成功</span>
+                        <div class="json-display">${JSON.stringify(result.data, null, 2)}</div>
+                    `;
+                    
+                    // 自动填充取消订单的ID
+                    document.getElementById('cancelOrderId').value = result.data.id;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 创建失败: ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 创建失败: ${error.message}</span>`;
+            }
+        }
+
+        // 查询乘客预约单列表
+        async function getPassengerScheduledOrders() {
+            const resultDiv = document.getElementById('listResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '查询中...';
+
+            try {
+                const passengerId = document.getElementById('passengerId').value;
+                
+                const response = await fetch(`/api/orders/passenger/${passengerId}/scheduled`);
+                const result = await response.json();
+
+                if (response.ok && result.code === 200) {
+                    const orders = result.data;
+                    resultDiv.innerHTML = `
+                        <span class="success">✅ 查询成功，共 ${orders.length} 个预约单</span>
+                        <div class="json-display">${JSON.stringify(orders, null, 2)}</div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 查询失败: ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 查询失败: ${error.message}</span>`;
+            }
+        }
+
+        // 查询司机可接预约单
+        async function getDriverScheduledOrders() {
+            const resultDiv = document.getElementById('driverOrdersResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '查询中...';
+
+            try {
+                const driverId = document.getElementById('driverId').value;
+                
+                const response = await fetch(`/api/drivers/${driverId}/scheduled-orders`);
+                const result = await response.json();
+
+                if (response.ok && result.code === 200) {
+                    const orders = result.data;
+                    resultDiv.innerHTML = `
+                        <span class="success">✅ 查询成功，共 ${orders.length} 个可接预约单</span>
+                        <div class="json-display">${JSON.stringify(orders, null, 2)}</div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 查询失败: ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 查询失败: ${error.message}</span>`;
+            }
+        }
+
+        // 取消预约单
+        async function cancelScheduledOrder() {
+            const resultDiv = document.getElementById('cancelResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '取消中...';
+
+            try {
+                const orderId = document.getElementById('cancelOrderId').value;
+                
+                if (!orderId) {
+                    resultDiv.innerHTML = '<span class="error">❌ 请输入订单ID</span>';
+                    return;
+                }
+
+                const response = await fetch(`/api/orders/${orderId}/cancel-scheduled`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.code === 200) {
+                    resultDiv.innerHTML = `<span class="success">✅ 预约单取消成功</span>`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ 取消失败: ${result.message}</span>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ 取消失败: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

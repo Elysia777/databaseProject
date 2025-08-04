@@ -47,4 +47,13 @@ public class CreateOrderRequest {
 
     /** 预约时间（预约单必填） */
     private LocalDateTime reservationTime;
+
+    /** 预估距离（公里） */
+    private BigDecimal estimatedDistance;
+
+    /** 预估时长（分钟） */
+    private Integer estimatedDuration;
+
+    /** 预估费用（元） */
+    private BigDecimal estimatedFare;
 }

@@ -444,9 +444,11 @@ export const useDriverStore = defineStore("driver", () => {
     try {
       console.log("🔌 建立司机WebSocket连接...");
 
-      // 如果已有连接，先断开
-      if (stompClient) {
+      // 如果已有连接，强制断开
+      if (stompClient && stompClient.connected) {
+        console.log("🔌 强制断开现有WebSocket连接");
         stompClient.deactivate();
+        stompClient = null;
       }
 
       const userStore = useUserStore();
@@ -456,6 +458,9 @@ export const useDriverStore = defineStore("driver", () => {
         debug: (str) => {
           console.log("🔌 司机STOMP Debug:", str);
         },
+        reconnectDelay: 5000, // 5秒后重连
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
       });
 
       stompClient.onConnect = () => {
@@ -476,8 +481,19 @@ export const useDriverStore = defineStore("driver", () => {
         const driverIdStr = driverId.toString();
         console.log("🆔 司机ID:", driverIdStr);
 
-        // 订阅司机专用队列
-        stompClient.subscribe(
+        // 发送连接请求，包含时间戳确保唯一性
+        stompClient.publish({
+          destination: "/app/driver/connect",
+          body: JSON.stringify({
+            driverId: driverIdStr,
+            timestamp: Date.now(),
+            sessionType: "DRIVER_SESSION",
+            userAgent: navigator.userAgent,
+          }),
+        });
+
+        // 订阅司机专用队列 - 订单队列
+        const orderSubscription = stompClient.subscribe(
           `/user/${driverIdStr}/queue/orders`,
           (message) => {
             console.log("📨 司机收到订单更新:", message.body);
@@ -491,16 +507,60 @@ export const useDriverStore = defineStore("driver", () => {
           }
         );
 
-        // 通知服务器司机已连接
-        stompClient.publish({
-          destination: "/app/driver/connect",
-          body: JSON.stringify({
-            driverId: driverIdStr,
-            timestamp: Date.now(),
-          }),
-        });
+        // 订阅司机专用队列 - 通知队列
+        const notificationSubscription = stompClient.subscribe(
+          `/user/${driverIdStr}/queue/notifications`,
+          (message) => {
+            console.log("🔔 司机收到通知:", message.body);
+            try {
+              const data = JSON.parse(message.body);
+              console.log("📋 解析后的通知数据:", data);
+              handleDriverOrderUpdate(data); // 使用同一个处理函数
+            } catch (error) {
+              console.error("❌ 解析通知数据失败:", error);
+            }
+          }
+        );
+
+        // 订阅司机专用队列 - 连接确认队列
+        const connectionSubscription = stompClient.subscribe(
+          `/user/${driverIdStr}/queue/connection`,
+          (message) => {
+            console.log("🔗 司机收到连接确认:", message.body);
+            try {
+              const data = JSON.parse(message.body);
+              if (data.status === "connected") {
+                console.log("✅ WebSocket连接已确认，会话ID:", data.sessionId);
+              }
+            } catch (error) {
+              console.error("❌ 解析连接确认数据失败:", error);
+            }
+          }
+        );
+
+        // 订阅司机广播主题（备用通道）
+        const topicSubscription = stompClient.subscribe(
+          `/topic/driver/${driverIdStr}`,
+          (message) => {
+            console.log("📢 司机收到广播消息:", message.body);
+            try {
+              const data = JSON.parse(message.body);
+              console.log("📋 解析后的广播数据:", data);
+              handleDriverOrderUpdate(data);
+            } catch (error) {
+              console.error("❌ 解析广播数据失败:", error);
+            }
+          }
+        );
 
         console.log("✅ 司机WebSocket订阅完成");
+        console.log("- 订单队列:", orderSubscription.id);
+        console.log("- 通知队列:", notificationSubscription.id);
+        console.log("- 连接队列:", connectionSubscription.id);
+        console.log("- 广播主题:", topicSubscription.id);
+
+        // 将连接状态暴露到全局，方便调试
+        window.driverStompClient = stompClient;
       };
 
       stompClient.onStompError = (frame) => {
@@ -513,6 +573,16 @@ export const useDriverStore = defineStore("driver", () => {
 
       stompClient.onDisconnect = () => {
         console.log("⚠️ 司机WebSocket连接断开");
+        
+        // 如果有进行中的订单或司机在线，尝试重连
+        if (currentOrder.value || isOnline.value) {
+          console.log("🔄 检测到司机在线或有进行中订单，3秒后尝试重连...");
+          setTimeout(() => {
+            if (!stompClient || !stompClient.connected) {
+              connectWebSocket();
+            }
+          }, 3000);
+        }
       };
 
       stompClient.activate();
@@ -533,23 +603,78 @@ export const useDriverStore = defineStore("driver", () => {
   const handleDriverOrderUpdate = (data) => {
     console.log("🔔 司机处理订单更新:", data);
     console.log("📋 消息类型:", data.type);
+    console.log("📋 消息优先级:", data.priority || "NORMAL");
 
     switch (data.type) {
       case "NEW_ORDER":
         console.log("📨 收到新订单");
-        if (data.order) {
-          addPendingOrder(data.order);
-        }
+        console.log("📋 订单数据:", data);
+
+        // WebSocket消息直接包含订单字段，不是嵌套在order对象中
+        const orderData = {
+          orderId: data.orderId,
+          orderNumber: data.orderNumber,
+          orderType: data.orderType, // 添加订单类型
+          pickupAddress: data.pickupAddress,
+          destinationAddress: data.destinationAddress,
+          pickupLatitude: data.pickupLatitude,
+          pickupLongitude: data.pickupLongitude,
+          destinationLatitude: data.destinationLatitude,
+          destinationLongitude: data.destinationLongitude,
+          passengerId: data.passengerId,
+          distance: data.distance,
+          estimatedFare: data.estimatedFare,
+          scheduledTime: data.scheduledTime, // 添加预约时间
+          timestamp: data.timestamp,
+          countdown: 30, // 添加倒计时初始值
+          processing: false // 添加处理状态
+        };
+
+        console.log("📦 处理后的订单数据:", orderData);
+        addPendingOrder(orderData);
         break;
+        
       case "ORDER_CANCELLED":
         console.log("❌ 订单被取消");
+        console.log("📋 取消的订单ID:", data.orderId);
+        console.log("📋 取消原因:", data.reason);
+        console.log("📋 当前订单:", currentOrder.value);
+        
+        // 处理订单取消
         if (data.orderId) {
-          removePendingOrder(data.orderId);
-          if (currentOrder.value && currentOrder.value.id === data.orderId) {
-            setCurrentOrder(null);
+          const orderIdStr = data.orderId.toString();
+          
+          // 从待处理订单中移除
+          removePendingOrder(orderIdStr);
+          
+          // 如果是当前正在执行的订单被取消
+          if (currentOrder.value) {
+            const currentOrderId = (currentOrder.value.id || currentOrder.value.orderId || currentOrder.value.orderNumber).toString();
+            
+            if (currentOrderId === orderIdStr) {
+              console.log("⚠️ 当前执行的订单被取消，清除订单状态");
+              setCurrentOrder(null);
+              clearOrderState();
+              
+              // 显示取消通知
+              if (window.ElMessage) {
+                window.ElMessage.warning(`订单已被取消：${data.reason || '乘客取消'}`);
+              }
+              
+              // 通知地图组件清除路线
+              if (window.handleDriverMapUpdate && typeof window.handleDriverMapUpdate === "function") {
+                window.handleDriverMapUpdate({
+                  type: "CLEAR_ROUTE",
+                  reason: "ORDER_CANCELLED"
+                });
+              }
+            }
           }
+          
+          console.log("✅ 订单取消处理完成");
         }
         break;
+        
       case "ORDER_STATUS_CHANGE":
         console.log("📊 订单状态变化");
         if (
@@ -560,16 +685,20 @@ export const useDriverStore = defineStore("driver", () => {
           updateOrderStatus(data.status);
         }
         break;
+        
       case "ORDER_ASSIGNED":
         console.log("✅ 订单分配确认");
         // 订单分配确认，通常在接单后收到
         break;
+        
       case "DRIVER_LOCATION":
         console.log("📍 司机位置更新");
         // 司机位置更新，可以忽略
         break;
+        
       default:
         console.log("❓ 未知消息类型:", data.type);
+        console.log("📋 完整消息数据:", data);
     }
 
     // 通知地图组件处理消息（如果存在）

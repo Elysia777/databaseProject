@@ -8,6 +8,7 @@ import com.taxi.mapper.OrderMapper;
 import com.taxi.service.DriverRedisService;
 import com.taxi.service.OrderDispatchService;
 import com.taxi.service.DriverLocationService;
+import com.taxi.service.ScheduledOrderService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -41,6 +42,9 @@ public class DriverController {
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private ScheduledOrderService scheduledOrderService;
 
     /**
      * 司机上线
@@ -473,6 +477,19 @@ public class DriverController {
             return Result.success(stats);
         } catch (Exception e) {
             return Result.error("获取今日统计失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取司机可接的预约单列表
+     */
+    @GetMapping("/{driverId}/scheduled-orders")
+    public Result<List<Order>> getAvailableScheduledOrders(@PathVariable Long driverId) {
+        try {
+            List<Order> scheduledOrders = scheduledOrderService.getAvailableScheduledOrdersForDriver(driverId);
+            return Result.success(scheduledOrders);
+        } catch (Exception e) {
+            return Result.error("获取预约单列表失败: " + e.getMessage());
         }
     }
 

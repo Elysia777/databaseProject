@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预约单激活状态修复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        .problem-analysis {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .fix-highlight {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+        .code-block {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .status-flow {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .status-box {
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin: 0 10px;
+            font-weight: bold;
+            text-align: center;
+            min-width: 100px;
+        }
+        .status-scheduled { background: #ffc107; color: #212529; }
+        .status-pending { background: #17a2b8; color: white; }
+        .status-assigned { background: #28a745; color: white; }
+        .arrow {
+            font-size: 20px;
+            color: #6c757d;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .before, .after {
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .before { 
+            background: #fff3cd; 
+            border-left: 4px solid #ffc107;
+        }
+        .after { 
+            background: #d4edda; 
+            border-left: 4px solid #28a745;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🔧 预约单激活状态修复测试</h1>
+
+    <div class="test-section">
+        <h3>🐛 问题发现</h3>
+        <div class="problem-analysis">
+            <strong>问题描述：</strong><br>
+            预约单激活后状态没有从 SCHEDULED 改为 PENDING，导致其他司机上线后查询不到这个预约单。
+            <br><br>
+            <strong>影响：</strong><br>
+            • 预约单激活后仍保持 SCHEDULED 状态<br>
+            • 新上线的司机无法看到已激活的预约单<br>
+            • 只有激活时在线的司机能收到通知<br>
+            • 降低了预约单的派单成功率
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 状态流转对比</h3>
+        
+        <h4>❌ 修复前的状态流转</h4>
+        <div class="status-flow">
+            <div class="status-box status-scheduled">SCHEDULED</div>
+            <div class="arrow">→</div>
+            <div class="status-box status-scheduled">SCHEDULED</div>
+            <div class="arrow">→</div>
+            <div class="status-box status-assigned">ASSIGNED</div>
+        </div>
+        <div class="result error">
+            <strong>问题：</strong> 激活后仍然是 SCHEDULED 状态，新上线司机查询不到
+        </div>
+
+        <h4>✅ 修复后的状态流转</h4>
+        <div class="status-flow">
+            <div class="status-box status-scheduled">SCHEDULED</div>
+            <div class="arrow">→</div>
+            <div class="status-box status-pending">PENDING</div>
+            <div class="arrow">→</div>
+            <div class="status-box status-assigned">ASSIGNED</div>
+        </div>
+        <div class="result success">
+            <strong>正确：</strong> 激活后变为 PENDING 状态，所有司机都能查询到
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔍 代码修复对比</h3>
+        
+        <div class="comparison">
+            <div class="before">
+                <h4>❌ 修复前的激活逻辑</h4>
+                <div class="code-block">
+try {
+    // 开始分配司机
+    log.info("开始为预约单分配司机: orderId={}", orderId);
+    orderDispatchService.dispatchOrder(orderId);
+    
+    // 设置超时取消任务（30分钟后）
+    scheduleOrderTimeout(orderId);
+    
+    log.info("预约单激活成功: orderId={}", orderId);
+    
+} catch (Exception e) {
+    // 激活失败，取消订单
+    cancelScheduledOrder(orderId, "系统激活失败");
+}
+
+// ❌ 问题：没有将状态从SCHEDULED改为PENDING
+                </div>
+            </div>
+            
+            <div class="after">
+                <h4>✅ 修复后的激活逻辑</h4>
+                <div class="code-block">
+try {
+    // ✅ 首先将预约单状态从SCHEDULED改为PENDING
+    log.info("将预约单状态从SCHEDULED改为PENDING: orderId={}", orderId);
+    order.setStatus("PENDING");
+    order.setUpdatedAt(LocalDateTime.now());
+    orderMapper.updateById(order);
+    
+    // ✅ 通知乘客预约单已激活
+    webSocketNotificationService.notifyPassengerOrderStatusChange(
+        order.getPassengerId(), orderId, "PENDING", 
+        "预约时间已到，正在为您寻找司机...");
+    
+    // 开始分配司机
+    orderDispatchService.dispatchOrder(orderId);
+    
+    // 设置超时取消任务
+    scheduleOrderTimeout(orderId);
+    
+} catch (Exception e) {
+    cancelScheduledOrder(orderId, "系统激活失败");
+}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔧 修复内容详解</h3>
+        
+        <div class="fix-highlight">
+            <strong>1. 状态更新</strong><br>
+            • 在调用 dispatchOrder 之前先更新订单状态<br>
+            • 从 SCHEDULED 改为 PENDING<br>
+            • 更新 updatedAt 时间戳
+        </div>
+        
+        <div class="fix-highlight">
+            <strong>2. 乘客通知</strong><br>
+            • 通知乘客预约单已激活<br>
+            • 状态文本："预约时间已到，正在为您寻找司机..."<br>
+            • 确保前端状态同步
+        </div>
+        
+        <div class="fix-highlight">
+            <strong>3. 日志增强</strong><br>
+            • 详细记录状态变更过程<br>
+            • 区分成功和失败的日志<br>
+            • 便于问题排查和监控
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 测试场景</h3>
+        
+        <div class="result info">
+            <strong>场景1：预约单正常激活</strong><br>
+            1. 创建预约单（状态：SCHEDULED）<br>
+            2. 等待激活时间到达<br>
+            3. 系统自动激活（状态：SCHEDULED → PENDING）<br>
+            4. 验证状态正确更新 ✅
+        </div>
+        
+        <div class="result info">
+            <strong>场景2：司机上线查询</strong><br>
+            1. 预约单已激活（状态：PENDING）<br>
+            2. 新司机上线<br>
+            3. 司机查询待分配订单<br>
+            4. 能够查询到已激活的预约单 ✅
+        </div>
+        
+        <div class="result info">
+            <strong>场景3：乘客端状态同步</strong><br>
+            1. 预约单激活时<br>
+            2. 乘客收到状态变更通知<br>
+            3. 前端显示"正在为您寻找司机..."<br>
+            4. 状态文本正确显示 ✅
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>🔍 关键检查点</h3>
+        
+        <div class="result warning">
+            <strong>后端日志关键词：</strong><br>
+            • "将预约单状态从SCHEDULED改为PENDING: orderId=X"<br>
+            • "✅ 预约单状态已更新为PENDING: orderId=X"<br>
+            • "✅ 已通知乘客预约单激活: passengerId=X"<br>
+            • "✅ 预约单激活成功: orderId=X"
+        </div>
+        
+        <div class="result warning">
+            <strong>数据库检查：</strong><br>
+            • 查询 orders 表中预约单的 status 字段<br>
+            • 激活前：status = 'SCHEDULED'<br>
+            • 激活后：status = 'PENDING'<br>
+            • updated_at 字段应该更新
+        </div>
+        
+        <div class="result warning">
+            <strong>前端状态检查：</strong><br>
+            • 乘客端收到 ORDER_STATUS_CHANGE 消息<br>
+            • 状态文本显示"正在为您寻找司机..."<br>
+            • 司机端能查询到 PENDING 状态的预约单
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>🚀 开始测试</h3>
+        <p>使用以下链接进行预约单激活状态测试：</p>
+        
+        <div style="margin: 20px 0;">
+            <a href="/passenger-app.html" target="_blank">
+                <button>乘客端（创建预约单）</button>
+            </a>
+            <a href="/driver-app.html?driverId=1" target="_blank">
+                <button>司机1（激活前上线）</button>
+            </a>
+            <a href="/driver-app.html?driverId=2" target="_blank">
+                <button>司机2（激活后上线）</button>
+            </a>
+        </div>
+
+        <div class="result info">
+            <strong>测试步骤：</strong><br>
+            1. 乘客创建预约单（状态：SCHEDULED）<br>
+            2. 等待激活时间到达或手动触发激活<br>
+            3. 检查订单状态是否变为 PENDING<br>
+            4. 司机2上线，检查是否能查询到预约单<br>
+            5. 验证乘客端状态文本是否正确显示
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>✅ 预期修复效果</h3>
+        <div class="result success">
+            <strong>修复完成后应该实现：</strong><br>
+            • 预约单激活后状态正确变为 PENDING ✅<br>
+            • 新上线的司机能查询到已激活的预约单 ✅<br>
+            • 乘客收到预约单激活的状态通知 ✅<br>
+            • 预约单的派单成功率提高 ✅<br>
+            • 状态流转逻辑与实时单保持一致 ✅
+        </div>
+    </div>
+</body>
+</html>

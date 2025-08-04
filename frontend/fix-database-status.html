@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库状态字段修复</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .sql-code {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>数据库状态字段修复指南</h1>
+
+    <div class="alert alert-error">
+        <h3>🚨 问题描述</h3>
+        <p>创建预约单时出现错误：<code>Data truncated for column 'status' at row 1</code></p>
+        <p>这是因为数据库中的 <code>orders</code> 表的 <code>status</code> 字段是 ENUM 类型，不包含 <code>SCHEDULED</code> 状态。</p>
+    </div>
+
+    <div class="alert alert-warning">
+        <h3>⚠️ 需要手动执行</h3>
+        <p>由于安全原因，需要你手动在数据库中执行以下SQL语句来修复这个问题。</p>
+    </div>
+
+    <div class="step">
+        <h3>步骤 1: 连接数据库</h3>
+        <p>使用你的数据库管理工具（如 MySQL Workbench、phpMyAdmin、或命令行）连接到数据库。</p>
+    </div>
+
+    <div class="step">
+        <h3>步骤 2: 执行修复SQL</h3>
+        <p>复制并执行以下SQL语句：</p>
+        <div class="sql-code">-- 修复orders表的status字段，添加SCHEDULED状态
+
+-- 使用正确的数据库（根据你的配置可能是 taxi_system 或 taxi_operation_system）
+USE taxi_system;
+
+-- 查看当前表结构
+DESCRIBE orders;
+
+-- 修改status字段，添加SCHEDULED状态到ENUM中
+ALTER TABLE orders MODIFY COLUMN status 
+ENUM('PENDING', 'ASSIGNED', 'PICKUP', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'SCHEDULED') 
+DEFAULT 'PENDING' 
+COMMENT '订单状态：待分配、已分配、接客中、进行中、已完成、已取消、已预约';
+
+-- 验证修改结果
+DESCRIBE orders;</div>
+    </div>
+
+    <div class="step">
+        <h3>步骤 3: 验证修复</h3>
+        <p>执行完SQL后，点击下面的按钮测试预约单创建：</p>
+        <button onclick="testScheduledOrderCreation()">测试预约单创建</button>
+        <div id="testResult"></div>
+    </div>
+
+    <div class="alert alert-info">
+        <h3>💡 如果数据库名称不对</h3>
+        <p>如果上面的SQL执行失败，可能是数据库名称不对。请尝试：</p>
+        <ul>
+            <li><code>USE taxi_operation_system;</code></li>
+            <li>或者先执行 <code>SHOW DATABASES;</code> 查看所有数据库名称</li>
+        </ul>
+    </div>
+
+    <script>
+        async function testScheduledOrderCreation() {
+            const resultDiv = document.getElementById('testResult');
+            resultDiv.innerHTML = '<div style="color: blue;">🔄 正在测试预约单创建...</div>';
+
+            // 创建1小时后的预约单
+            const scheduledTime = new Date();
+            scheduledTime.setHours(scheduledTime.getHours() + 1);
+            scheduledTime.setMinutes(0);
+            scheduledTime.setSeconds(0);
+            
+            const orderData = {
+                passengerId: 1,
+                pickupAddress: "测试上车地址",
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: "测试目的地",
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: formatDateTime(scheduledTime),
+                estimatedFare: 25.00
+            };
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    resultDiv.innerHTML = `
+                        <div style="color: green; margin-top: 10px;">
+                            ✅ 预约单创建成功！数据库修复完成。<br>
+                            订单ID: ${result.data.id}<br>
+                            状态: ${result.data.status}<br>
+                            预约时间: ${result.data.scheduledTime}
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="color: red; margin-top: 10px;">
+                            ❌ 预约单创建仍然失败: ${result.message}<br>
+                            请检查SQL是否正确执行，或者数据库名称是否正确。
+                        </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="color: red; margin-top: 10px;">
+                        ❌ 网络错误: ${error.message}
+                    </div>`;
+            }
+        }
+
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+    </script>
+</body>
+</html>

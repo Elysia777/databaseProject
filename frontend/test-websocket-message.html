@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket消息结构测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .json-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+        .message-log {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: #f8f9fa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket消息结构测试</h1>
+
+    <div class="result info">
+        <h3>🎯 测试目标</h3>
+        <p>验证WebSocket消息是否包含 orderType 和 scheduledTime 字段</p>
+    </div>
+
+    <button onclick="connectWebSocket()">连接WebSocket</button>
+    <button onclick="createTestOrder()">创建测试预约单</button>
+    <button onclick="clearLog()">清空日志</button>
+
+    <div id="connectionStatus" class="result"></div>
+
+    <h3>📋 消息日志</h3>
+    <div id="messageLog" class="message-log"></div>
+
+    <h3>📊 最新消息详情</h3>
+    <div id="messageDetail" class="json-display">等待WebSocket消息...</div>
+
+    <script>
+        let stompClient = null;
+        let messageCount = 0;
+
+        function log(message) {
+            const logDiv = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connectWebSocket() {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.innerHTML = '<div class="info">🔄 正在连接WebSocket...</div>';
+
+            try {
+                // 模拟司机ID为1
+                const driverId = 1;
+                
+                const socket = new SockJS('/ws');
+                stompClient = Stomp.over(socket);
+                
+                stompClient.connect({}, function(frame) {
+                    log('✅ WebSocket连接成功');
+                    statusDiv.innerHTML = '<div class="success">✅ WebSocket连接成功</div>';
+                    
+                    // 订阅司机订单队列
+                    stompClient.subscribe(`/user/${driverId}/queue/orders`, function(message) {
+                        messageCount++;
+                        const data = JSON.parse(message.body);
+                        
+                        log(`📨 收到消息 #${messageCount}: ${data.type}`);
+                        
+                        if (data.type === 'NEW_ORDER') {
+                            log(`📋 订单类型: ${data.orderType || '缺失'}`);
+                            log(`📅 预约时间: ${data.scheduledTime || '缺失'}`);
+                            log(`📍 上车地址: ${data.pickupAddress}`);
+                            
+                            // 检查关键字段
+                            const hasOrderType = data.orderType !== undefined;
+                            const hasScheduledTime = data.scheduledTime !== undefined;
+                            
+                            if (hasOrderType && hasScheduledTime) {
+                                log('✅ 消息包含完整的预约单信息');
+                            } else {
+                                log('❌ 消息缺少预约单关键字段');
+                            }
+                        }
+                        
+                        // 显示完整消息
+                        document.getElementById('messageDetail').textContent = JSON.stringify(data, null, 2);
+                    });
+                    
+                    log(`📡 已订阅司机队列: /user/${driverId}/queue/orders`);
+                    
+                }, function(error) {
+                    log('❌ WebSocket连接失败: ' + error);
+                    statusDiv.innerHTML = '<div class="error">❌ WebSocket连接失败</div>';
+                });
+                
+            } catch (error) {
+                log('❌ WebSocket连接异常: ' + error.message);
+                statusDiv.innerHTML = '<div class="error">❌ WebSocket连接异常</div>';
+            }
+        }
+
+        async function createTestOrder() {
+            log('🔄 创建测试预约单...');
+            
+            const scheduledTime = new Date();
+            scheduledTime.setTime(scheduledTime.getTime() + 30 * 60 * 1000);
+            
+            const orderData = {
+                passengerId: 1,
+                pickupAddress: "WebSocket测试上车地址",
+                pickupLatitude: 38.914677,
+                pickupLongitude: 121.619643,
+                destinationAddress: "WebSocket测试目的地",
+                destinationLatitude: 38.924677,
+                destinationLongitude: 121.629643,
+                scheduledTime: formatDateTime(scheduledTime),
+                estimatedFare: 40.00
+            };
+            
+            try {
+                const response = await fetch('/api/orders/scheduled', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.code === 200) {
+                    log(`✅ 预约单创建成功: ${result.data.id}`);
+                    log(`📋 订单类型: ${result.data.orderType}`);
+                    log(`📅 预约时间: ${result.data.scheduledTime}`);
+                    
+                    // 模拟司机上线触发派单
+                    setTimeout(async () => {
+                        log('🔄 模拟司机上线触发派单...');
+                        try {
+                            const onlineResponse = await fetch('/api/drivers/1/online', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    latitude: 38.914677,
+                                    longitude: 121.619643
+                                })
+                            });
+                            
+                            if (onlineResponse.ok) {
+                                log('✅ 司机上线成功，等待WebSocket消息...');
+                            } else {
+                                log('❌ 司机上线失败');
+                            }
+                        } catch (error) {
+                            log('❌ 司机上线异常: ' + error.message);
+                        }
+                    }, 2000);
+                    
+                } else {
+                    log(`❌ 预约单创建失败: ${result.message}`);
+                }
+            } catch (error) {
+                log('❌ 创建预约单异常: ' + error.message);
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('messageLog').innerHTML = '';
+            document.getElementById('messageDetail').textContent = '等待WebSocket消息...';
+            messageCount = 0;
+        }
+
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        // 页面卸载时断开连接
+        window.addEventListener('beforeunload', function() {
+            if (stompClient) {
+                stompClient.disconnect();
+            }
+        });
+    </script>
+    
+    <!-- 引入STOMP.js -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</body>
+</html>
