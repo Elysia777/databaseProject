@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>紧凑司机信息显示测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        
+        .demo-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+        
+        .map-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #e8f4fd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #7f8c8d;
+        }
+        
+        /* 复制乘客地图页面的新样式 */
+        .driver-info-bar {
+            position: absolute;
+            top: 80px;
+            left: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .driver-info-bar:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .driver-bar-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .driver-avatar-small img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            object-fit: cover;
+        }
+
+        .driver-basic-info {
+            flex: 1;
+        }
+
+        .driver-name-small {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 2px;
+        }
+
+        .vehicle-brief {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .driver-rating-small {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .rating-score-small {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .star-small {
+            color: #ffd700;
+            font-size: 14px;
+        }
+
+        .expand-icon {
+            color: #7f8c8d;
+            transition: transform 0.3s ease;
+        }
+
+        /* 司机详细信息面板 */
+        .driver-details-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+            max-height: 70vh;
+            overflow-y: auto;
+            z-index: 2000;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 20px 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .panel-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .panel-content {
+            padding: 20px;
+        }
+
+        .driver-profile {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .driver-avatar-large img {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            object-fit: cover;
+        }
+
+        .driver-info {
+            flex: 1;
+        }
+
+        .driver-name-large {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 6px;
+        }
+
+        .driver-rating-large {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .rating-stars {
+            display: flex;
+            gap: 2px;
+        }
+
+        .star {
+            color: #ddd;
+            font-size: 16px;
+            transition: color 0.2s ease;
+        }
+
+        .star.filled {
+            color: #ffd700;
+        }
+
+        .rating-score {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .driver-phone {
+            font-size: 14px;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+
+        .vehicle-info-section {
+            margin-bottom: 24px;
+        }
+
+        .vehicle-info-section h4 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .vehicle-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-item .label {
+            font-size: 12px;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+
+        .detail-item .value {
+            font-size: 14px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .plate-number-compact {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+
+        .action-buttons {
+            margin-top: 20px;
+        }
+        
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+        }
+        
+        .info-panel h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="demo-container">
+            <!-- 地图占位符 -->
+            <div class="map-placeholder">
+                🗺️ 地图区域（不被司机信息遮挡）
+            </div>
+            
+            <!-- 说明面板 -->
+            <div class="info-panel">
+                <h3>🎯 新设计特点</h3>
+                <ul style="font-size: 14px; margin: 0; padding-left: 16px;">
+                    <li>紧凑的顶部信息条</li>
+                    <li>不占用地图空间</li>
+                    <li>点击展开详细信息</li>
+                    <li>底部滑出面板</li>
+                    <li>车牌号简洁显示</li>
+                </ul>
+            </div>
+            
+            <!-- 紧凑的司机信息条 -->
+            <div class="driver-info-bar" @click="toggleDriverDetails">
+                <div class="driver-bar-content">
+                    <div class="driver-avatar-small">
+                        <img :src="demoDriver.avatar" :alt="demoDriver.name" />
+                    </div>
+                    <div class="driver-basic-info">
+                        <div class="driver-name-small">{{ demoDriver.name }}</div>
+                        <div class="vehicle-brief">{{ demoDriver.plateNumber }} · {{ demoDriver.vehicleBrand }} {{ demoDriver.vehicleModel }}</div>
+                    </div>
+                    <div class="driver-rating-small">
+                        <span class="rating-score-small">{{ demoDriver.rating.toFixed(1) }}</span>
+                        <span class="star-small">★</span>
+                    </div>
+                    <div class="expand-icon">
+                        <el-icon><ArrowDown v-if="!showDriverDetails" /><ArrowUp v-else /></el-icon>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 可滚动的司机详细信息面板 -->
+            <div v-if="showDriverDetails" class="driver-details-panel">
+                <div class="panel-header">
+                    <h3>司机信息</h3>
+                    <el-button text @click="toggleDriverDetails">
+                        <el-icon><Close /></el-icon>
+                    </el-button>
+                </div>
+                
+                <div class="panel-content">
+                    <div class="driver-profile">
+                        <div class="driver-avatar-large">
+                            <img :src="demoDriver.avatar" :alt="demoDriver.name" />
+                        </div>
+                        
+                        <div class="driver-info">
+                            <div class="driver-name-large">{{ demoDriver.name }}</div>
+                            <div class="driver-rating-large">
+                                <span class="rating-stars">
+                                    <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= Math.floor(demoDriver.rating) }">★</span>
+                                </span>
+                                <span class="rating-score">{{ demoDriver.rating.toFixed(1) }}分</span>
+                            </div>
+                            <div class="driver-phone">{{ demoDriver.phone }}</div>
+                        </div>
+                    </div>
+
+                    <div class="vehicle-info-section">
+                        <h4>车辆信息</h4>
+                        <div class="vehicle-details-grid">
+                            <div class="detail-item">
+                                <span class="label">车牌号</span>
+                                <span class="value plate-number-compact">{{ demoDriver.plateNumber }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">车型</span>
+                                <span class="value">{{ demoDriver.vehicleBrand }} {{ demoDriver.vehicleModel }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">颜色</span>
+                                <span class="value">{{ demoDriver.vehicleColor }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">类型</span>
+                                <span class="value">{{ getVehicleTypeText(demoDriver.vehicleType) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons">
+                        <el-button 
+                            type="primary" 
+                            @click="callDriver"
+                            size="large"
+                            style="width: 100%;"
+                        >
+                            📞 拨打司机电话
+                        </el-button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+        const { ElMessage } = ElementPlus;
+        const { ArrowDown, ArrowUp, Close } = ElementPlusIconsVue;
+
+        createApp({
+            components: {
+                ArrowDown, ArrowUp, Close
+            },
+            setup() {
+                const showDriverDetails = ref(false);
+                
+                // 演示数据
+                const demoDriver = reactive({
+                    name: '张师傅',
+                    phone: '138****8888',
+                    rating: 4.8,
+                    avatar: getDefaultAvatar('张师傅'),
+                    vehicleBrand: '丰田',
+                    vehicleModel: '凯美瑞',
+                    vehicleColor: '白色',
+                    plateNumber: '京A12345',
+                    vehicleType: 'COMFORT'
+                });
+
+                // 获取默认头像
+                function getDefaultAvatar(name) {
+                    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+                    const colorIndex = name ? name.charCodeAt(0) % colors.length : 0;
+                    const backgroundColor = colors[colorIndex];
+                    const firstChar = name ? name.charAt(0).toUpperCase() : '司';
+                    
+                    const svg = `
+                        <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="20" cy="20" r="20" fill="${backgroundColor}"/>
+                            <text x="20" y="26" text-anchor="middle" fill="white" font-size="16" font-weight="bold">${firstChar}</text>
+                        </svg>
+                    `;
+                    
+                    return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+                }
+
+                // 切换司机详情面板
+                const toggleDriverDetails = () => {
+                    showDriverDetails.value = !showDriverDetails.value;
+                };
+
+                // 获取车辆类型文本
+                const getVehicleTypeText = (type) => {
+                    const typeMap = {
+                        'ECONOMY': '经济型',
+                        'COMFORT': '舒适型',
+                        'PREMIUM': '高级型',
+                        'LUXURY': '豪华型'
+                    };
+                    return typeMap[type] || '经济型';
+                };
+
+                // 拨打司机电话
+                const callDriver = () => {
+                    ElMessage.success('正在拨打司机电话...');
+                };
+
+                return {
+                    showDriverDetails,
+                    demoDriver,
+                    toggleDriverDetails,
+                    getVehicleTypeText,
+                    callDriver
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

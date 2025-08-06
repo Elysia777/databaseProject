@@ -1,8 +1,9 @@
- package com.taxi.entity;
+package com.taxi.entity;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -20,35 +21,38 @@ public class Vehicle {
     /** 车牌号 */
     private String plateNumber;
 
-    /** 车辆品牌 */
+    /** 品牌 */
     private String brand;
 
-    /** 车辆型号 */
+    /** 型号 */
     private String model;
 
-    /** 车辆颜色 */
+    /** 颜色 */
     private String color;
 
-    /** 车辆类型：SEDAN-轿车，SUV-越野车，VAN-面包车等 */
-    private String vehicleType;
+    /** 年份 */
+    private Integer year;
 
     /** 座位数 */
     private Integer seats;
 
-    /** 车辆年份 */
-    private Integer year;
+    /** 车辆类型 */
+    private String vehicleType;
 
-    /** 行驶证号 */
-    private String registrationNumber;
+    /** 燃料类型 */
+    private String fuelType;
 
-    /** 行驶证有效期 */
-    private LocalDateTime registrationExpiryDate;
+    /** 保险单号 */
+    private String insuranceNumber;
 
-    /** 保险到期时间 */
-    private LocalDateTime insuranceExpiryDate;
+    /** 保险到期日期 */
+    private LocalDate insuranceExpiry;
 
-    /** 车辆状态：ACTIVE-正常，MAINTENANCE-维修中，INACTIVE-停用 */
-    private String status;
+    /** 年检到期日期 */
+    private LocalDate inspectionExpiry;
+
+    /** 是否激活 */
+    private Boolean isActive;
 
     /** 创建时间 */
     private LocalDateTime createdAt;

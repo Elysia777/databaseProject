@@ -4,7 +4,7 @@ import { userApi } from "@/api/user";
 
 export const useUserStore = defineStore("user", () => {
   // 状态
-  const user = ref(null);
+  const user = ref(JSON.parse(localStorage.getItem("user") || "null"));
   const token = ref(localStorage.getItem("token") || "");
 
   // 计算属性
@@ -36,6 +36,7 @@ export const useUserStore = defineStore("user", () => {
       user.value = data;
       token.value = data.token;
       localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data));
 
       return data;
     } catch (error) {
@@ -51,6 +52,7 @@ export const useUserStore = defineStore("user", () => {
       user.value = data;
       token.value = data.token;
       localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data));
 
       return data;
     } catch (error) {
@@ -83,6 +85,7 @@ export const useUserStore = defineStore("user", () => {
       user.value = null;
       token.value = "";
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
 
       // 清除订单相关的localStorage数据
       localStorage.removeItem("currentOrder");
@@ -113,6 +116,7 @@ export const useUserStore = defineStore("user", () => {
     try {
       const response = await userApi.getUserInfo();
       user.value = response.data;
+      localStorage.setItem("user", JSON.stringify(response.data));
       return response.data;
     } catch (error) {
       throw error;
@@ -123,6 +127,7 @@ export const useUserStore = defineStore("user", () => {
     try {
       const response = await userApi.updateUserInfo(userData);
       user.value = response.data;
+      localStorage.setItem("user", JSON.stringify(response.data));
       return response.data;
     } catch (error) {
       throw error;

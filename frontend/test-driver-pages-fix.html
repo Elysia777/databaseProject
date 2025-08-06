@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机端页面修复测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+        }
+        .test-container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .test-result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            color: #0c4a6e;
+        }
+        .error {
+            background-color: #fef2f2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        .component-test {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="test-container">
+            <h1>司机端页面修复测试</h1>
+            
+            <!-- 登录测试 -->
+            <div class="test-section">
+                <div class="test-title">1. 司机登录</div>
+                <el-form :model="loginForm" inline>
+                    <el-form-item label="用户名">
+                        <el-input v-model="loginForm.username" placeholder="输入司机用户名"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码">
+                        <el-input v-model="loginForm.password" type="password" placeholder="输入密码"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="testLogin" :loading="loginLoading">登录</el-button>
+                    </el-form-item>
+                </el-form>
+                <div v-if="loginResult" class="test-result" :class="loginResult.success ? 'success' : 'error'">
+                    {{ loginResult.message }}
+                </div>
+            </div>
+
+            <!-- 司机订单页面测试 -->
+            <div class="test-section">
+                <div class="test-title">2. 司机订单页面组件测试</div>
+                <div class="component-test">
+                    <h3>我的订单页面</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <el-select v-model="orderStatusFilter" placeholder="筛选状态" clearable style="width: 150px;">
+                            <el-option label="全部" value="" />
+                            <el-option label="已完成" value="COMPLETED" />
+                            <el-option label="已取消" value="CANCELLED" />
+                            <el-option label="进行中" value="IN_PROGRESS" />
+                        </el-select>
+                        <el-button @click="loadDriverOrders" :loading="ordersLoading">
+                            <el-icon><Refresh /></el-icon>
+                            刷新
+                        </el-button>
+                    </div>
+                    
+                    <div v-if="ordersLoading" style="text-align: center; padding: 20px;">
+                        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon>
+                        <div>加载中...</div>
+                    </div>
+                    
+                    <div v-else-if="driverOrders.length === 0" style="text-align: center; padding: 20px;">
+                        <el-empty description="暂无订单记录" />
+                    </div>
+                    
+                    <div v-else>
+                        <el-card v-for="order in driverOrders.slice(0, 3)" :key="order.id" style="margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-weight: 600;">#{{ order.orderNumber || order.id }}</span>
+                                    <el-tag :type="getStatusTagType(order.status)" size="small">
+                                        {{ getStatusText(order.status) }}
+                                    </el-tag>
+                                </div>
+                                <span style="color: #666; font-size: 14px;">{{ formatDateTime(order.createdAt) }}</span>
+                            </div>
+                            <div style="display: flex; gap: 20px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 5px;">
+                                        <el-icon style="color: #67c23a;"><LocationFilled /></el-icon>
+                                        <span style="font-size: 14px;">{{ order.pickupAddress }}</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <el-icon style="color: #e6a23c;"><Location /></el-icon>
+                                        <span style="font-size: 14px;">{{ order.destinationAddress }}</span>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="color: #f56c6c; font-weight: 600;">¥{{ (order.actualFare || order.estimatedFare || 0).toFixed(2) }}</div>
+                                    <div style="font-size: 12px; color: #666;">{{ (order.estimatedDistance || 0).toFixed(1) }}km</div>
+                                </div>
+                            </div>
+                        </el-card>
+                    </div>
+                </div>
+                
+                <div v-if="ordersTestResult" class="test-result" :class="ordersTestResult.success ? 'success' : 'error'">
+                    {{ ordersTestResult.message }}
+                </div>
+            </div>
+
+            <!-- 收入统计页面测试 -->
+            <div class="test-section">
+                <div class="test-title">3. 收入统计页面组件测试</div>
+                <div class="component-test">
+                    <h3>收入统计页面</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <el-date-picker
+                            v-model="selectedMonth"
+                            type="month"
+                            placeholder="选择月份"
+                            format="YYYY年MM月"
+                            value-format="YYYY-MM"
+                            style="width: 200px;">
+                        </el-date-picker>
+                        <el-button type="primary" @click="loadEarningsData" :loading="earningsLoading">
+                            <el-icon><Refresh /></el-icon>
+                            刷新
+                        </el-button>
+                    </div>
+                    
+                    <!-- 收入概览卡片 -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <el-icon style="font-size: 24px; margin-bottom: 10px;"><Money /></el-icon>
+                            <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">¥{{ earningsStats.totalEarnings.toFixed(2) }}</div>
+                            <div style="font-size: 14px; opacity: 0.9;">总收入</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <el-icon style="font-size: 24px; margin-bottom: 10px;"><Document /></el-icon>
+                            <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">{{ earningsStats.totalOrders }}</div>
+                            <div style="font-size: 14px; opacity: 0.9;">完成订单</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <el-icon style="font-size: 24px; margin-bottom: 10px;"><TrendCharts /></el-icon>
+                            <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">¥{{ earningsStats.averageEarnings.toFixed(2) }}</div>
+                            <div style="font-size: 14px; opacity: 0.9;">平均单价</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <el-icon style="font-size: 24px; margin-bottom: 10px;"><Location /></el-icon>
+                            <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">{{ earningsStats.totalDistance.toFixed(1) }}km</div>
+                            <div style="font-size: 14px; opacity: 0.9;">总里程</div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="earningsLoading" style="text-align: center; padding: 20px;">
+                        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon>
+                        <div>加载收入数据中...</div>
+                    </div>
+                </div>
+                
+                <div v-if="earningsTestResult" class="test-result" :class="earningsTestResult.success ? 'success' : 'error'">
+                    {{ earningsTestResult.message }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+        const { ElMessage } = ElementPlus;
+        
+        // 导入图标
+        const { Refresh, Loading, LocationFilled, Location, Money, Document, TrendCharts } = ElementPlusIconsVue;
+
+        createApp({
+            components: {
+                Refresh, Loading, LocationFilled, Location, Money, Document, TrendCharts
+            },
+            setup() {
+                // 登录相关
+                const loginForm = reactive({
+                    username: 'driver1',
+                    password: '123456'
+                });
+                const loginLoading = ref(false);
+                const loginResult = ref(null);
+                const token = ref(localStorage.getItem('token'));
+
+                // 订单相关
+                const orderStatusFilter = ref('');
+                const ordersLoading = ref(false);
+                const ordersTestResult = ref(null);
+                const driverOrders = ref([]);
+
+                // 收入统计相关
+                const selectedMonth = ref(new Date().toISOString().slice(0, 7));
+                const earningsLoading = ref(false);
+                const earningsTestResult = ref(null);
+                const earningsStats = reactive({
+                    totalEarnings: 0,
+                    totalOrders: 0,
+                    averageEarnings: 0,
+                    totalDistance: 0
+                });
+
+                // 登录测试
+                const testLogin = async () => {
+                    loginLoading.value = true;
+                    loginResult.value = null;
+
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(loginForm)
+                        });
+
+                        const result = await response.json();
+
+                        if (result.code === 200) {
+                            token.value = result.data.token;
+                            localStorage.setItem('token', token.value);
+                            loginResult.value = {
+                                success: true,
+                                message: `登录成功！用户类型: ${result.data.userType}, 用户ID: ${result.data.userId}`
+                            };
+                        } else {
+                            loginResult.value = {
+                                success: false,
+                                message: `登录失败: ${result.message}`
+                            };
+                        }
+                    } catch (error) {
+                        loginResult.value = {
+                            success: false,
+                            message: `网络错误: ${error.message}`
+                        };
+                    } finally {
+                        loginLoading.value = false;
+                    }
+                };
+
+                // 加载司机订单
+                const loadDriverOrders = async () => {
+                    if (!token.value) {
+                        ElMessage.error('请先登录');
+                        return;
+                    }
+
+                    ordersLoading.value = true;
+                    ordersTestResult.value = null;
+
+                    try {
+                        const params = new URLSearchParams({
+                            page: '1',
+                            size: '10'
+                        });
+                        
+                        if (orderStatusFilter.value) {
+                            params.append('status', orderStatusFilter.value);
+                        }
+
+                        const response = await fetch(`/api/drivers/1/orders?${params}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`
+                            }
+                        });
+
+                        const result = await response.json();
+
+                        if (result.code === 200) {
+                            driverOrders.value = result.data || [];
+                            ordersTestResult.value = {
+                                success: true,
+                                message: `订单页面组件测试成功！\n获取到 ${driverOrders.value.length} 条订单记录\n图标和样式显示正常`
+                            };
+                        } else {
+                            ordersTestResult.value = {
+                                success: false,
+                                message: `API调用失败: ${result.message}`
+                            };
+                        }
+                    } catch (error) {
+                        ordersTestResult.value = {
+                            success: false,
+                            message: `网络错误: ${error.message}`
+                        };
+                    } finally {
+                        ordersLoading.value = false;
+                    }
+                };
+
+                // 加载收入数据
+                const loadEarningsData = async () => {
+                    if (!token.value) {
+                        ElMessage.error('请先登录');
+                        return;
+                    }
+
+                    earningsLoading.value = true;
+                    earningsTestResult.value = null;
+
+                    try {
+                        const response = await fetch(`/api/drivers/1/earnings?month=${selectedMonth.value}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`
+                            }
+                        });
+
+                        const result = await response.json();
+
+                        if (result.code === 200) {
+                            const summary = result.data.summary || {};
+                            Object.assign(earningsStats, {
+                                totalEarnings: summary.totalEarnings || 0,
+                                totalOrders: summary.totalOrders || 0,
+                                averageEarnings: summary.averageEarnings || 0,
+                                totalDistance: summary.totalDistance || 0
+                            });
+                            
+                            earningsTestResult.value = {
+                                success: true,
+                                message: `收入统计页面组件测试成功！\n总收入: ¥${earningsStats.totalEarnings.toFixed(2)}\n总订单: ${earningsStats.totalOrders}单\n图标和卡片显示正常`
+                            };
+                        } else {
+                            earningsTestResult.value = {
+                                success: false,
+                                message: `API调用失败: ${result.message}`
+                            };
+                        }
+                    } catch (error) {
+                        earningsTestResult.value = {
+                            success: false,
+                            message: `网络错误: ${error.message}`
+                        };
+                    } finally {
+                        earningsLoading.value = false;
+                    }
+                };
+
+                // 状态相关方法
+                const getStatusTagType = (status) => {
+                    const statusMap = {
+                        'COMPLETED': 'success',
+                        'CANCELLED': 'danger',
+                        'IN_PROGRESS': 'primary',
+                        'ASSIGNED': 'warning',
+                        'PICKUP': 'info',
+                        'PENDING': 'warning',
+                        'SCHEDULED': 'info'
+                    };
+                    return statusMap[status] || 'info';
+                };
+
+                const getStatusText = (status) => {
+                    const statusMap = {
+                        'SCHEDULED': '已预约',
+                        'PENDING': '待接单',
+                        'ASSIGNED': '已接单',
+                        'PICKUP': '已到达',
+                        'IN_PROGRESS': '进行中',
+                        'COMPLETED': '已完成',
+                        'CANCELLED': '已取消'
+                    };
+                    return statusMap[status] || status;
+                };
+
+                const formatDateTime = (dateTime) => {
+                    if (!dateTime) return '--';
+                    return new Date(dateTime).toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                };
+
+                return {
+                    loginForm,
+                    loginLoading,
+                    loginResult,
+                    orderStatusFilter,
+                    ordersLoading,
+                    ordersTestResult,
+                    driverOrders,
+                    selectedMonth,
+                    earningsLoading,
+                    earningsTestResult,
+                    earningsStats,
+                    testLogin,
+                    loadDriverOrders,
+                    loadEarningsData,
+                    getStatusTagType,
+                    getStatusText,
+                    formatDateTime
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

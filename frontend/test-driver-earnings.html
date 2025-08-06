@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机收入统计测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        input, select, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .success {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>司机收入统计功能测试</h1>
+        <p>测试司机收入统计相关的API接口</p>
+    </div>
+
+    <!-- 收入统计测试 -->
+    <div class="container">
+        <div class="test-section">
+            <h3>📊 收入统计测试</h3>
+            <div class="form-group">
+                <label>司机ID:</label>
+                <input type="number" id="driverId" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>查询月份:</label>
+                <input type="month" id="month" value="2024-12">
+            </div>
+            <div class="form-group">
+                <label>页码:</label>
+                <input type="number" id="page" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>每页大小:</label>
+                <input type="number" id="size" value="20" min="1" max="100">
+            </div>
+            <button onclick="testEarningsAPI()">获取收入统计</button>
+            <div id="earningsResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 收入图表测试 -->
+    <div class="container">
+        <div class="test-section">
+            <h3>📈 收入图表测试</h3>
+            <div class="form-group">
+                <label>司机ID:</label>
+                <input type="number" id="chartDriverId" value="1" min="1">
+            </div>
+            <div class="form-group">
+                <label>查询月份:</label>
+                <input type="month" id="chartMonth" value="2024-12">
+            </div>
+            <div class="form-group">
+                <label>图表类型:</label>
+                <select id="chartType">
+                    <option value="daily">按日</option>
+                    <option value="weekly">按周</option>
+                </select>
+            </div>
+            <button onclick="testChartAPI()">获取图表数据</button>
+            <div id="chartResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 创建测试数据 -->
+    <div class="container">
+        <div class="test-section">
+            <h3>🔧 创建测试数据</h3>
+            <p>为了测试收入统计功能，需要先创建一些已完成的订单数据</p>
+            <div class="form-group">
+                <label>司机ID:</label>
+                <input type="number" id="testDriverId" value="1" min="1">
+            </div>
+            <button onclick="createTestData()">创建测试订单数据</button>
+            <div id="testDataResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 测试收入统计API
+        async function testEarningsAPI() {
+            const driverId = document.getElementById('driverId').value;
+            const month = document.getElementById('month').value;
+            const page = document.getElementById('page').value;
+            const size = document.getElementById('size').value;
+            const resultDiv = document.getElementById('earningsResult');
+            
+            try {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.textContent = '正在获取收入统计数据...';
+                
+                const url = `/api/drivers/${driverId}/earnings?month=${month}&page=${page}&size=${size}`;
+                console.log('请求URL:', url);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    
+                    // 显示汇总数据
+                    let result = '=== 收入统计结果 ===\n\n';
+                    result += '📊 月度汇总:\n';
+                    result += `总收入: ¥${data.data.summary.totalEarnings}\n`;
+                    result += `总订单: ${data.data.summary.totalOrders}单\n`;
+                    result += `平均单价: ¥${data.data.summary.averageEarnings}\n`;
+                    result += `总里程: ${data.data.summary.totalDistance}km\n\n`;
+                    
+                    // 显示每日记录
+                    result += '📅 每日收入记录:\n';
+                    if (data.data.records && data.data.records.length > 0) {
+                        data.data.records.forEach(record => {
+                            result += `${record.date}: ${record.orderCount}单, ¥${record.totalEarnings}, ${record.totalDistance}km\n`;
+                        });
+                    } else {
+                        result += '暂无收入记录\n';
+                    }
+                    
+                    result += `\n分页信息: 第${data.data.page}页, 共${data.data.total}条记录`;
+                    
+                    resultDiv.textContent = result;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `获取失败: ${data.message || '未知错误'}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `请求失败: ${error.message}`;
+                console.error('获取收入统计失败:', error);
+            }
+        }
+
+        // 测试图表数据API
+        async function testChartAPI() {
+            const driverId = document.getElementById('chartDriverId').value;
+            const month = document.getElementById('chartMonth').value;
+            const type = document.getElementById('chartType').value;
+            const resultDiv = document.getElementById('chartResult');
+            
+            try {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.textContent = '正在获取图表数据...';
+                
+                const url = `/api/drivers/${driverId}/earnings/chart?month=${month}&type=${type}`;
+                console.log('请求URL:', url);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    
+                    let result = '=== 图表数据结果 ===\n\n';
+                    result += `图表类型: ${type === 'daily' ? '按日' : '按周'}\n`;
+                    result += `数据点数量: ${data.data.dates.length}\n\n`;
+                    
+                    result += '📈 数据详情:\n';
+                    if (data.data.dates && data.data.earnings) {
+                        for (let i = 0; i < data.data.dates.length; i++) {
+                            result += `${data.data.dates[i]}: ¥${data.data.earnings[i]}\n`;
+                        }
+                    } else {
+                        result += '暂无图表数据\n';
+                    }
+                    
+                    resultDiv.textContent = result;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `获取失败: ${data.message || '未知错误'}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `请求失败: ${error.message}`;
+                console.error('获取图表数据失败:', error);
+            }
+        }
+
+        // 创建测试数据
+        async function createTestData() {
+            const driverId = document.getElementById('testDriverId').value;
+            const resultDiv = document.getElementById('testDataResult');
+            
+            try {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.textContent = '正在创建测试数据...';
+                
+                // 创建一些测试订单数据
+                const testOrders = [];
+                const currentDate = new Date();
+                
+                // 创建本月的一些测试订单
+                for (let i = 0; i < 10; i++) {
+                    const orderDate = new Date(currentDate);
+                    orderDate.setDate(currentDate.getDate() - i);
+                    
+                    const order = {
+                        orderNumber: `TEST${Date.now()}_${i}`,
+                        passengerId: 1,
+                        driverId: parseInt(driverId),
+                        status: 'COMPLETED',
+                        pickupAddress: '测试起点地址',
+                        pickupLatitude: 39.044237 + (Math.random() - 0.5) * 0.01,
+                        pickupLongitude: 121.749849 + (Math.random() - 0.5) * 0.01,
+                        destinationAddress: '测试终点地址',
+                        destinationLatitude: 39.044237 + (Math.random() - 0.5) * 0.02,
+                        destinationLongitude: 121.749849 + (Math.random() - 0.5) * 0.02,
+                        actualDistance: Math.round((Math.random() * 20 + 5) * 100) / 100,
+                        actualFare: Math.round((Math.random() * 50 + 15) * 100) / 100,
+                        totalFare: Math.round((Math.random() * 60 + 20) * 100) / 100,
+                        completionTime: orderDate.toISOString().slice(0, 19).replace('T', ' '),
+                        createdAt: orderDate.toISOString().slice(0, 19).replace('T', ' '),
+                        updatedAt: orderDate.toISOString().slice(0, 19).replace('T', ' ')
+                    };
+                    
+                    testOrders.push(order);
+                }
+                
+                let successCount = 0;
+                let errorCount = 0;
+                let result = '=== 创建测试数据结果 ===\n\n';
+                
+                for (const order of testOrders) {
+                    try {
+                        const response = await fetch('/api/orders', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(order)
+                        });
+                        
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        errorCount++;
+                        console.error('创建订单失败:', error);
+                    }
+                }
+                
+                result += `✅ 成功创建: ${successCount}条订单\n`;
+                result += `❌ 创建失败: ${errorCount}条订单\n\n`;
+                result += '现在可以测试收入统计功能了！';
+                
+                resultDiv.className = 'result success';
+                resultDiv.textContent = result;
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `创建测试数据失败: ${error.message}`;
+                console.error('创建测试数据失败:', error);
+            }
+        }
+
+        // 页面加载时设置当前月份
+        document.addEventListener('DOMContentLoaded', function() {
+            const now = new Date();
+            const currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('month').value = currentMonth;
+            document.getElementById('chartMonth').value = currentMonth;
+        });
+    </script>
+</body>
+</html>

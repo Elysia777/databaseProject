@@ -163,21 +163,38 @@
       </el-button>
     </div>
 
+    <!-- 紧凑的司机信息条 -->
+    <div 
+      v-if="currentOrder && driverInfo && (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP' || orderStatus === 'IN_PROGRESS')" 
+      class="driver-info-bar"
+      @click="toggleDriverDetails"
+    >
+      <div class="driver-bar-content">
+        <div class="driver-avatar-small">
+          <img 
+            :src="driverInfo.avatar || getDefaultAvatar(driverInfo.name)" 
+            :alt="driverInfo.name"
+            @error="handleAvatarError"
+          />
+        </div>
+        <div class="driver-basic-info">
+          <div class="driver-name-small">{{ driverInfo.name }}</div>
+          <div class="vehicle-brief">{{ driverInfo.plateNumber || '暂无车牌' }} · {{ driverInfo.vehicleBrand || '未知' }} {{ driverInfo.vehicleModel || '' }}</div>
+        </div>
+        <div class="driver-rating-small" v-if="driverInfo.rating">
+          <span class="rating-score-small">{{ driverInfo.rating.toFixed(1) }}</span>
+          <span class="star-small">★</span>
+        </div>
+        <div class="expand-icon">
+          <el-icon><ArrowDown v-if="!showDriverDetails" /><ArrowUp v-else /></el-icon>
+        </div>
+      </div>
+    </div>
+
     <!-- 订单状态面板 -->
     <div v-if="currentOrder" class="order-panel">
       <div class="order-status">
         <div class="status-text">{{ orderStore.getStatusText() }}</div>
-        <div
-          v-if="
-            driverInfo &&
-            (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP')
-          "
-          class="driver-info"
-        >
-          <div class="driver-name">司机：{{ driverInfo.name }}</div>
-          <div class="driver-phone">{{ driverInfo.phone }}</div>
-          <div class="vehicle-info">{{ driverInfo.vehicleInfo }}</div>
-        </div>
 
         <!-- 取消订单按钮 -->
         <div v-if="canCancelOrder" class="cancel-order-section">
@@ -193,13 +210,83 @@
         </div>
       </div>
     </div>
+
+    <!-- 可滚动的司机详细信息面板 -->
+    <div 
+      v-if="currentOrder && driverInfo && showDriverDetails && (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP' || orderStatus === 'IN_PROGRESS')" 
+      class="driver-details-panel"
+    >
+      <div class="panel-header">
+        <h3>司机信息</h3>
+        <el-button text @click="toggleDriverDetails">
+          <el-icon><Close /></el-icon>
+        </el-button>
+      </div>
+      
+      <div class="panel-content">
+        <div class="driver-profile">
+          <div class="driver-avatar-large">
+            <img 
+              :src="driverInfo.avatar || getDefaultAvatar(driverInfo.name)" 
+              :alt="driverInfo.name"
+              @error="handleAvatarError"
+            />
+          </div>
+          
+          <div class="driver-info">
+            <div class="driver-name-large">{{ driverInfo.name }}</div>
+            <div class="driver-rating-large" v-if="driverInfo.rating">
+              <span class="rating-stars">
+                <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= Math.floor(driverInfo.rating) }">★</span>
+              </span>
+              <span class="rating-score">{{ driverInfo.rating.toFixed(1) }}分</span>
+            </div>
+            <div class="driver-phone">{{ driverInfo.phone }}</div>
+          </div>
+        </div>
+
+        <div class="vehicle-info-section">
+          <h4>车辆信息</h4>
+          <div class="vehicle-details-grid">
+            <div class="detail-item">
+              <span class="label">车牌号</span>
+              <span class="value plate-number-compact">{{ driverInfo.plateNumber || '暂无' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">车型</span>
+              <span class="value">{{ driverInfo.vehicleBrand || '未知' }} {{ driverInfo.vehicleModel || '' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">颜色</span>
+              <span class="value">{{ driverInfo.vehicleColor || '未知' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">类型</span>
+              <span class="value">{{ getVehicleTypeText(driverInfo.vehicleType) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <el-button 
+            type="primary" 
+            @click="callDriver"
+            :icon="Phone"
+            size="large"
+            style="width: 100%;"
+          >
+            拨打司机电话
+          </el-button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed, onUnmounted, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Location } from "@element-plus/icons-vue";
+import { Location, Phone, ArrowDown, ArrowUp, Close } from "@element-plus/icons-vue";
 import { useUserStore } from "@/stores/user";
 import { useOrderStore } from "@/stores/order";
 import {
@@ -250,6 +337,9 @@ const cancelLoading = ref(false);
 const showPaymentDialog = ref(false);
 const completedOrder = ref(null);
 const selectedPaymentMethod = ref('');
+
+// 司机详情面板控制
+const showDriverDetails = ref(false);
 
 // 从store获取订单状态
 const currentOrder = computed(() => orderStore.currentOrder);
@@ -1292,7 +1382,16 @@ const handleOrderAssigned = (data) => {
       phone: data.driver.phone || data.driver.phoneNumber,
       avatar: data.driver.avatar,
       rating: data.driver.rating || 5.0,
-      vehicleInfo: data.driver.vehicleInfo || data.driver.carModel || "车牌号",
+      // 车辆信息
+      plateNumber: data.driver.plateNumber || "暂无车牌",
+      vehicleBrand: data.driver.vehicleBrand || "未知",
+      vehicleModel: data.driver.vehicleModel || "",
+      vehicleColor: data.driver.vehicleColor || "未知",
+      vehicleType: data.driver.vehicleType || "ECONOMY",
+      vehicleSeats: data.driver.vehicleSeats || 5,
+      vehicleYear: data.driver.vehicleYear,
+      vehicleInfo: data.driver.vehicleInfo || data.driver.carModel || `${data.driver.vehicleBrand || '未知'} ${data.driver.vehicleModel || ''} ${data.driver.plateNumber || ''}`.trim(),
+      carModel: data.driver.carModel || `${data.driver.vehicleBrand || '未知'} ${data.driver.vehicleModel || ''}`.trim(),
       latitude: data.driver.latitude,
       longitude: data.driver.longitude,
     };
@@ -1758,6 +1857,67 @@ const goToMyTrips = () => {
       });
   }
 };
+
+// 获取默认头像
+const getDefaultAvatar = (name) => {
+  // 根据姓名生成默认头像
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+  const colorIndex = name ? name.charCodeAt(0) % colors.length : 0;
+  const backgroundColor = colors[colorIndex];
+  const firstChar = name ? name.charAt(0).toUpperCase() : '司';
+  
+  // 创建SVG头像
+  const svg = `
+    <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="20" fill="${backgroundColor}"/>
+      <text x="20" y="26" text-anchor="middle" fill="white" font-size="16" font-weight="bold">${firstChar}</text>
+    </svg>
+  `;
+  
+  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+};
+
+// 处理头像加载错误
+const handleAvatarError = (event) => {
+  const img = event.target;
+  const name = driverInfo.value?.name || '司机';
+  img.src = getDefaultAvatar(name);
+};
+
+// 获取车辆类型文本
+const getVehicleTypeText = (type) => {
+  const typeMap = {
+    'ECONOMY': '经济型',
+    'COMFORT': '舒适型',
+    'PREMIUM': '高级型',
+    'LUXURY': '豪华型'
+  };
+  return typeMap[type] || '经济型';
+};
+
+// 拨打司机电话
+const callDriver = () => {
+  if (driverInfo.value?.phone) {
+    // 在移动设备上直接拨打电话
+    if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+      window.location.href = `tel:${driverInfo.value.phone}`;
+    } else {
+      // 在桌面设备上显示电话号码
+      ElMessage.info(`司机电话：${driverInfo.value.phone}`);
+      // 复制到剪贴板
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(driverInfo.value.phone).then(() => {
+          ElMessage.success('电话号码已复制到剪贴板');
+        });
+      }
+    }
+  }
+};
+
+// 切换司机详情面板
+const toggleDriverDetails = () => {
+  showDriverDetails.value = !showDriverDetails.value;
+};
 </script>
 
 <style scoped>
@@ -2029,6 +2189,233 @@ const goToMyTrips = () => {
 .vehicle-info {
   font-size: 14px;
   color: #666;
+}
+
+/* 紧凑的司机信息条 */
+.driver-info-bar {
+  position: absolute;
+  top: 80px;
+  left: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.driver-info-bar:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.driver-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.driver-avatar-small img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  object-fit: cover;
+}
+
+.driver-basic-info {
+  flex: 1;
+}
+
+.driver-name-small {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 2px;
+}
+
+.vehicle-brief {
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+.driver-rating-small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rating-score-small {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.star-small {
+  color: #ffd700;
+  font-size: 14px;
+}
+
+.expand-icon {
+  color: #7f8c8d;
+  transition: transform 0.3s ease;
+}
+
+/* 司机详细信息面板 */
+.driver-details-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 2000;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 20px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.panel-content {
+  padding: 20px;
+}
+
+.driver-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.driver-avatar-large img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  object-fit: cover;
+}
+
+.driver-info {
+  flex: 1;
+}
+
+.driver-name-large {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 6px;
+}
+
+.driver-rating-large {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rating-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.star {
+  color: #ddd;
+  font-size: 16px;
+  transition: color 0.2s ease;
+}
+
+.star.filled {
+  color: #ffd700;
+}
+
+.rating-score {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.driver-phone {
+  font-size: 14px;
+  color: #7f8c8d;
+  font-weight: 500;
+}
+
+.vehicle-info-section {
+  margin-bottom: 24px;
+}
+
+.vehicle-info-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.vehicle-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item .label {
+  font-size: 12px;
+  color: #7f8c8d;
+  font-weight: 500;
+}
+
+.detail-item .value {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.plate-number-compact {
+  font-family: 'Courier New', monospace;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  letter-spacing: 1px;
+  display: inline-block;
+}
+
+.action-buttons {
+  margin-top: 20px;
 }
 
 .cancel-order-section {

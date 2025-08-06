@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.taxi.mapper.VehicleMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.taxi.entity.Vehicle">
+        <id column="id" property="id" />
+        <result column="driver_id" property="driverId" />
+        <result column="plate_number" property="plateNumber" />
+        <result column="brand" property="brand" />
+        <result column="model" property="model" />
+        <result column="color" property="color" />
+        <result column="year" property="year" />
+        <result column="seats" property="seats" />
+        <result column="vehicle_type" property="vehicleType" />
+        <result column="fuel_type" property="fuelType" />
+        <result column="insurance_number" property="insuranceNumber" />
+        <result column="insurance_expiry" property="insuranceExpiry" />
+        <result column="inspection_expiry" property="inspectionExpiry" />
+        <result column="is_active" property="isActive" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, driver_id, plate_number, brand, model, color, year, seats, 
+        vehicle_type, fuel_type, insurance_number, insurance_expiry, 
+        inspection_expiry, is_active, created_at, updated_at
+    </sql>
+
+    <!-- 根据ID查询车辆 -->
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM vehicles
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据司机ID查询车辆列表 -->
+    <select id="selectByDriverId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM vehicles
+        WHERE driver_id = #{driverId}
+        ORDER BY is_active DESC, created_at DESC
+    </select>
+
+    <!-- 根据司机ID查询激活的车辆 -->
+    <select id="selectActiveByDriverId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM vehicles
+        WHERE driver_id = #{driverId} AND is_active = TRUE
+        LIMIT 1
+    </select>
+
+    <!-- 根据车牌号查询车辆 -->
+    <select id="selectByPlateNumber" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM vehicles
+        WHERE plate_number = #{plateNumber}
+    </select>
+
+    <!-- 插入车辆 -->
+    <insert id="insert" parameterType="com.taxi.entity.Vehicle" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO vehicles (
+            driver_id, plate_number, brand, model, color, year, seats,
+            vehicle_type, fuel_type, insurance_number, insurance_expiry,
+            inspection_expiry, is_active, created_at, updated_at
+        ) VALUES (
+            #{driverId}, #{plateNumber}, #{brand}, #{model}, #{color}, #{year}, #{seats},
+            #{vehicleType}, #{fuelType}, #{insuranceNumber}, #{insuranceExpiry},
+            #{inspectionExpiry}, #{isActive}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 根据ID更新车辆 -->
+    <update id="updateById" parameterType="com.taxi.entity.Vehicle">
+        UPDATE vehicles
+        SET driver_id = #{driverId},
+            plate_number = #{plateNumber},
+            brand = #{brand},
+            model = #{model},
+            color = #{color},
+            year = #{year},
+            seats = #{seats},
+            vehicle_type = #{vehicleType},
+            fuel_type = #{fuelType},
+            insurance_number = #{insuranceNumber},
+            insurance_expiry = #{insuranceExpiry},
+            inspection_expiry = #{inspectionExpiry},
+            is_active = #{isActive},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除车辆 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM vehicles WHERE id = #{id}
+    </delete>
+
+    <!-- 设置司机的激活车辆 -->
+    <update id="setActiveVehicle">
+        UPDATE vehicles 
+        SET is_active = CASE 
+            WHEN id = #{vehicleId} THEN TRUE 
+            ELSE FALSE 
+        END,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE driver_id = #{driverId}
+    </update>
+
+    <!-- 取消司机所有车辆的激活状态 -->
+    <update id="deactivateAllByDriverId" parameterType="java.lang.Long">
+        UPDATE vehicles 
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE driver_id = #{driverId}
+    </update>
+
+</mapper>

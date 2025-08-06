@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机登录问题诊断</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 司机登录问题诊断</h1>
+        <p>诊断司机登录失败的原因</p>
+    </div>
+
+    <div class="container">
+        <h3>步骤1: 检查司机数据</h3>
+        <button onclick="checkDriverData()">检查司机数据</button>
+        <div id="driverResult" class="result-display">
+            点击检查司机数据...
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>步骤2: 测试登录接口</h3>
+        <button onclick="testDriverLogin()">测试司机登录</button>
+        <div id="loginResult" class="result-display">
+            点击测试司机登录...
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>步骤3: 检查用户-司机映射</h3>
+        <button onclick="checkUserDriverMapping()">检查映射关系</button>
+        <div id="mappingResult" class="result-display">
+            点击检查映射关系...
+        </div>
+    </div>
+
+    <script>
+        function log(message, containerId = 'result') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        async function checkDriverData() {
+            const resultDiv = document.getElementById('driverResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔍 检查司机数据...', 'driverResult');
+            
+            try {
+                // 检查所有司机
+                const driversResponse = await fetch('/api/drivers');
+                if (driversResponse.ok) {
+                    const driversResult = await driversResponse.json();
+                    if (driversResult.code === 200) {
+                        const drivers = driversResult.data || [];
+                        log(`找到 ${drivers.length} 个司机:`, 'driverResult');
+                        
+                        drivers.forEach(driver => {
+                            log(`司机ID: ${driver.id}, 用户ID: ${driver.userId}, 姓名: ${driver.name}, 在线: ${driver.isOnline}`, 'driverResult');
+                        });
+                        
+                        // 检查用户ID为2的司机
+                        log('\\n检查用户ID为2的司机...', 'driverResult');
+                        const userDriverResponse = await fetch('/api/drivers/user/2');
+                        if (userDriverResponse.ok) {
+                            const userDriverResult = await userDriverResponse.json();
+                            if (userDriverResult.code === 200) {
+                                log('✅ 找到用户ID为2的司机:', 'driverResult');
+                                log(JSON.stringify(userDriverResult.data, null, 2), 'driverResult');
+                            } else {
+                                log(`❌ 用户ID为2的司机查询失败: ${userDriverResult.message}`, 'driverResult');
+                            }
+                        } else {
+                            log('❌ 用户ID为2的司机查询请求失败', 'driverResult');
+                        }
+                        
+                        resultDiv.className = 'result-display status-good';
+                    } else {
+                        log(`❌ 获取司机数据失败: ${driversResult.message}`, 'driverResult');
+                        resultDiv.className = 'result-display status-error';
+                    }
+                } else {
+                    log('❌ 获取司机数据请求失败', 'driverResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 检查司机数据失败: ${error.message}`, 'driverResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function testDriverLogin() {
+            const resultDiv = document.getElementById('loginResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔐 测试司机登录...', 'loginResult');
+            
+            try {
+                const loginData = {
+                    username: 'driver',
+                    password: '123456'
+                };
+                
+                log('发送登录请求...', 'loginResult');
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(loginData)
+                });
+                
+                log(`响应状态: ${response.status}`, 'loginResult');
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    log('登录响应:', 'loginResult');
+                    log(JSON.stringify(result, null, 2), 'loginResult');
+                    
+                    if (result.code === 200) {
+                        log('✅ 登录成功', 'loginResult');
+                        resultDiv.className = 'result-display status-good';
+                    } else {
+                        log(`❌ 登录失败: ${result.message}`, 'loginResult');
+                        resultDiv.className = 'result-display status-error';
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ 登录请求失败: ${errorText}`, 'loginResult');
+                    resultDiv.className = 'result-display status-error';
+                }
+            } catch (error) {
+                log(`❌ 登录测试失败: ${error.message}`, 'loginResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        async function checkUserDriverMapping() {
+            const resultDiv = document.getElementById('mappingResult');
+            resultDiv.textContent = '';
+            resultDiv.className = 'result-display';
+            
+            log('🔍 检查用户-司机映射关系...', 'mappingResult');
+            
+            try {
+                // 获取所有用户
+                const usersResponse = await fetch('/api/auth/users');
+                let users = [];
+                if (usersResponse.ok) {
+                    const usersResult = await usersResponse.json();
+                    users = usersResult.data || [];
+                }
+                
+                // 获取所有司机
+                const driversResponse = await fetch('/api/drivers');
+                let drivers = [];
+                if (driversResponse.ok) {
+                    const driversResult = await driversResponse.json();
+                    drivers = driversResult.data || [];
+                }
+                
+                log('用户-司机映射关系:', 'mappingResult');
+                const driverUsers = users.filter(u => u.userType === 'DRIVER');
+                
+                driverUsers.forEach(user => {
+                    const relatedDrivers = drivers.filter(d => d.userId === user.id);
+                    log(`用户ID ${user.id} (${user.username}/${user.realName}):`, 'mappingResult');
+                    
+                    if (relatedDrivers.length === 0) {
+                        log(`  ❌ 没有对应的司机记录`, 'mappingResult');
+                    } else if (relatedDrivers.length === 1) {
+                        log(`  ✅ 对应司机ID ${relatedDrivers[0].id}`, 'mappingResult');
+                    } else {
+                        log(`  ⚠️ 对应多个司机记录: ${relatedDrivers.map(d => d.id).join(', ')}`, 'mappingResult');
+                    }
+                });
+                
+                // 检查是否有重复的用户ID
+                const userIdCounts = {};
+                drivers.forEach(driver => {
+                    userIdCounts[driver.userId] = (userIdCounts[driver.userId] || 0) + 1;
+                });
+                
+                log('\\n用户ID重复检查:', 'mappingResult');
+                Object.entries(userIdCounts).forEach(([userId, count]) => {
+                    if (count > 1) {
+                        log(`⚠️ 用户ID ${userId} 对应 ${count} 个司机记录`, 'mappingResult');
+                    }
+                });
+                
+                resultDiv.className = 'result-display status-good';
+            } catch (error) {
+                log(`❌ 检查映射关系失败: ${error.message}`, 'mappingResult');
+                resultDiv.className = 'result-display status-error';
+            }
+        }
+
+        // 页面加载时的说明
+        window.onload = function() {
+            log('司机登录问题诊断页面加载完成', 'driverResult');
+            log('按顺序点击按钮进行诊断', 'driverResult');
+        };
+    </script>
+</body>
+</html>

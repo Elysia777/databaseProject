@@ -283,6 +283,22 @@ public class DriverController {
     }
 
     /**
+     * 通过用户ID获取司机信息
+     */
+    @GetMapping("/user/{userId}")
+    public Result<Driver> getDriverByUserId(@PathVariable Long userId) {
+        try {
+            Driver driver = driverMapper.selectByUserId(userId);
+            if (driver == null) {
+                return Result.error("司机不存在");
+            }
+            return Result.success(driver);
+        } catch (Exception e) {
+            return Result.error("获取司机信息失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 获取在线司机统计（从Redis）
      */
     @GetMapping("/online/stats")
@@ -481,6 +497,40 @@ public class DriverController {
     }
 
     /**
+     * 获取司机的历史订单列表
+     */
+    @GetMapping("/{driverId}/orders")
+    public Result<List<Order>> getDriverOrders(@PathVariable Long driverId,
+                                              @RequestParam(defaultValue = "1") int page,
+                                              @RequestParam(defaultValue = "20") int size,
+                                              @RequestParam(required = false) String status) {
+        try {
+            System.out.println("=== 获取司机历史订单 ===");
+            System.out.println("司机ID: " + driverId);
+            System.out.println("页码: " + page + ", 大小: " + size);
+            System.out.println("状态筛选: " + status);
+            
+            // 计算偏移量
+            int offset = (page - 1) * size;
+            
+            List<Order> orders;
+            if (status != null && !status.isEmpty()) {
+                orders = orderMapper.selectDriverOrdersByStatus(driverId, status, offset, size);
+            } else {
+                orders = orderMapper.selectDriverOrders(driverId, offset, size);
+            }
+            
+            System.out.println("查询到 " + orders.size() + " 条订单记录");
+            
+            return Result.success(orders);
+        } catch (Exception e) {
+            System.err.println("获取司机订单失败: " + e.getMessage());
+            e.printStackTrace();
+            return Result.error("获取订单列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 获取司机可接的预约单列表
      */
     @GetMapping("/{driverId}/scheduled-orders")
@@ -534,6 +584,83 @@ public class DriverController {
             
         } catch (Exception e) {
             return Result.error("检查失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取司机收入统计
+     */
+    @GetMapping("/{driverId}/earnings")
+    public Result<Map<String, Object>> getDriverEarnings(
+            @PathVariable Long driverId,
+            @RequestParam String month,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        try {
+            Map<String, Object> result = new HashMap<>();
+            
+            // 获取月度收入汇总
+            Map<String, Object> summary = orderMapper.selectDriverEarningsSummary(driverId, month);
+            if (summary == null) {
+                summary = Map.of(
+                    "totalEarnings", 0.0,
+                    "totalOrders", 0,
+                    "averageEarnings", 0.0,
+                    "totalDistance", 0.0
+                );
+            }
+            
+            // 获取每日收入记录
+            int offset = (page - 1) * size;
+            List<Map<String, Object>> records = orderMapper.selectDriverDailyEarnings(driverId, month, offset, size);
+            int total = orderMapper.countDriverDailyEarnings(driverId, month);
+            
+            result.put("summary", summary);
+            result.put("records", records);
+            result.put("total", total);
+            result.put("page", page);
+            result.put("size", size);
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            return Result.error("获取收入统计失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取司机收入图表数据
+     */
+    @GetMapping("/{driverId}/earnings/chart")
+    public Result<Map<String, Object>> getDriverEarningsChart(
+            @PathVariable Long driverId,
+            @RequestParam String month,
+            @RequestParam(defaultValue = "daily") String type) {
+        
+        try {
+            Map<String, Object> result = new HashMap<>();
+            List<Map<String, Object>> chartData;
+            
+            if ("weekly".equals(type)) {
+                chartData = orderMapper.selectDriverWeeklyEarnings(driverId, month);
+            } else {
+                chartData = orderMapper.selectDriverDailyEarningsChart(driverId, month);
+            }
+            
+            List<String> dates = new java.util.ArrayList<>();
+            List<Double> earnings = new java.util.ArrayList<>();
+            
+            for (Map<String, Object> data : chartData) {
+                dates.add(data.get("date").toString());
+                earnings.add(((Number) data.get("earnings")).doubleValue());
+            }
+            
+            result.put("dates", dates);
+            result.put("earnings", earnings);
+            
+            return Result.success(result);
+        } catch (Exception e) {
+            return Result.error("获取图表数据失败: " + e.getMessage());
         }
     }
 }

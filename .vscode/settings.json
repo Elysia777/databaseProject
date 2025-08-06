@@ -20,5 +20,6 @@
   "typescript.suggest.completeFunctionCalls": false,
   "typescript.inlayHints.parameterNames.enabled": "none",
   "typescript.inlayHints.variableTypes.enabled": false,
-  "typescript.inlayHints.functionLikeReturnTypes.enabled": false
+  "typescript.inlayHints.functionLikeReturnTypes.enabled": false,
+  "html.autoClosingTags": false
 }

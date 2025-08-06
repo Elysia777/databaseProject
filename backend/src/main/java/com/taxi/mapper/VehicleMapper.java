@@ -1,4 +1,4 @@
- package com.taxi.mapper;
+package com.taxi.mapper;
 
 import com.taxi.entity.Vehicle;
 import org.apache.ibatis.annotations.Mapper;
@@ -7,32 +7,35 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * 车辆Mapper接口
+ * 车辆数据访问层
  */
 @Mapper
 public interface VehicleMapper {
 
     /** 根据ID查询车辆 */
-    Vehicle selectById(@Param("id") Long id);
+    Vehicle selectById(Long id);
 
-    /** 根据司机ID查询车辆 */
-    Vehicle selectByDriverId(@Param("driverId") Long driverId);
+    /** 根据司机ID查询车辆列表 */
+    List<Vehicle> selectByDriverId(Long driverId);
+
+    /** 根据司机ID查询激活的车辆 */
+    Vehicle selectActiveByDriverId(Long driverId);
 
     /** 根据车牌号查询车辆 */
-    Vehicle selectByPlateNumber(@Param("plateNumber") String plateNumber);
+    Vehicle selectByPlateNumber(String plateNumber);
 
     /** 插入车辆 */
     int insert(Vehicle vehicle);
 
-    /** 更新车辆 */
+    /** 根据ID更新车辆 */
     int updateById(Vehicle vehicle);
 
-    /** 删除车辆 */
-    int deleteById(@Param("id") Long id);
+    /** 根据ID删除车辆 */
+    int deleteById(Long id);
 
-    /** 查询所有车辆 */
-    List<Vehicle> selectAll();
+    /** 设置司机的激活车辆 */
+    int setActiveVehicle(@Param("driverId") Long driverId, @Param("vehicleId") Long vehicleId);
 
-    /** 查询正常状态的车辆 */
-    List<Vehicle> selectActiveVehicles();
+    /** 取消司机所有车辆的激活状态 */
+    int deactivateAllByDriverId(Long driverId);
 }

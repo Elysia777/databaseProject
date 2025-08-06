@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简化车辆管理测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .vehicle-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+        .vehicle-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .vehicle-card.active {
+            border-color: #67c23a;
+            background: #f0f9ff;
+        }
+        .vehicle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .vehicle-main-info {
+            flex: 1;
+        }
+        .plate-number-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .plate-number {
+            font-weight: 700;
+            color: #1f2937;
+            font-size: 20px;
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 2px solid #d1d5db;
+            letter-spacing: 1px;
+        }
+        .vehicle-basic-info {
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .vehicle-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .vehicle-details {
+            display: flex;
+            gap: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+        }
+        .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="test-container">
+            <h1 style="text-align: center; color: #333; margin-bottom: 30px;">简化车辆管理测试</h1>
+            
+            <!-- 登录区域 -->
+            <div style="margin-bottom: 30px; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <h3>司机登录</h3>
+                <el-form :model="loginForm" inline>
+                    <el-form-item label="用户名">
+                        <el-input v-model="loginForm.username" placeholder="driver1"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码">
+                        <el-input v-model="loginForm.password" type="password" placeholder="123456"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="login" :loading="loginLoading">登录</el-button>
+                    </el-form-item>
+                </el-form>
+                <div v-if="loginMessage" style="margin-top: 10px;">
+                    <el-alert :title="loginMessage" :type="loginSuccess ? 'success' : 'error'" show-icon />
+                </div>
+            </div>
+
+            <!-- 车辆管理区域 -->
+            <div style="margin-bottom: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>我的车辆</h3>
+                    <div style="display: flex; gap: 12px;">
+                        <el-button type="primary" @click="showAddDialog">
+                            <el-icon><Plus /></el-icon>
+                            添加车辆
+                        </el-button>
+                        <el-button @click="loadVehicles" :loading="loading">
+                            <el-icon><Refresh /></el-icon>
+                            刷新
+                        </el-button>
+                    </div>
+                </div>
+
+                <div v-if="loading" style="text-align: center; padding: 40px;">
+                    <el-icon class="is-loading" style="font-size: 32px;"><Loading /></el-icon>
+                    <div style="margin-top: 10px;">加载中...</div>
+                </div>
+
+                <div v-else-if="vehicles.length === 0" style="text-align: center; padding: 40px;">
+                    <el-empty description="暂无车辆信息">
+                        <el-button type="primary" @click="showAddDialog">添加第一辆车</el-button>
+                    </el-empty>
+                </div>
+
+                <div v-else>
+                    <div v-for="vehicle in vehicles" :key="vehicle.id" class="vehicle-card" :class="{ active: vehicle.isActive }">
+                        <div class="vehicle-header">
+                            <div class="vehicle-main-info">
+                                <div class="plate-number-section">
+                                    <span class="plate-number">{{ vehicle.plateNumber }}</span>
+                                    <el-tag v-if="vehicle.isActive" type="success" size="small">
+                                        <el-icon><Check /></el-icon>
+                                        当前使用
+                                    </el-tag>
+                                </div>
+                                <div class="vehicle-basic-info">
+                                    {{ vehicle.brand }} {{ vehicle.model }} · {{ vehicle.color }} · {{ vehicle.year }}年
+                                </div>
+                            </div>
+                            <div class="vehicle-actions">
+                                <el-button 
+                                    v-if="!vehicle.isActive" 
+                                    type="primary" 
+                                    size="small" 
+                                    @click="setActiveVehicle(vehicle.id)"
+                                    :loading="actionLoading === vehicle.id"
+                                >
+                                    设为当前
+                                </el-button>
+                                <el-button 
+                                    type="primary" 
+                                    size="small" 
+                                    @click="editVehicle(vehicle)"
+                                    plain
+                                >
+                                    <el-icon><Edit /></el-icon>
+                                </el-button>
+                                <el-button 
+                                    type="danger" 
+                                    size="small" 
+                                    @click="deleteVehicle(vehicle.id)" 
+                                    :disabled="vehicle.isActive"
+                                    plain
+                                >
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </div>
+                        </div>
+
+                        <div class="vehicle-details">
+                            <div class="detail-item">
+                                <el-icon><User /></el-icon>
+                                <span>{{ vehicle.seats }}座</span>
+                            </div>
+                            <div class="detail-item">
+                                <el-icon><Setting /></el-icon>
+                                <span>{{ getVehicleTypeText(vehicle.vehicleType) }}</span>
+                            </div>
+                            <div class="detail-item">
+                                <el-icon><Lightning /></el-icon>
+                                <span>{{ getFuelTypeText(vehicle.fuelType) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 添加车辆对话框 -->
+            <el-dialog
+                title="添加车辆"
+                v-model="dialogVisible"
+                width="500px"
+                @close="resetForm"
+            >
+                <el-form :model="vehicleForm" :rules="formRules" ref="formRef" label-width="80px">
+                    <el-form-item label="车牌号" prop="plateNumber">
+                        <el-input v-model="vehicleForm.plateNumber" placeholder="如：京A12345" />
+                    </el-form-item>
+                    
+                    <el-row :gutter="20">
+                        <el-col :span="12">
+                            <el-form-item label="品牌" prop="brand">
+                                <el-input v-model="vehicleForm.brand" placeholder="如：丰田" />
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-form-item label="型号" prop="model">
+                                <el-input v-model="vehicleForm.model" placeholder="如：凯美瑞" />
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+
+                    <el-row :gutter="20">
+                        <el-col :span="12">
+                            <el-form-item label="颜色" prop="color">
+                                <el-select v-model="vehicleForm.color" placeholder="选择颜色">
+                                    <el-option label="白色" value="白色" />
+                                    <el-option label="黑色" value="黑色" />
+                                    <el-option label="银色" value="银色" />
+                                    <el-option label="红色" value="红色" />
+                                </el-select>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-form-item label="年份" prop="year">
+                                <el-date-picker
+                                    v-model="vehicleForm.year"
+                                    type="year"
+                                    placeholder="选择年份"
+                                    value-format="YYYY"
+                                />
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+                </el-form>
+
+                <template #footer>
+                    <span class="dialog-footer">
+                        <el-button @click="dialogVisible = false">取消</el-button>
+                        <el-button type="primary" @click="submitForm" :loading="submitLoading">
+                            添加
+                        </el-button>
+                    </span>
+                </template>
+            </el-dialog>
+
+            <!-- 测试状态 -->
+            <div style="margin-top: 30px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
+                <h3 style="color: #0c4a6e; margin-bottom: 15px;">测试状态</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <div style="color: #0c4a6e;">
+                        <strong>登录状态:</strong> {{ loginSuccess ? '✅ 已登录' : '❌ 未登录' }}
+                    </div>
+                    <div style="color: #0c4a6e;">
+                        <strong>车辆数量:</strong> {{ vehicles.length }} 辆
+                    </div>
+                    <div style="color: #0c4a6e;">
+                        <strong>当前车辆:</strong> {{ currentVehicle?.plateNumber || '无' }}
+                    </div>
+                    <div style="color: #0c4a6e;">
+                        <strong>界面状态:</strong> ✅ 简洁美观
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+        
+        // 导入图标
+        const { Plus, Refresh, Edit, Delete, Loading, Check, User, Setting, Lightning } = ElementPlusIconsVue;
+
+        createApp({
+            components: {
+                Plus, Refresh, Edit, Delete, Loading, Check, User, Setting, Lightning
+            },
+            setup() {
+                // 登录相关
+                const loginForm = reactive({
+                    username: 'driver1',
+                    password: '123456'
+                });
+                const loginLoading = ref(false);
+                const loginSuccess = ref(false);
+                const loginMessage = ref('');
+                const token = ref(localStorage.getItem('token'));
+
+                // 车辆相关
+                const vehicles = ref([]);
+                const loading = ref(false);
+                const actionLoading = ref(null);
+                const dialogVisible = ref(false);
+                const submitLoading = ref(false);
+                const formRef = ref();
+
+                // 表单数据
+                const vehicleForm = reactive({
+                    plateNumber: '',
+                    brand: '',
+                    model: '',
+                    color: '',
+                    year: new Date().getFullYear(),
+                    seats: 5,
+                    vehicleType: 'COMFORT',
+                    fuelType: 'GASOLINE'
+                });
+
+                // 表单验证规则
+                const formRules = {
+                    plateNumber: [
+                        { required: true, message: '请输入车牌号', trigger: 'blur' }
+                    ],
+                    brand: [
+                        { required: true, message: '请输入品牌', trigger: 'blur' }
+                    ],
+                    model: [
+                        { required: true, message: '请输入型号', trigger: 'blur' }
+                    ],
+                    color: [
+                        { required: true, message: '请选择颜色', trigger: 'change' }
+                    ]
+                };
+
+                // 计算属性
+                const currentVehicle = computed(() => {
+                    return vehicles.value.find(v => v.isActive);
+                });
+
+                // 登录
+                const login = async () => {
+                    loginLoading.value = true;
+                    loginMessage.value = '';
+
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(loginForm)
+                        });
+
+                        const result = await response.json();
+
+                        if (result.code === 200) {
+                            token.value = result.data.token;
+                            localStorage.setItem('token', token.value);
+                            loginSuccess.value = true;
+                            loginMessage.value = `登录成功！用户类型: ${result.data.userType}`;
+                            // 自动加载车辆列表
+                            loadVehicles();
+                        } else {
+                            loginSuccess.value = false;
+                            loginMessage.value = `登录失败: ${result.message}`;
+                        }
+                    } catch (error) {
+                        loginSuccess.value = false;
+                        loginMessage.value = `网络错误: ${error.message}`;
+                    } finally {
+                        loginLoading.value = false;
+                    }
+                };
+
+                // 加载车辆列表
+                const loadVehicles = async () => {
+                    loading.value = true;
+                    try {
+                        if (!token.value) {
+                            // 模拟数据
+                            vehicles.value = [
+                                {
+                                    id: 1,
+                                    plateNumber: '京A12345',
+                                    brand: '丰田',
+                                    model: '凯美瑞',
+                                    color: '白色',
+                                    year: 2022,
+                                    seats: 5,
+                                    vehicleType: 'COMFORT',
+                                    fuelType: 'GASOLINE',
+                                    isActive: true
+                                },
+                                {
+                                    id: 2,
+                                    plateNumber: '京B67890',
+                                    brand: '本田',
+                                    model: '雅阁',
+                                    color: '黑色',
+                                    year: 2021,
+                                    seats: 5,
+                                    vehicleType: 'ECONOMY',
+                                    fuelType: 'GASOLINE',
+                                    isActive: false
+                                }
+                            ];
+                            return;
+                        }
+
+                        const response = await fetch('/api/vehicles/driver/1', {
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`
+                            }
+                        });
+
+                        const result = await response.json();
+                        
+                        if (result.code === 200) {
+                            vehicles.value = result.data || [];
+                        } else {
+                            ElMessage.error(result.message || '加载车辆列表失败');
+                        }
+                    } catch (error) {
+                        console.error('加载车辆列表失败:', error);
+                        ElMessage.error('网络错误，请稍后重试');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // 显示添加对话框
+                const showAddDialog = () => {
+                    resetForm();
+                    dialogVisible.value = true;
+                };
+
+                // 重置表单
+                const resetForm = () => {
+                    Object.assign(vehicleForm, {
+                        plateNumber: '',
+                        brand: '',
+                        model: '',
+                        color: '',
+                        year: new Date().getFullYear(),
+                        seats: 5,
+                        vehicleType: 'COMFORT',
+                        fuelType: 'GASOLINE'
+                    });
+                    if (formRef.value) {
+                        formRef.value.resetFields();
+                    }
+                };
+
+                // 提交表单
+                const submitForm = async () => {
+                    if (!formRef.value) return;
+                    
+                    try {
+                        await formRef.value.validate();
+                    } catch (error) {
+                        return;
+                    }
+
+                    submitLoading.value = true;
+                    try {
+                        // 模拟添加成功
+                        const newVehicle = {
+                            id: Date.now(),
+                            ...vehicleForm,
+                            year: parseInt(vehicleForm.year),
+                            isActive: vehicles.value.length === 0
+                        };
+                        
+                        vehicles.value.push(newVehicle);
+                        ElMessage.success('车辆添加成功');
+                        dialogVisible.value = false;
+                    } catch (error) {
+                        ElMessage.error('添加失败');
+                    } finally {
+                        submitLoading.value = false;
+                    }
+                };
+
+                // 设置激活车辆
+                const setActiveVehicle = async (vehicleId) => {
+                    actionLoading.value = vehicleId;
+                    try {
+                        // 模拟设置成功
+                        vehicles.value.forEach(v => {
+                            v.isActive = v.id === vehicleId;
+                        });
+                        ElMessage.success('已设置为当前车辆');
+                    } catch (error) {
+                        ElMessage.error('设置失败');
+                    } finally {
+                        actionLoading.value = null;
+                    }
+                };
+
+                // 编辑车辆
+                const editVehicle = (vehicle) => {
+                    ElMessage.info('编辑功能开发中...');
+                };
+
+                // 删除车辆
+                const deleteVehicle = async (vehicleId) => {
+                    try {
+                        await ElMessageBox.confirm('确定要删除这辆车吗？', '提示', {
+                            confirmButtonText: '确定',
+                            cancelButtonText: '取消',
+                            type: 'warning'
+                        });
+
+                        // 模拟删除成功
+                        const index = vehicles.value.findIndex(v => v.id === vehicleId);
+                        if (index > -1) {
+                            vehicles.value.splice(index, 1);
+                            ElMessage.success('车辆删除成功');
+                        }
+                    } catch (error) {
+                        // 用户取消
+                    }
+                };
+
+                // 辅助方法
+                const getVehicleTypeText = (type) => {
+                    const typeMap = {
+                        'ECONOMY': '经济型',
+                        'COMFORT': '舒适型',
+                        'PREMIUM': '高级型',
+                        'LUXURY': '豪华型'
+                    };
+                    return typeMap[type] || type;
+                };
+
+                const getFuelTypeText = (type) => {
+                    const typeMap = {
+                        'GASOLINE': '汽油',
+                        'DIESEL': '柴油',
+                        'ELECTRIC': '电动',
+                        'HYBRID': '混动'
+                    };
+                    return typeMap[type] || type;
+                };
+
+                // 初始化
+                if (token.value) {
+                    loginSuccess.value = true;
+                    loginMessage.value = '已有登录状态';
+                    loadVehicles();
+                }
+
+                return {
+                    loginForm,
+                    loginLoading,
+                    loginSuccess,
+                    loginMessage,
+                    vehicles,
+                    loading,
+                    actionLoading,
+                    dialogVisible,
+                    submitLoading,
+                    formRef,
+                    vehicleForm,
+                    formRules,
+                    currentVehicle,
+                    login,
+                    loadVehicles,
+                    showAddDialog,
+                    resetForm,
+                    submitForm,
+                    setActiveVehicle,
+                    editVehicle,
+                    deleteVehicle,
+                    getVehicleTypeText,
+                    getFuelTypeText
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

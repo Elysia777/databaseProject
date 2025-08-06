@@ -59,4 +59,46 @@ public interface OrderMapper {
     /** 查询已激活的预约单（司机端） */
     List<Order> selectActivatedScheduledOrders(@Param("startTime") LocalDateTime startTime, 
                                               @Param("endTime") LocalDateTime endTime);
+    
+    /** 查询司机的历史订单（分页） */
+    List<Order> selectDriverOrders(@Param("driverId") Long driverId, 
+                                  @Param("offset") int offset, 
+                                  @Param("size") int size);
+    
+    /** 按状态查询司机的订单（分页） */
+    List<Order> selectDriverOrdersByStatus(@Param("driverId") Long driverId, 
+                                          @Param("status") String status,
+                                          @Param("offset") int offset, 
+                                          @Param("size") int size);
+    
+    /** 统计司机订单数量 */
+    int countDriverOrders(@Param("driverId") Long driverId, @Param("status") String status);
+    
+    /** 查询订单详情（包含司机车辆信息） */
+    java.util.Map<String, Object> selectOrderWithDriverVehicle(@Param("orderId") Long orderId);
+    
+    /** 获取司机月度收入汇总 */
+    java.util.Map<String, Object> selectDriverMonthlySummary(@Param("driverId") Long driverId, 
+                                                             @Param("month") String month);
+    
+    /** 获取司机收入汇总统计 */
+    java.util.Map<String, Object> selectDriverEarningsSummary(@Param("driverId") Long driverId, 
+                                                              @Param("month") String month);
+    
+    /** 获取司机每日收入记录 */
+    List<java.util.Map<String, Object>> selectDriverDailyEarnings(@Param("driverId") Long driverId, 
+                                                                  @Param("month") String month,
+                                                                  @Param("offset") int offset, 
+                                                                  @Param("size") int size);
+    
+    /** 统计司机每日收入记录数量 */
+    int countDriverDailyEarnings(@Param("driverId") Long driverId, @Param("month") String month);
+    
+    /** 获取司机每日收入图表数据 */
+    List<java.util.Map<String, Object>> selectDriverDailyEarningsChart(@Param("driverId") Long driverId, 
+                                                                       @Param("month") String month);
+    
+    /** 获取司机每周收入图表数据 */
+    List<java.util.Map<String, Object>> selectDriverWeeklyEarnings(@Param("driverId") Long driverId, 
+                                                                   @Param("month") String month);
 }

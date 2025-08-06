@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库车辆数据调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        .result-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status-good {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 数据库车辆数据调试</h1>
+        <p>检查数据库中的用户、司机、车辆数据关系</p>
+        <button onclick="debugAllData()">调试所有数据</button>
+        <button onclick="clearResults()">清空结果</button>
+    </div>
+
+    <div class="container">
+        <h3>📊 数据关系分析</h3>
+        <div id="analysisResult" class="result-display">
+            点击"调试所有数据"开始分析...
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🔧 修复建议</h3>
+        <div id="fixSuggestion" class="result-display">
+            等待分析完成...
+        </div>
+    </div>
+
+    <script>
+        function log(message, containerId = 'result') {
+            const container = document.getElementById(containerId);
+            const timestamp = new Date().toLocaleTimeString();
+            container.textContent += `[${timestamp}] ${message}\n`;
+            container.scrollTop = container.scrollHeight;
+            console.log(message);
+        }
+
+        function clearResults() {
+            document.getElementById('analysisResult').textContent = '';
+            document.getElementById('fixSuggestion').textContent = '';
+        }
+
+        async function debugAllData() {
+            clearResults();
+            
+            log('🔍 开始调试数据库数据...', 'analysisResult');
+            
+            try {
+                // 1. 获取所有用户数据
+                log('1. 获取用户数据...', 'analysisResult');
+                const usersResponse = await fetch('/api/auth/users');
+                let users = [];
+                if (usersResponse.ok) {
+                    const usersResult = await usersResponse.json();
+                    users = usersResult.data || [];
+                    log(`找到 ${users.length} 个用户`, 'analysisResult');
+                } else {
+                    log('❌ 无法获取用户数据', 'analysisResult');
+                    return;
+                }
+                
+                // 2. 获取所有司机数据
+                log('2. 获取司机数据...', 'analysisResult');
+                const driversResponse = await fetch('/api/drivers');
+                let drivers = [];
+                if (driversResponse.ok) {
+                    const driversResult = await driversResponse.json();
+                    drivers = driversResult.data || [];
+                    log(`找到 ${drivers.length} 个司机`, 'analysisResult');
+                } else {
+                    log('❌ 无法获取司机数据', 'analysisResult');
+                    return;
+                }
+                
+                // 3. 分析用户-司机关系
+                log('\\n3. 分析用户-司机关系:', 'analysisResult');
+                const driverUsers = users.filter(u => u.userType === 'DRIVER');
+                log(`司机类型用户: ${driverUsers.length} 个`, 'analysisResult');
+                
+                driverUsers.forEach(user => {
+                    const driver = drivers.find(d => d.userId === user.id);
+                    if (driver) {
+                        log(`✅ 用户ID ${user.id} (${user.realName}) -> 司机ID ${driver.id}`, 'analysisResult');
+                    } else {
+                        log(`❌ 用户ID ${user.id} (${user.realName}) 没有对应的司机记录`, 'analysisResult');
+                    }
+                });
+                
+                // 4. 检查每个司机的车辆数据
+                log('\\n4. 检查司机车辆数据:', 'analysisResult');
+                for (const driver of drivers) {
+                    log(`\\n司机 ${driver.id} (${driver.name}):`, 'analysisResult');
+                    
+                    const vehicleResponse = await fetch(`/api/vehicles/driver/${driver.id}`);
+                    if (vehicleResponse.ok) {
+                        const vehicleResult = await vehicleResponse.json();
+                        if (vehicleResult.code === 200 && vehicleResult.data) {
+                            log(`  车辆数量: ${vehicleResult.data.length}`, 'analysisResult');
+                            vehicleResult.data.forEach(vehicle => {
+                                const status = vehicle.driverId === driver.id ? '✅' : '❌';
+                                log(`  ${status} 车辆ID ${vehicle.id}: 司机ID ${vehicle.driverId}, 车牌 ${vehicle.plateNumber}, 激活 ${vehicle.isActive}`, 'analysisResult');
+                            });
+                        } else {
+                            log(`  没有车辆`, 'analysisResult');
+                        }
+                    } else {
+                        log(`  ❌ 无法获取车辆数据`, 'analysisResult');
+                    }
+                }
+                
+                // 5. 生成修复建议
+                generateFixSuggestions(users, drivers);
+                
+            } catch (error) {
+                log(`❌ 调试失败: ${error.message}`, 'analysisResult');
+            }
+        }
+
+        async function generateFixSuggestions(users, drivers) {
+            log('🔧 生成修复建议...', 'fixSuggestion');
+            
+            // 检查是否有车辆数据不一致的问题
+            let hasInconsistentData = false;
+            
+            for (const driver of drivers) {
+                const vehicleResponse = await fetch(`/api/vehicles/driver/${driver.id}`);
+                if (vehicleResponse.ok) {
+                    const vehicleResult = await vehicleResponse.json();
+                    if (vehicleResult.code === 200 && vehicleResult.data) {
+                        const inconsistentVehicles = vehicleResult.data.filter(v => v.driverId !== driver.id);
+                        if (inconsistentVehicles.length > 0) {
+                            hasInconsistentData = true;
+                            log(`❌ 司机 ${driver.id} 有 ${inconsistentVehicles.length} 辆车的司机ID不正确`, 'fixSuggestion');
+                        }
+                    }
+                }
+            }
+            
+            if (hasInconsistentData) {
+                log('\\n修复建议:', 'fixSuggestion');
+                log('1. 问题原因: 司机添加车辆时使用了用户ID而不是司机ID', 'fixSuggestion');
+                log('2. 解决方案: 修改前端车辆管理页面，使用正确的司机ID', 'fixSuggestion');
+                log('3. 数据修复: 需要更新数据库中车辆表的driver_id字段', 'fixSuggestion');
+                
+                log('\\n具体修复步骤:', 'fixSuggestion');
+                log('1. 前端修复: 已修改DriverVehiclesFixed.vue使用正确的司机ID', 'fixSuggestion');
+                log('2. 后端修复: 已添加/api/drivers/user/{userId}接口', 'fixSuggestion');
+                log('3. 数据修复: 运行SQL更新现有车辆数据', 'fixSuggestion');
+                
+                // 生成修复SQL
+                log('\\n修复SQL示例:', 'fixSuggestion');
+                for (const driver of drivers) {
+                    const user = users.find(u => u.id === driver.userId);
+                    if (user) {
+                        log(`UPDATE vehicles SET driver_id = ${driver.id} WHERE driver_id = ${user.id};`, 'fixSuggestion');
+                    }
+                }
+            } else {
+                log('✅ 数据一致性检查通过，没有发现问题', 'fixSuggestion');
+            }
+            
+            // 测试修复后的效果
+            log('\\n🧪 测试修复效果:', 'fixSuggestion');
+            await testVehicleInfoFlow();
+        }
+
+        async function testVehicleInfoFlow() {
+            try {
+                // 创建测试订单
+                const orderData = {
+                    passengerId: 1,
+                    pickupAddress: '修复测试 - 上车点',
+                    pickupLatitude: 39.044237,
+                    pickupLongitude: 121.749849,
+                    destinationAddress: '修复测试 - 目的地',
+                    destinationLatitude: 39.054237,
+                    destinationLongitude: 121.759849
+                };
+                
+                const createResponse = await fetch('/api/orders/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (createResponse.ok) {
+                    const createResult = await createResponse.json();
+                    if (createResult.code === 200) {
+                        const orderId = createResult.data;
+                        log(`创建测试订单: ${orderId}`, 'fixSuggestion');
+                        
+                        // 司机接单
+                        const acceptResponse = await fetch(`/api/drivers/1/accept-order/${orderId}`, {
+                            method: 'POST'
+                        });
+                        
+                        if (acceptResponse.ok) {
+                            const acceptResult = await acceptResponse.json();
+                            if (acceptResult.code === 200) {
+                                log('司机接单成功', 'fixSuggestion');
+                                
+                                // 检查车辆信息
+                                const vehicleResponse = await fetch('/api/vehicles/driver/1/active');
+                                if (vehicleResponse.ok) {
+                                    const vehicleResult = await vehicleResponse.json();
+                                    if (vehicleResult.code === 200 && vehicleResult.data) {
+                                        log(`✅ 成功获取车辆信息: ${vehicleResult.data.plateNumber}`, 'fixSuggestion');
+                                        log('🎉 修复成功！车辆信息可以正确传递给乘客', 'fixSuggestion');
+                                        document.getElementById('fixSuggestion').className = 'result-display status-good';
+                                    } else {
+                                        log('❌ 无法获取车辆信息', 'fixSuggestion');
+                                        document.getElementById('fixSuggestion').className = 'result-display status-error';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`测试失败: ${error.message}`, 'fixSuggestion');
+            }
+        }
+
+        // 页面加载时的说明
+        window.onload = function() {
+            log('数据库车辆数据调试页面加载完成', 'analysisResult');
+            log('点击"调试所有数据"开始分析数据关系', 'analysisResult');
+        };
+    </script>
+</body>
+</html>

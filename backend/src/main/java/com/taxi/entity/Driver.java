@@ -44,6 +44,9 @@ public class Driver {
     
     /** 车辆信息 */
     private String vehicleInfo;
+    
+    /** 车牌号 */
+    private String licensePlate;
 
     /** 驾龄(年) */
     private Integer drivingYears;

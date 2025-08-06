@@ -3,6 +3,8 @@ package com.taxi.service;
 import com.taxi.entity.Order;
 import com.taxi.entity.Driver;
 import com.taxi.entity.User;
+import com.taxi.entity.Vehicle;
+import com.taxi.mapper.VehicleMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,9 @@ public class WebSocketNotificationService {
     
     @Autowired
     private DriverRedisService driverRedisService;
+    
+    @Autowired
+    private VehicleMapper vehicleMapper;
 
     /**
      * 通知司机有新订单
@@ -188,8 +193,31 @@ public class WebSocketNotificationService {
             
             // 从Driver表获取专业信息
             driverInfo.put("rating", driver.getRating() != null ? driver.getRating() : BigDecimal.valueOf(5.0));
-            driverInfo.put("vehicleInfo", "车牌号"); // 暂时使用默认值
-            driverInfo.put("carModel", "车辆信息"); // 暂时使用默认值
+            
+            // 获取司机的激活车辆信息
+            Vehicle activeVehicle = vehicleMapper.selectActiveByDriverId(driver.getId());
+            if (activeVehicle != null) {
+                driverInfo.put("plateNumber", activeVehicle.getPlateNumber());
+                driverInfo.put("vehicleBrand", activeVehicle.getBrand());
+                driverInfo.put("vehicleModel", activeVehicle.getModel());
+                driverInfo.put("vehicleColor", activeVehicle.getColor());
+                driverInfo.put("vehicleType", activeVehicle.getVehicleType());
+                driverInfo.put("vehicleYear", activeVehicle.getYear());
+                driverInfo.put("vehicleSeats", activeVehicle.getSeats());
+                driverInfo.put("vehicleInfo", activeVehicle.getBrand() + " " + activeVehicle.getModel() + " " + activeVehicle.getPlateNumber());
+                driverInfo.put("carModel", activeVehicle.getBrand() + " " + activeVehicle.getModel());
+            } else {
+                // 如果没有激活车辆，使用默认值
+                driverInfo.put("plateNumber", "暂无车牌");
+                driverInfo.put("vehicleBrand", "未知");
+                driverInfo.put("vehicleModel", "未知");
+                driverInfo.put("vehicleColor", "未知");
+                driverInfo.put("vehicleType", "ECONOMY");
+                driverInfo.put("vehicleYear", null);
+                driverInfo.put("vehicleSeats", 5);
+                driverInfo.put("vehicleInfo", "车辆信息暂无");
+                driverInfo.put("carModel", "车辆信息暂无");
+            }
             
             // 添加司机位置信息
             if (driverLocation != null) {

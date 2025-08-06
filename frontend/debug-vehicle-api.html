@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>车辆API调试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #1f2937;
+        }
+        .code-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .status-good {
+            color: #059669;
+            font-weight: bold;
+        }
+        .status-bad {
+            color: #dc2626;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1 style="text-align: center; color: #1f2937; margin-bottom: 40px;">🔧 车辆API调试</h1>
+            
+            <!-- 用户状态检查 -->
+            <div class="debug-section">
+                <h3>1. 用户状态检查</h3>
+                <div>
+                    <strong>Token:</strong> 
+                    <span :class="token ? 'status-good' : 'status-bad'">
+                        {{ token ? '✅ 已设置' : '❌ 未设置' }}
+                    </span>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>Token值:</strong>
+                    <div class="code-block">{{ token || '无' }}</div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>用户信息:</strong>
+                    <div class="code-block">{{ JSON.stringify(userInfo, null, 2) }}</div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>司机ID:</strong> 
+                    <span :class="driverId ? 'status-good' : 'status-bad'">
+                        {{ driverId || '未获取到' }}
+                    </span>
+                </div>
+                <el-button @click="checkUserStatus" type="primary">重新检查用户状态</el-button>
+            </div>
+
+            <!-- API测试 -->
+            <div class="debug-section">
+                <h3>2. API测试</h3>
+                <div style="margin-bottom: 15px;">
+                    <el-button @click="testGetVehicles" :loading="testLoading.get">测试获取车辆列表</el-button>
+                    <el-button @click="testAddVehicle" :loading="testLoading.add">测试添加车辆</el-button>
+                </div>
+                
+                <div v-if="apiResults.get">
+                    <h4>获取车辆列表结果:</h4>
+                    <div class="code-block">{{ JSON.stringify(apiResults.get, null, 2) }}</div>
+                </div>
+                
+                <div v-if="apiResults.add">
+                    <h4>添加车辆结果:</h4>
+                    <div class="code-block">{{ JSON.stringify(apiResults.add, null, 2) }}</div>
+                </div>
+            </div>
+
+            <!-- 登录测试 -->
+            <div class="debug-section">
+                <h3>3. 登录测试</h3>
+                <el-form :model="loginForm" inline>
+                    <el-form-item label="用户名">
+                        <el-input v-model="loginForm.username" placeholder="driver1"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码">
+                        <el-input v-model="loginForm.password" type="password" placeholder="123456"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="testLogin" :loading="testLoading.login">登录</el-button>
+                    </el-form-item>
+                </el-form>
+                
+                <div v-if="loginResult">
+                    <h4>登录结果:</h4>
+                    <div class="code-block">{{ JSON.stringify(loginResult, null, 2) }}</div>
+                </div>
+            </div>
+
+            <!-- 数据库检查 -->
+            <div class="debug-section">
+                <h3>4. 数据库数据检查</h3>
+                <el-button @click="checkDatabase" :loading="testLoading.db">检查数据库数据</el-button>
+                
+                <div v-if="dbResult">
+                    <h4>数据库检查结果:</h4>
+                    <div class="code-block">{{ JSON.stringify(dbResult, null, 2) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const token = ref(localStorage.getItem('token'));
+                const userInfo = ref(null);
+                const driverId = ref(null);
+                const testLoading = reactive({
+                    get: false,
+                    add: false,
+                    login: false,
+                    db: false
+                });
+                const apiResults = reactive({
+                    get: null,
+                    add: null
+                });
+                const loginForm = reactive({
+                    username: 'driver1',
+                    password: '123456'
+                });
+                const loginResult = ref(null);
+                const dbResult = ref(null);
+
+                // 检查用户状态
+                const checkUserStatus = async () => {
+                    try {
+                        // 尝试从localStorage获取用户信息
+                        const storedUser = localStorage.getItem('user');
+                        if (storedUser) {
+                            userInfo.value = JSON.parse(storedUser);
+                            if (userInfo.value.userType === 'DRIVER') {
+                                driverId.value = userInfo.value.id;
+                            }
+                        }
+
+                        // 如果有token，尝试获取用户信息
+                        if (token.value) {
+                            const response = await fetch('/api/auth/me', {
+                                headers: {
+                                    'Authorization': `Bearer ${token.value}`
+                                }
+                            });
+                            
+                            if (response.ok) {
+                                const result = await response.json();
+                                if (result.code === 200) {
+                                    userInfo.value = result.data;
+                                    if (result.data.userType === 'DRIVER') {
+                                        driverId.value = result.data.id;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('检查用户状态失败:', error);
+                    }
+                };
+
+                // 测试获取车辆列表
+                const testGetVehicles = async () => {
+                    testLoading.get = true;
+                    try {
+                        if (!token.value) {
+                            apiResults.get = { error: '没有token' };
+                            return;
+                        }
+
+                        if (!driverId.value) {
+                            apiResults.get = { error: '没有司机ID' };
+                            return;
+                        }
+
+                        const response = await fetch(`/api/vehicles/driver/${driverId.value}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        apiResults.get = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            data: result
+                        };
+                    } catch (error) {
+                        apiResults.get = { error: error.message };
+                    } finally {
+                        testLoading.get = false;
+                    }
+                };
+
+                // 测试添加车辆
+                const testAddVehicle = async () => {
+                    testLoading.add = true;
+                    try {
+                        if (!token.value) {
+                            apiResults.add = { error: '没有token' };
+                            return;
+                        }
+
+                        if (!driverId.value) {
+                            apiResults.add = { error: '没有司机ID' };
+                            return;
+                        }
+
+                        const testVehicle = {
+                            driverId: driverId.value,
+                            plateNumber: '测试' + Date.now(),
+                            brand: '测试品牌',
+                            model: '测试型号',
+                            color: '白色',
+                            year: 2023,
+                            seats: 5,
+                            vehicleType: 'COMFORT',
+                            fuelType: 'GASOLINE'
+                        };
+
+                        const response = await fetch('/api/vehicles', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(testVehicle)
+                        });
+
+                        const result = await response.json();
+                        apiResults.add = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            data: result
+                        };
+                    } catch (error) {
+                        apiResults.add = { error: error.message };
+                    } finally {
+                        testLoading.add = false;
+                    }
+                };
+
+                // 测试登录
+                const testLogin = async () => {
+                    testLoading.login = true;
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(loginForm)
+                        });
+
+                        const result = await response.json();
+                        loginResult.value = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            data: result
+                        };
+
+                        if (result.code === 200) {
+                            token.value = result.data.token;
+                            localStorage.setItem('token', token.value);
+                            localStorage.setItem('user', JSON.stringify(result.data));
+                            await checkUserStatus();
+                            ElMessage.success('登录成功');
+                        }
+                    } catch (error) {
+                        loginResult.value = { error: error.message };
+                    } finally {
+                        testLoading.login = false;
+                    }
+                };
+
+                // 检查数据库数据
+                const checkDatabase = async () => {
+                    testLoading.db = true;
+                    try {
+                        // 检查所有司机
+                        const driversResponse = await fetch('/api/drivers', {
+                            headers: token.value ? {
+                                'Authorization': `Bearer ${token.value}`
+                            } : {}
+                        });
+                        
+                        let driversData = null;
+                        if (driversResponse.ok) {
+                            driversData = await driversResponse.json();
+                        }
+
+                        // 检查所有车辆
+                        const vehiclesResponse = await fetch('/api/vehicles/all', {
+                            headers: token.value ? {
+                                'Authorization': `Bearer ${token.value}`
+                            } : {}
+                        });
+                        
+                        let vehiclesData = null;
+                        if (vehiclesResponse.ok) {
+                            vehiclesData = await vehiclesResponse.json();
+                        }
+
+                        dbResult.value = {
+                            drivers: driversData,
+                            vehicles: vehiclesData
+                        };
+                    } catch (error) {
+                        dbResult.value = { error: error.message };
+                    } finally {
+                        testLoading.db = false;
+                    }
+                };
+
+                // 页面加载时检查用户状态
+                onMounted(() => {
+                    checkUserStatus();
+                });
+
+                return {
+                    token,
+                    userInfo,
+                    driverId,
+                    testLoading,
+                    apiResults,
+                    loginForm,
+                    loginResult,
+                    dbResult,
+                    checkUserStatus,
+                    testGetVehicles,
+                    testAddVehicle,
+                    testLogin,
+                    checkDatabase
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

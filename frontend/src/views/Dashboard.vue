@@ -21,7 +21,7 @@
           <span>司机管理</span>
         </el-menu-item>
         
-        <el-menu-item index="/dashboard/vehicles">
+        <el-menu-item index="/dashboard/admin-vehicles">
           <el-icon><Van /></el-icon>
           <span>车辆管理</span>
         </el-menu-item>
@@ -62,9 +62,14 @@
             <span>我的订单</span>
           </el-menu-item>
           
-          <el-menu-item index="/dashboard/drivers">
-            <el-icon><User /></el-icon>
+          <el-menu-item index="/dashboard/earnings">
+            <el-icon><TrendCharts /></el-icon>
             <span>收入统计</span>
+          </el-menu-item>
+          
+          <el-menu-item index="/dashboard/vehicles">
+            <el-icon><Van /></el-icon>
+            <span>我的车辆</span>
           </el-menu-item>
         </template>
         
@@ -129,7 +134,7 @@ const pageTitleMap = computed(() => {
   if (userStore.isAdmin) {
     return {
       '/dashboard/drivers': '司机管理',
-      '/dashboard/vehicles': '车辆管理',
+      '/dashboard/admin-vehicles': '车辆管理',
       '/dashboard/complaints': '投诉处理',
       '/dashboard/statistics': '数据统计',
       '/dashboard/profile': '个人设置'
@@ -144,7 +149,8 @@ const pageTitleMap = computed(() => {
     return {
       '/dashboard/driver-map': '接单地图',
       '/dashboard/orders': '我的订单',
-      '/dashboard/drivers': '收入统计',
+      '/dashboard/earnings': '收入统计',
+      '/dashboard/vehicles': '我的车辆',
       '/dashboard/profile': '个人设置'
     }
   }

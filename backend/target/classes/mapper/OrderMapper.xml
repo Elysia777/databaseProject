@@ -121,6 +121,24 @@
         DELETE FROM orders WHERE id = #{id}
     </delete>
 
+    <!-- 查询司机的历史订单 -->
+    <select id="selectDriverOrders" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId}
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 按状态查询司机的订单 -->
+    <select id="selectDriverOrdersByStatus" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId} AND status = #{status}
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
     <select id="selectAll" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
@@ -185,6 +203,114 @@
         AND status = 'PENDING'
         AND scheduled_time BETWEEN #{startTime} AND #{endTime}
         ORDER BY scheduled_time ASC
+    </select>
+
+    <!-- 统计司机订单数量 -->
+    <select id="countDriverOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM orders
+        WHERE driver_id = #{driverId}
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <!-- 获取司机月度收入汇总 -->
+    <select id="selectDriverMonthlySummary" resultType="map">
+        SELECT 
+            COALESCE(SUM(total_fare), 0) as totalEarnings,
+            COUNT(*) as totalOrders,
+            COALESCE(AVG(total_fare), 0) as averageEarnings,
+            COALESCE(SUM(actual_distance), 0) as totalDistance
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+    </select>
+
+    <!-- 获取司机收入汇总统计 -->
+    <select id="selectDriverEarningsSummary" resultType="map">
+        SELECT 
+            COALESCE(SUM(total_fare), 0) as totalEarnings,
+            COUNT(*) as totalOrders,
+            COALESCE(AVG(total_fare), 0) as averageEarnings,
+            COALESCE(SUM(actual_distance), 0) as totalDistance
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+    </select>
+
+    <!-- 获取司机每日收入记录 -->
+    <select id="selectDriverDailyEarnings" resultType="map">
+        SELECT 
+            DATE(completion_time) as date,
+            COUNT(*) as orderCount,
+            COALESCE(SUM(actual_distance), 0) as totalDistance,
+            COALESCE(SUM(total_fare), 0) as totalEarnings,
+            COALESCE(AVG(total_fare), 0) as averageEarnings
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+        GROUP BY DATE(completion_time)
+        ORDER BY DATE(completion_time) DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 统计司机每日收入记录数量 -->
+    <select id="countDriverDailyEarnings" resultType="int">
+        SELECT COUNT(DISTINCT DATE(completion_time))
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+    </select>
+
+    <!-- 获取司机每日收入图表数据 -->
+    <select id="selectDriverDailyEarningsChart" resultType="map">
+        SELECT 
+            DATE_FORMAT(completion_time, '%m-%d') as date,
+            COALESCE(SUM(total_fare), 0) as earnings,
+            COUNT(*) as orderCount
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+        GROUP BY DATE(completion_time)
+        ORDER BY DATE(completion_time) ASC
+    </select>
+
+    <!-- 获取司机每周收入图表数据 -->
+    <select id="selectDriverWeeklyEarnings" resultType="map">
+        SELECT 
+            CONCAT('第', WEEK(completion_time, 1) - WEEK(DATE_SUB(completion_time, INTERVAL DAYOFMONTH(completion_time) - 1 DAY), 1) + 1, '周') as date,
+            COALESCE(SUM(total_fare), 0) as earnings,
+            COUNT(*) as orderCount
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND status = 'COMPLETED'
+        AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
+        GROUP BY WEEK(completion_time, 1)
+        ORDER BY WEEK(completion_time, 1) ASC
+    </select>
+
+    <!-- 查询订单详情（包含司机车辆信息） -->
+    <select id="selectOrderWithDriverVehicle" resultType="map">
+        SELECT 
+            o.*,
+            u.real_name as driverName,
+            u.phone as driverPhone,
+            v.plate_number as vehiclePlateNumber,
+            v.brand as vehicleBrand,
+            v.model as vehicleModel,
+            v.color as vehicleColor,
+            v.seats as vehicleSeats
+        FROM orders o
+        LEFT JOIN drivers d ON o.driver_id = d.id
+        LEFT JOIN users u ON d.user_id = u.id
+        LEFT JOIN vehicles v ON d.id = v.driver_id AND v.is_active = TRUE
+        WHERE o.id = #{orderId}
     </select>
 
 </mapper> 

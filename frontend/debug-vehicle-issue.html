@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>车辆问题调试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .code-block {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>🔧 车辆问题调试</h1>
+            
+            <!-- 用户状态检查 -->
+            <div class="debug-section">
+                <h3>1. 用户状态检查</h3>
+                <div>
+                    <strong>Token:</strong> 
+                    <span :class="token ? 'success' : 'error'">
+                        {{ token ? '✅ 存在' : '❌ 不存在' }}
+                    </span>
+                </div>
+                <div>
+                    <strong>用户信息:</strong>
+                    <div class="code-block">{{ userInfo ? JSON.stringify(userInfo, null, 2) : '无' }}</div>
+                </div>
+                <div>
+                    <strong>司机ID:</strong> 
+                    <span :class="driverId ? 'success' : 'error'>
+                        {{ driverId || '未获取到' }}
+                    </span>
+                </div>
+                
+                <el-button @click="login" type="primary" :loading="loginLoading">重新登录</el-button>
+            </div>
+
+            <!-- API测试 -->
+            <div class="debug-section">
+                <h3>2. API连接测试</h3>
+                <div style="margin-bottom: 10px;">
+                    <el-button @click="testGetVehicles" :loading="testLoading.get">测试获取车辆</el-button>
+                    <el-button @click="testAddVehicle" :loading="testLoading.add">测试添加车辆</el-button>
+                    <el-button @click="testBackendConnection" :loading="testLoading.backend">测试后端连接</el-button>
+                </div>
+                
+                <div v-if="apiResults.length > 0">
+                    <h4>API测试结果:</h4>
+                    <div v-for="(result, index) in apiResults" :key="index" class="code-block">
+                        <strong>{{ result.action }}:</strong><br>
+                        {{ JSON.stringify(result.data, null, 2) }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 网络请求监控 -->
+            <div class="debug-section">
+                <h3>3. 网络请求监控</h3>
+                <div v-if="networkLogs.length > 0">
+                    <div v-for="(log, index) in networkLogs" :key="index" class="code-block">
+                        <strong>{{ log.method }} {{ log.url }}</strong><br>
+                        状态: {{ log.status }}<br>
+                        响应: {{ JSON.stringify(log.response, null, 2) }}
+                    </div>
+                </div>
+                <div v-else>
+                    暂无网络请求记录
+                </div>
+            </div>
+
+            <!-- 数据库检查 -->
+            <div class="debug-section">
+                <h3>4. 数据库数据检查</h3>
+                <el-button @click="checkDatabase" :loading="testLoading.db">检查数据库</el-button>
+                
+                <div v-if="dbData">
+                    <h4>数据库数据:</h4>
+                    <div class="code-block">{{ JSON.stringify(dbData, null, 2) }}</div>
+                </div>
+            </div>
+
+            <!-- 控制台日志 -->
+            <div class="debug-section">
+                <h3>5. 控制台日志</h3>
+                <div v-if="consoleLogs.length > 0">
+                    <div v-for="(log, index) in consoleLogs" :key="index" class="code-block">
+                        <span :class="log.level">{{ log.level.toUpperCase() }}:</span> {{ log.message }}
+                    </div>
+                </div>
+                <el-button @click="clearLogs">清除日志</el-button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const token = ref(localStorage.getItem('token'));
+                const userInfo = ref(null);
+                const driverId = ref(null);
+                const loginLoading = ref(false);
+                const testLoading = reactive({
+                    get: false,
+                    add: false,
+                    backend: false,
+                    db: false
+                });
+                const apiResults = ref([]);
+                const networkLogs = ref([]);
+                const dbData = ref(null);
+                const consoleLogs = ref([]);
+
+                // 拦截console方法
+                const originalConsole = {
+                    log: console.log,
+                    error: console.error,
+                    warn: console.warn
+                };
+
+                console.log = (...args) => {
+                    consoleLogs.value.push({ level: 'log', message: args.join(' ') });
+                    originalConsole.log(...args);
+                };
+
+                console.error = (...args) => {
+                    consoleLogs.value.push({ level: 'error', message: args.join(' ') });
+                    originalConsole.error(...args);
+                };
+
+                console.warn = (...args) => {
+                    consoleLogs.value.push({ level: 'warning', message: args.join(' ') });
+                    originalConsole.warn(...args);
+                };
+
+                // 检查用户状态
+                const checkUserStatus = () => {
+                    try {
+                        const storedUser = localStorage.getItem('user');
+                        if (storedUser) {
+                            userInfo.value = JSON.parse(storedUser);
+                            if (userInfo.value.userType === 'DRIVER') {
+                                driverId.value = userInfo.value.id;
+                            }
+                        }
+                        console.log('用户状态检查完成:', userInfo.value);
+                    } catch (error) {
+                        console.error('检查用户状态失败:', error);
+                    }
+                };
+
+                // 登录
+                const login = async () => {
+                    loginLoading.value = true;
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                username: 'driver1',
+                                password: '123456'
+                            })
+                        });
+
+                        const result = await response.json();
+                        
+                        networkLogs.value.push({
+                            method: 'POST',
+                            url: '/api/auth/login',
+                            status: response.status,
+                            response: result
+                        });
+
+                        if (result.code === 200) {
+                            token.value = result.data.token;
+                            localStorage.setItem('token', token.value);
+                            localStorage.setItem('user', JSON.stringify(result.data));
+                            checkUserStatus();
+                            ElMessage.success('登录成功');
+                        } else {
+                            ElMessage.error(result.message || '登录失败');
+                        }
+                    } catch (error) {
+                        console.error('登录失败:', error);
+                        ElMessage.error('登录失败: ' + error.message);
+                    } finally {
+                        loginLoading.value = false;
+                    }
+                };
+
+                // 测试获取车辆
+                const testGetVehicles = async () => {
+                    testLoading.get = true;
+                    try {
+                        if (!token.value || !driverId.value) {
+                            ElMessage.error('请先登录');
+                            return;
+                        }
+
+                        console.log('开始测试获取车辆，司机ID:', driverId.value);
+
+                        const response = await fetch(`/api/vehicles/driver/${driverId.value}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        
+                        networkLogs.value.push({
+                            method: 'GET',
+                            url: `/api/vehicles/driver/${driverId.value}`,
+                            status: response.status,
+                            response: result
+                        });
+
+                        apiResults.value.push({
+                            action: '获取车辆列表',
+                            data: result
+                        });
+
+                        console.log('获取车辆结果:', result);
+                    } catch (error) {
+                        console.error('获取车辆失败:', error);
+                        apiResults.value.push({
+                            action: '获取车辆列表错误',
+                            data: { error: error.message }
+                        });
+                    } finally {
+                        testLoading.get = false;
+                    }
+                };
+
+                // 测试添加车辆
+                const testAddVehicle = async () => {
+                    testLoading.add = true;
+                    try {
+                        if (!token.value || !driverId.value) {
+                            ElMessage.error('请先登录');
+                            return;
+                        }
+
+                        const testVehicle = {
+                            driverId: driverId.value,
+                            plateNumber: '测试' + Date.now(),
+                            brand: '测试品牌',
+                            model: '测试型号',
+                            color: '白色',
+                            year: 2023,
+                            seats: 5,
+                            vehicleType: 'COMFORT',
+                            fuelType: 'GASOLINE'
+                        };
+
+                        console.log('开始测试添加车辆:', testVehicle);
+
+                        const response = await fetch('/api/vehicles', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token.value}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(testVehicle)
+                        });
+
+                        const result = await response.json();
+                        
+                        networkLogs.value.push({
+                            method: 'POST',
+                            url: '/api/vehicles',
+                            status: response.status,
+                            response: result
+                        });
+
+                        apiResults.value.push({
+                            action: '添加车辆',
+                            data: result
+                        });
+
+                        console.log('添加车辆结果:', result);
+                    } catch (error) {
+                        console.error('添加车辆失败:', error);
+                        apiResults.value.push({
+                            action: '添加车辆错误',
+                            data: { error: error.message }
+                        });
+                    } finally {
+                        testLoading.add = false;
+                    }
+                };
+
+                // 测试后端连接
+                const testBackendConnection = async () => {
+                    testLoading.backend = true;
+                    try {
+                        console.log('测试后端连接...');
+
+                        // 测试基本连接
+                        const healthResponse = await fetch('/api/health', {
+                            headers: token.value ? {
+                                'Authorization': `Bearer ${token.value}`
+                            } : {}
+                        });
+
+                        let healthResult = null;
+                        if (healthResponse.ok) {
+                            healthResult = await healthResponse.json();
+                        }
+
+                        networkLogs.value.push({
+                            method: 'GET',
+                            url: '/api/health',
+                            status: healthResponse.status,
+                            response: healthResult || { error: 'No response' }
+                        });
+
+                        // 测试认证端点
+                        if (token.value) {
+                            const meResponse = await fetch('/api/auth/me', {
+                                headers: {
+                                    'Authorization': `Bearer ${token.value}`
+                                }
+                            });
+
+                            let meResult = null;
+                            if (meResponse.ok) {
+                                meResult = await meResponse.json();
+                            }
+
+                            networkLogs.value.push({
+                                method: 'GET',
+                                url: '/api/auth/me',
+                                status: meResponse.status,
+                                response: meResult || { error: 'No response' }
+                            });
+                        }
+
+                        console.log('后端连接测试完成');
+                    } catch (error) {
+                        console.error('后端连接测试失败:', error);
+                        networkLogs.value.push({
+                            method: 'GET',
+                            url: '/api/health',
+                            status: 0,
+                            response: { error: error.message }
+                        });
+                    } finally {
+                        testLoading.backend = false;
+                    }
+                };
+
+                // 检查数据库
+                const checkDatabase = async () => {
+                    testLoading.db = true;
+                    try {
+                        console.log('检查数据库数据...');
+
+                        // 尝试获取所有司机
+                        const driversResponse = await fetch('/api/drivers', {
+                            headers: token.value ? {
+                                'Authorization': `Bearer ${token.value}`
+                            } : {}
+                        });
+
+                        let driversData = null;
+                        if (driversResponse.ok) {
+                            driversData = await driversResponse.json();
+                        }
+
+                        // 尝试获取所有车辆（如果有这个端点）
+                        const allVehiclesResponse = await fetch('/api/vehicles/all', {
+                            headers: token.value ? {
+                                'Authorization': `Bearer ${token.value}`
+                            } : {}
+                        });
+
+                        let allVehiclesData = null;
+                        if (allVehiclesResponse.ok) {
+                            allVehiclesData = await allVehiclesResponse.json();
+                        }
+
+                        dbData.value = {
+                            drivers: driversData,
+                            allVehicles: allVehiclesData
+                        };
+
+                        console.log('数据库检查完成:', dbData.value);
+                    } catch (error) {
+                        console.error('数据库检查失败:', error);
+                        dbData.value = { error: error.message };
+                    } finally {
+                        testLoading.db = false;
+                    }
+                };
+
+                // 清除日志
+                const clearLogs = () => {
+                    consoleLogs.value = [];
+                    apiResults.value = [];
+                    networkLogs.value = [];
+                };
+
+                // 页面加载时检查用户状态
+                onMounted(() => {
+                    checkUserStatus();
+                    console.log('调试页面已加载');
+                });
+
+                return {
+                    token,
+                    userInfo,
+                    driverId,
+                    loginLoading,
+                    testLoading,
+                    apiResults,
+                    networkLogs,
+                    dbData,
+                    consoleLogs,
+                    login,
+                    testGetVehicles,
+                    testAddVehicle,
+                    testBackendConnection,
+                    checkDatabase,
+                    clearLogs
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

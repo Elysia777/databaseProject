@@ -57,7 +57,7 @@
     <sql id="Full_Column_List">
         d.id, d.user_id, u.real_name as name, u.phone, u.status,
         d.driver_license, d.driver_license_expiry, d.professional_license, d.professional_license_expiry,
-        CONCAT(COALESCE(v.brand, ''), ' ', COALESCE(v.model, ''), ' ', COALESCE(v.color, '')) as vehicle_info,
+        '' as vehicle_info,
         d.driving_years, d.total_mileage, d.rating, d.total_orders, d.completed_orders, d.cancelled_orders, 
         d.is_online, d.current_latitude, d.current_longitude, 
         d.created_at as d_created_at, d.updated_at as d_updated_at
@@ -67,7 +67,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.id = #{id}
     </select>
 
@@ -75,7 +74,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.user_id = #{userId}
     </select>
 
@@ -83,7 +81,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.driver_license = #{licenseNumber}
     </select>
 
@@ -91,7 +88,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.is_online = true
         ORDER BY d.rating DESC
     </select>
@@ -136,7 +132,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         ORDER BY d.created_at DESC
     </select>
 
@@ -144,7 +139,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.rating >= #{minRating}
         ORDER BY d.rating DESC
     </select>
@@ -153,7 +147,6 @@
         SELECT <include refid="Full_Column_List"/>
         FROM drivers d
         LEFT JOIN users u ON d.user_id = u.id
-        LEFT JOIN vehicles v ON d.id = v.driver_id
         WHERE d.is_online = true
         ORDER BY d.rating DESC
     </select>

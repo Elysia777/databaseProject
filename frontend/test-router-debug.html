@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路由调试测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .route-link {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 16px;
+            background: #409EFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .route-link:hover {
+            background: #66b1ff;
+        }
+        .route-link.active {
+            background: #67c23a;
+        }
+        .error {
+            color: red;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            background: #e6ffe6;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>Vue Router 路由调试</h1>
+        
+        <div class="test-section">
+            <h3>当前路由信息</h3>
+            <p><strong>当前路径:</strong> {{ $route.path }}</p>
+            <p><strong>路由名称:</strong> {{ $route.name }}</p>
+            <p><strong>路由参数:</strong> {{ JSON.stringify($route.params) }}</p>
+            <p><strong>查询参数:</strong> {{ JSON.stringify($route.query) }}</p>
+        </div>
+
+        <div class="test-section">
+            <h3>路由导航测试</h3>
+            <div>
+                <router-link to="/dashboard" class="route-link">Dashboard</router-link>
+                <router-link to="/dashboard/driver-map" class="route-link">司机地图</router-link>
+                <router-link to="/dashboard/orders" class="route-link">我的订单</router-link>
+                <router-link to="/dashboard/earnings" class="route-link">收入统计</router-link>
+                <router-link to="/dashboard/profile" class="route-link">个人设置</router-link>
+            </div>
+            <div style="margin-top: 15px;">
+                <el-button @click="testProgrammaticNavigation">编程式导航到收入统计</el-button>
+                <el-button @click="testOrdersNavigation">编程式导航到订单页面</el-button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>路由组件测试</h3>
+            <div v-if="routeError" class="error">
+                路由错误: {{ routeError }}
+            </div>
+            <div v-else class="success">
+                路由正常工作
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>模拟用户状态</h3>
+            <el-form inline>
+                <el-form-item label="用户类型:">
+                    <el-select v-model="mockUserType" @change="updateMockUser">
+                        <el-option label="司机" value="DRIVER"></el-option>
+                        <el-option label="乘客" value="PASSENGER"></el-option>
+                        <el-option label="管理员" value="ADMIN"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="登录状态:">
+                    <el-switch v-model="mockLoggedIn" @change="updateMockUser"></el-switch>
+                </el-form-item>
+            </el-form>
+            <div style="margin-top: 10px;">
+                <strong>模拟用户信息:</strong>
+                <pre>{{ JSON.stringify(mockUser, null, 2) }}</pre>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>路由视图</h3>
+            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; min-height: 200px;">
+                <router-view></router-view>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed } = Vue;
+        const { createRouter, createWebHistory } = VueRouter;
+        const { ElMessage } = ElementPlus;
+
+        // 模拟用户store
+        const mockUserStore = reactive({
+            user: null,
+            token: '',
+            isLoggedIn: false,
+            userType: null,
+            isDriver: false,
+            isPassenger: false,
+            isAdmin: false
+        });
+
+        // 简化的组件
+        const DashboardHome = {
+            template: '<div><h3>Dashboard 首页</h3><p>欢迎使用网约车系统</p></div>'
+        };
+
+        const DriverMap = {
+            template: '<div><h3>司机地图</h3><p>这里是司机接单地图页面</p></div>'
+        };
+
+        const DriverOrders = {
+            template: `
+                <div>
+                    <h3>我的订单</h3>
+                    <p>这里是司机订单列表页面</p>
+                    <div style="margin-top: 15px;">
+                        <div style="border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                                <span><strong>#ORD20250805001</strong></span>
+                                <span style="color: #67c23a;">已完成</span>
+                            </div>
+                            <div>
+                                <div>📍 北京市朝阳区三里屯SOHO</div>
+                                <div>🎯 北京市海淀区中关村软件园</div>
+                                <div style="text-align: right; color: #f56c6c; font-weight: bold;">¥45.80</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        const DriverEarnings = {
+            template: `
+                <div>
+                    <h3>收入统计</h3>
+                    <p>这里是司机收入统计页面</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold;">¥1,256.80</div>
+                            <div>总收入</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold;">28</div>
+                            <div>完成订单</div>
+                        </div>
+                        <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 24px; font-weight: bold;">¥44.89</div>
+                            <div>平均单价</div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        const Profile = {
+            template: '<div><h3>个人设置</h3><p>这里是个人设置页面</p></div>'
+        };
+
+        // 路由配置
+        const routes = [
+            {
+                path: '/',
+                redirect: '/dashboard'
+            },
+            {
+                path: '/dashboard',
+                component: {
+                    template: `
+                        <div>
+                            <div style="background: #304156; color: white; padding: 15px; margin-bottom: 20px;">
+                                <h2>网约车运营系统 - 司机端</h2>
+                            </div>
+                            <router-view></router-view>
+                        </div>
+                    `
+                },
+                children: [
+                    {
+                        path: '',
+                        component: DashboardHome
+                    },
+                    {
+                        path: 'driver-map',
+                        name: 'DriverMap',
+                        component: DriverMap
+                    },
+                    {
+                        path: 'orders',
+                        name: 'DriverOrders',
+                        component: DriverOrders
+                    },
+                    {
+                        path: 'earnings',
+                        name: 'DriverEarnings',
+                        component: DriverEarnings
+                    },
+                    {
+                        path: 'profile',
+                        name: 'Profile',
+                        component: Profile
+                    }
+                ]
+            }
+        ];
+
+        const router = createRouter({
+            history: createWebHistory(),
+            routes
+        });
+
+        // 路由错误处理
+        router.onError((error) => {
+            console.error('路由错误:', error);
+        });
+
+        const app = createApp({
+            setup() {
+                const routeError = ref('');
+                const mockUserType = ref('DRIVER');
+                const mockLoggedIn = ref(true);
+                const mockUser = computed(() => ({
+                    userType: mockUserType.value,
+                    isLoggedIn: mockLoggedIn.value,
+                    isDriver: mockUserType.value === 'DRIVER',
+                    isPassenger: mockUserType.value === 'PASSENGER',
+                    isAdmin: mockUserType.value === 'ADMIN'
+                }));
+
+                const updateMockUser = () => {
+                    Object.assign(mockUserStore, mockUser.value);
+                };
+
+                const testProgrammaticNavigation = async () => {
+                    try {
+                        await router.push('/dashboard/earnings');
+                        ElMessage.success('成功导航到收入统计页面');
+                        routeError.value = '';
+                    } catch (error) {
+                        routeError.value = error.message;
+                        ElMessage.error(`导航失败: ${error.message}`);
+                    }
+                };
+
+                const testOrdersNavigation = async () => {
+                    try {
+                        await router.push('/dashboard/orders');
+                        ElMessage.success('成功导航到订单页面');
+                        routeError.value = '';
+                    } catch (error) {
+                        routeError.value = error.message;
+                        ElMessage.error(`导航失败: ${error.message}`);
+                    }
+                };
+
+                // 初始化模拟用户
+                updateMockUser();
+
+                return {
+                    routeError,
+                    mockUserType,
+                    mockLoggedIn,
+                    mockUser,
+                    updateMockUser,
+                    testProgrammaticNavigation,
+                    testOrdersNavigation
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+        app.use(router);
+        app.mount('#app');
+    </script>
+</body>
+</html>
