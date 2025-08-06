@@ -172,7 +172,7 @@
       <div class="driver-bar-content">
         <div class="driver-avatar-small">
           <img 
-            :src="driverInfo.avatar || getDefaultAvatar(driverInfo.name)" 
+            :src="buildAvatarUrl(driverInfo.avatar) || getDefaultAvatar(driverInfo.name)" 
             :alt="driverInfo.name"
             @error="handleAvatarError"
           />
@@ -227,7 +227,7 @@
         <div class="driver-profile">
           <div class="driver-avatar-large">
             <img 
-              :src="driverInfo.avatar || getDefaultAvatar(driverInfo.name)" 
+              :src="buildAvatarUrl(driverInfo.avatar) || getDefaultAvatar(driverInfo.name)" 
               :alt="driverInfo.name"
               @error="handleAvatarError"
             />
@@ -284,7 +284,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted, watch } from "vue";
+import { ref, onMounted, computed, onUnmounted, onActivated, onDeactivated, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Location, Phone, ArrowDown, ArrowUp, Close } from "@element-plus/icons-vue";
 import { useUserStore } from "@/stores/user";
@@ -677,49 +677,97 @@ const formatDateTimeForBackend = (date) => {
 
 // 旧的时间验证方法已移除，使用新的滚轮选择器
 // 初始化地图
-onMounted(async () => {
-  console.log("🚀 开始初始化乘客地图页面...");
+let isPassengerMapInitialized = false
+
+// 统一的初始化函数
+const initializePassengerMap = async (isReactivation = false) => {
+  const logPrefix = isReactivation ? '🔄 重新激活' : '🚀 首次初始化'
+  console.log(`${logPrefix}乘客地图页面...`)
 
   // 立即注册全局函数，让store能够通知地图组件
-  window.handleMapOrderUpdate = handleOrderUpdate;
-  console.log("✅ 已注册全局地图消息处理函数");
+  window.handleMapOrderUpdate = handleOrderUpdate
+  console.log("✅ 已注册全局地图消息处理函数")
 
+  // 如果是重新激活且已经初始化过，只需要重新检查状态
+  if (isReactivation && isPassengerMapInitialized) {
+    console.log('🔄 页面重新激活，检查订单状态...')
+    
+    // 确保用户信息完整性
+    try {
+      await userStore.ensureUserInfo()
+    } catch (error) {
+      console.error('❌ 用户状态检查失败:', error.message)
+      ElMessage.error(error.message)
+      return
+    }
+    
+    // 重新检查活跃订单
+    await checkActiveOrder()
+    
+    // 重新连接WebSocket（如果需要）
+    if (!orderStore.isWebSocketConnected) {
+      console.log('🔄 重新连接WebSocket...')
+      await orderStore.connectWebSocket()
+    }
+    
+    return
+  }
+
+  // 完整初始化流程
   // 初始化时间选择器
-  initializeTimePicker();
+  initializeTimePicker()
 
   // 初始化订单状态（包括检查未支付订单和当前订单）
-  console.log("🔄 开始初始化订单状态...");
-  await orderStore.initOrderState();
-  console.log("✅ 订单状态初始化完成");
+  console.log("🔄 开始初始化订单状态...")
+  await orderStore.initOrderState()
+  console.log("✅ 订单状态初始化完成")
   
   // 检查是否有活跃订单
-  await checkActiveOrder();
+  await checkActiveOrder()
 
   // 延迟初始化地图，确保DOM完全加载
   setTimeout(() => {
-    console.log("🗺️ 开始初始化地图...");
+    console.log("🗺️ 开始初始化地图...")
     if (window.AMap) {
-      console.log("高德地图已加载，直接初始化");
-      initMap();
+      console.log("高德地图已加载，直接初始化")
+      initMap()
     } else {
-      console.log("开始加载高德地图API...");
+      console.log("开始加载高德地图API...")
 
-      window._AMapSecurityConfig = getSecurityConfig();
+      window._AMapSecurityConfig = getSecurityConfig()
 
-      const script = document.createElement("script");
-      script.src = getMapApiUrl();
+      const script = document.createElement("script")
+      script.src = getMapApiUrl()
       script.onload = () => {
-        console.log("高德地图API加载成功");
-        setTimeout(initMap, 200);
-      };
+        console.log("高德地图API加载成功")
+        setTimeout(initMap, 200)
+      }
       script.onerror = (error) => {
-        console.error("高德地图API加载失败:", error);
-        ElMessage.error("地图加载失败，请检查网络连接");
-      };
-      document.head.appendChild(script);
+        console.error("高德地图API加载失败:", error)
+        ElMessage.error("地图加载失败，请检查网络连接")
+      }
+      document.head.appendChild(script)
     }
-  }, 500);
-});
+  }, 500)
+  
+  isPassengerMapInitialized = true
+}
+
+onMounted(async () => {
+  await initializePassengerMap(false)
+})
+
+// 页面激活时（从其他页面切换回来）
+onActivated(async () => {
+  console.log('📱 乘客地图页面被激活')
+  await initializePassengerMap(true)
+})
+
+// 页面失活时（切换到其他页面）
+onDeactivated(() => {
+  console.log('📱 乘客地图页面失活')
+  // 不清理状态，保持连接
+})
 
 function initMap() {
   console.log("开始创建地图实例...");
@@ -1229,8 +1277,40 @@ const handleCallCar = async () => {
       destLat = destination.value.location.lat;
     }
 
+    // 确保用户信息完整性
+    try {
+      await userStore.ensureUserInfo()
+    } catch (error) {
+      console.error('❌ 用户状态检查失败:', error)
+      ElMessage.error(error.message)
+      return
+    }
+
+    const passengerId = userStore.user.passengerId || userStore.user.id
+    if (!passengerId) {
+      console.error('❌ 无法获取乘客ID，用户数据:', userStore.user)
+      ElMessage.error('用户数据异常，请重新登录')
+      return
+    }
+
+    console.log('🆔 使用乘客ID:', passengerId)
+    console.log('👤 用户信息:', userStore.user)
+    
+    // 调试：验证passengerId是否有效
+    try {
+      const debugResponse = await fetch(`/api/auth/debug/user/${userStore.user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${userStore.token}`
+        }
+      })
+      const debugResult = await debugResponse.json()
+      console.log('🔍 用户调试信息:', debugResult)
+    } catch (error) {
+      console.warn('⚠️ 无法获取调试信息:', error)
+    }
+
     const orderData = {
-      passengerId: userStore.user.passengerId || userStore.user.id,
+      passengerId: passengerId,
       pickupAddress: pickupAddress.value,
       pickupLatitude: currentPosition.value.lat,
       pickupLongitude: currentPosition.value.lng,
@@ -1856,6 +1936,14 @@ const goToMyTrips = () => {
         window.location.href = "#/dashboard/my-trips";
       });
   }
+};
+
+// 构建完整的头像URL
+const buildAvatarUrl = (avatarPath) => {
+  if (!avatarPath) return null;
+  if (avatarPath.startsWith('http')) return avatarPath;
+  // 添加服务器前缀
+  return `http://localhost:8080${avatarPath}`;
 };
 
 // 获取默认头像

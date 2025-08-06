@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户数据调试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 用户数据调试工具</h1>
+        
+        <div class="debug-section">
+            <h3>当前用户信息</h3>
+            <button class="btn" onclick="loadUserInfo()">加载用户信息</button>
+            <div id="userInfo"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>后端调试信息</h3>
+            <button class="btn" onclick="loadDebugInfo()">获取调试信息</button>
+            <div id="debugInfo"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>数据库验证</h3>
+            <button class="btn" onclick="validatePassengerId()">验证乘客ID</button>
+            <div id="validationResult"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>修复操作</h3>
+            <button class="btn" onclick="refreshUserInfo()">刷新用户信息</button>
+            <button class="btn" onclick="fixUserData()">修复用户数据</button>
+            <button class="btn" onclick="testOrderCreation()">测试订单创建数据</button>
+            <div id="fixResult"></div>
+        </div>
+    </div>
+
+    <script>
+        let userInfo = null;
+
+        async function loadUserInfo() {
+            const container = document.getElementById('userInfo');
+            
+            try {
+                // 从localStorage获取用户信息
+                const localUser = JSON.parse(localStorage.getItem('user') || 'null');
+                const token = localStorage.getItem('token');
+                
+                container.innerHTML = `
+                    <h4>localStorage中的用户信息:</h4>
+                    <pre>${JSON.stringify(localUser, null, 2)}</pre>
+                    <h4>Token存在:</h4>
+                    <pre>${!!token}</pre>
+                `;
+                
+                userInfo = localUser;
+            } catch (error) {
+                container.innerHTML = `<div class="error">加载用户信息失败: ${error.message}</div>`;
+            }
+        }
+
+        async function loadDebugInfo() {
+            const container = document.getElementById('debugInfo');
+            
+            if (!userInfo) {
+                container.innerHTML = '<div class="error">请先加载用户信息</div>';
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/auth/debug/user/${userInfo.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                container.innerHTML = `
+                    <h4>后端调试响应:</h4>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error">获取调试信息失败: ${error.message}</div>`;
+            }
+        }
+
+        async function validatePassengerId() {
+            const container = document.getElementById('validationResult');
+            
+            if (!userInfo) {
+                container.innerHTML = '<div class="error">请先加载用户信息</div>';
+                return;
+            }
+
+            try {
+                const passengerId = userInfo.passengerId || userInfo.id;
+                
+                container.innerHTML = `
+                    <h4>乘客ID验证:</h4>
+                    <p><strong>用户ID:</strong> ${userInfo.id}</p>
+                    <p><strong>用户类型:</strong> ${userInfo.userType}</p>
+                    <p><strong>passengerId字段:</strong> ${userInfo.passengerId || '未设置'}</p>
+                    <p><strong>将使用的乘客ID:</strong> ${passengerId}</p>
+                    <p><strong>问题分析:</strong> ${userInfo.userType === 'PASSENGER' && !userInfo.passengerId ? 
+                        '❌ PASSENGER用户缺少passengerId字段' : 
+                        '✅ 乘客ID设置正常'}</p>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error">验证失败: ${error.message}</div>`;
+            }
+        }
+
+        async function refreshUserInfo() {
+            const container = document.getElementById('fixResult');
+            
+            if (!userInfo) {
+                container.innerHTML = '<div class="error">请先加载用户信息</div>';
+                return;
+            }
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/auth/user/${userInfo.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    // 更新localStorage，保留token
+                    const updatedUser = { 
+                        ...result.data, 
+                        token: userInfo.token || token 
+                    };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    
+                    container.innerHTML = `
+                        <div class="success">✅ 用户信息已刷新并更新到localStorage</div>
+                        <h4>更新后的用户信息:</h4>
+                        <pre>${JSON.stringify(updatedUser, null, 2)}</pre>
+                        <div class="success">
+                            <strong>重要:</strong> 现在passengerId应该已经设置。请重新加载页面或刷新应用来使用新的用户信息。
+                        </div>
+                    `;
+                    
+                    userInfo = updatedUser;
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">刷新用户信息失败: ${error.message}</div>`;
+            }
+        }
+
+        async function fixUserData() {
+            const container = document.getElementById('fixResult');
+            
+            if (!userInfo) {
+                container.innerHTML = '<div class="error">请先加载用户信息</div>';
+                return;
+            }
+
+            container.innerHTML = '<div>🔧 正在修复用户数据...</div>';
+
+            try {
+                // 步骤1: 重新登录获取最新用户信息
+                const token = localStorage.getItem('token');
+                
+                // 步骤2: 调用getUserInfo API获取完整用户信息
+                const response = await fetch(`/api/auth/user/${userInfo.id}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const updatedUser = { 
+                        ...result.data, 
+                        token: userInfo.token || token 
+                    };
+                    
+                    // 更新localStorage
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    
+                    container.innerHTML = `
+                        <div class="success">✅ 用户数据修复完成</div>
+                        <h4>修复结果:</h4>
+                        <p><strong>用户ID:</strong> ${updatedUser.id}</p>
+                        <p><strong>用户类型:</strong> ${updatedUser.userType}</p>
+                        <p><strong>乘客ID:</strong> ${updatedUser.passengerId || '仍然为空'}</p>
+                        <p><strong>状态:</strong> ${updatedUser.passengerId ? '✅ 修复成功' : '❌ 仍需手动修复数据库'}</p>
+                        
+                        ${!updatedUser.passengerId ? `
+                        <div class="error">
+                            <strong>数据库修复需要:</strong><br>
+                            1. 在数据库中执行: <code>INSERT INTO passengers (user_id, default_payment_method, rating, total_orders, total_spent, created_at, updated_at) VALUES (${updatedUser.id}, 'WECHAT', 5.00, 0, 0.00, NOW(), NOW());</code><br>
+                            2. 然后点击"刷新用户信息"按钮
+                        </div>
+                        ` : ''}
+                        
+                        <h4>完整用户信息:</h4>
+                        <pre>${JSON.stringify(updatedUser, null, 2)}</pre>
+                    `;
+                    
+                    userInfo = updatedUser;
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">修复失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testOrderCreation() {
+            const container = document.getElementById('fixResult');
+            
+            if (!userInfo) {
+                container.innerHTML = '<div class="error">请先加载用户信息</div>';
+                return;
+            }
+
+            try {
+                const passengerId = userInfo.passengerId || userInfo.id;
+                
+                const testOrderData = {
+                    passengerId: passengerId,
+                    pickupAddress: "测试起点",
+                    pickupLatitude: 39.9042,
+                    pickupLongitude: 116.4074,
+                    destinationAddress: "测试终点",
+                    destinationLatitude: 39.9142,
+                    destinationLongitude: 116.4174,
+                    estimatedDistance: 5.0,
+                    estimatedDuration: 15,
+                    estimatedFare: 25.0
+                };
+
+                container.innerHTML = `
+                    <h4>测试订单数据:</h4>
+                    <pre>${JSON.stringify(testOrderData, null, 2)}</pre>
+                    <p><strong>注意:</strong> 这只是显示将要发送的数据，不会实际创建订单</p>
+                    <p><strong>乘客ID:</strong> ${passengerId} ${userInfo.passengerId ? '(来自passengerId字段)' : '(来自用户ID)'}</p>
+                    <p><strong>风险评估:</strong> ${userInfo.passengerId ? '✅ 安全，使用正确的passengerId' : '⚠️ 风险，使用用户ID可能导致外键约束错误'}</p>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+            }
+        }
+
+        // 页面加载时自动加载用户信息
+        window.onload = function() {
+            loadUserInfo();
+        };
+    </script>
+</body>
+</html>

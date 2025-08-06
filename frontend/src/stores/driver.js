@@ -9,10 +9,12 @@ export const useDriverStore = defineStore("driver", () => {
   let stompClient = null;
 
   // 司机状态
+  const driverId = ref(null);
   const isOnline = ref(false);
   const currentPosition = ref({ lng: 0, lat: 0 });
   const todayEarnings = ref(0);
   const completedOrders = ref(0);
+  const isWebSocketConnected = ref(false);
 
   // 订单相关状态
   const pendingOrders = ref([]); // 待处理订单队列
@@ -156,6 +158,7 @@ export const useDriverStore = defineStore("driver", () => {
 
   // 清除司机状态
   const clearDriverState = () => {
+    driverId.value = null;
     isOnline.value = false;
     currentPosition.value = { lng: 0, lat: 0 };
     todayEarnings.value = 0;
@@ -163,6 +166,7 @@ export const useDriverStore = defineStore("driver", () => {
     currentOrder.value = null;
     navigationInfo.value = null;
     pendingOrders.value = [];
+    isWebSocketConnected.value = false;
 
     localStorage.removeItem("driverState");
     localStorage.removeItem("driverUserId");
@@ -293,6 +297,17 @@ export const useDriverStore = defineStore("driver", () => {
         clearDriverState();
         return;
       }
+    }
+
+    // 设置司机ID
+    const currentDriverId = userStore.user?.driverId || userStore.user?.id;
+    if (currentDriverId) {
+      driverId.value = currentDriverId;
+      console.log("🆔 设置司机ID:", driverId.value);
+    } else {
+      console.error("❌ 无法获取司机ID");
+      clearDriverState();
+      return;
     }
 
     // 先从localStorage恢复状态
@@ -465,6 +480,7 @@ export const useDriverStore = defineStore("driver", () => {
 
       stompClient.onConnect = () => {
         console.log("✅ 司机WebSocket连接成功");
+        isWebSocketConnected.value = true;
 
         // 确保用户信息存在
         if (!userStore.user) {
@@ -573,6 +589,7 @@ export const useDriverStore = defineStore("driver", () => {
 
       stompClient.onDisconnect = () => {
         console.log("⚠️ 司机WebSocket连接断开");
+        isWebSocketConnected.value = false;
         
         // 如果有进行中的订单或司机在线，尝试重连
         if (currentOrder.value || isOnline.value) {
@@ -713,6 +730,7 @@ export const useDriverStore = defineStore("driver", () => {
 
   return {
     // 状态
+    driverId,
     isOnline,
     currentPosition,
     todayEarnings,
@@ -720,6 +738,7 @@ export const useDriverStore = defineStore("driver", () => {
     pendingOrders,
     currentOrder,
     navigationInfo,
+    isWebSocketConnected,
 
     // 计算属性
     hasActiveOrder,

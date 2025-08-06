@@ -33,6 +33,12 @@ spring:
     username: guest
     password: guest
 
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
 # MyBatis配置
 mybatis:
   configuration:
@@ -47,11 +53,10 @@ jwt:
   secret: taxi-operation-system-secret-key-2024
   expiration: 86400000  # 24小时
 
-# 文件上传配置 - 暂时注释
-# file:
-#   upload:
-#     path: /uploads/
-#     max-size: 10MB
+# 文件上传路径配置
+file:
+  upload:
+    path: uploads/
 
 # 日志配置
 logging:

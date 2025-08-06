@@ -32,4 +32,13 @@ public interface UserService {
 
     /** 根据用户类型获取用户列表 */
     List<UserInfo> getUsersByType(String userType);
+
+    /** 更新用户头像 */
+    void updateUserAvatar(Long userId, String avatarUrl);
+
+    /** 获取用户头像URL */
+    String getUserAvatarUrl(Long userId);
+
+    /** 修改密码 */
+    void changePassword(Long userId, String oldPassword, String newPassword);
 }

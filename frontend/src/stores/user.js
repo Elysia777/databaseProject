@@ -16,15 +16,74 @@ export const useUserStore = defineStore("user", () => {
 
   // 初始化时如果有token但没有用户信息，尝试获取用户信息
   const initUserInfo = async () => {
+    console.log('🔄 初始化用户信息...')
+    console.log('Token存在:', !!token.value)
+    console.log('用户信息存在:', !!user.value)
+    
     if (token.value && !user.value) {
+      console.log('⚠️ 有token但无用户信息，尝试获取用户信息')
       try {
         await getUserInfo();
+        console.log('✅ 用户信息获取成功:', user.value)
       } catch (error) {
-        console.error("获取用户信息失败:", error);
+        console.error("❌ 获取用户信息失败:", error);
         // 如果获取用户信息失败，清除token
         logout();
       }
+    } else if (user.value) {
+      console.log('✅ 用户信息已存在:', user.value)
+    } else {
+      console.log('⚠️ 无token和用户信息')
     }
+  };
+
+  // 确保用户信息完整性的方法
+  const ensureUserInfo = async () => {
+    console.log('🔍 检查用户信息完整性...')
+    console.log('当前用户信息:', user.value)
+    
+    if (!user.value && token.value) {
+      console.log('🔄 用户信息丢失，尝试恢复...')
+      await initUserInfo()
+    }
+    
+    if (!user.value) {
+      throw new Error('用户信息不存在，请重新登录')
+    }
+    
+    // 检查关键字段是否缺失
+    const needsRefresh = (
+      (user.value.userType === 'PASSENGER' && !user.value.passengerId) ||
+      (user.value.userType === 'DRIVER' && !user.value.driverId)
+    )
+    
+    if (needsRefresh) {
+      console.log('⚠️ 用户信息不完整，从服务器刷新...')
+      console.log('缺失字段:', {
+        userType: user.value.userType,
+        passengerId: user.value.passengerId,
+        driverId: user.value.driverId
+      })
+      
+      try {
+        await getUserInfo() // 这会保留原有信息并更新缺失字段
+        console.log('✅ 用户信息已刷新:', user.value)
+      } catch (error) {
+        console.error('❌ 刷新用户信息失败:', error)
+        throw new Error('无法获取完整用户信息，请重新登录')
+      }
+    }
+    
+    // 最终验证
+    if (user.value.userType === 'PASSENGER' && !user.value.passengerId) {
+      throw new Error('乘客ID不存在，请重新登录')
+    }
+    
+    if (user.value.userType === 'DRIVER' && !user.value.driverId) {
+      throw new Error('司机ID不存在，请重新登录')
+    }
+    
+    return user.value
   };
 
   // 方法
@@ -115,9 +174,17 @@ export const useUserStore = defineStore("user", () => {
   const getUserInfo = async () => {
     try {
       const response = await userApi.getUserInfo();
-      user.value = response.data;
-      localStorage.setItem("user", JSON.stringify(response.data));
-      return response.data;
+      
+      // 保留原有的重要信息（如token），只更新服务器返回的字段
+      const updatedUser = {
+        ...user.value, // 保留原有信息
+        ...response.data, // 用服务器数据覆盖
+        token: user.value?.token || token.value // 确保token不丢失
+      };
+      
+      user.value = updatedUser;
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      return updatedUser;
     } catch (error) {
       throw error;
     }
@@ -162,5 +229,6 @@ export const useUserStore = defineStore("user", () => {
     updateUserInfo,
     changePassword,
     initUserInfo,
+    ensureUserInfo,
   };
 });

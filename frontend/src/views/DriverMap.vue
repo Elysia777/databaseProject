@@ -167,7 +167,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useDriverStore } from '@/stores/driver'
@@ -218,28 +218,67 @@ let navigationTimer = null
 
 // WebSocket连接
 let stompClient = null
+let isInitialized = false
 
-onMounted(async () => {
-  console.log('🚀 开始初始化司机地图页面...')
+// 统一的初始化函数
+const initializeDriverMap = async (isReactivation = false) => {
+  const logPrefix = isReactivation ? '🔄 重新激活' : '🚀 首次初始化'
+  console.log(`${logPrefix}司机地图页面...`)
   
   // 立即注册全局函数，让store能够通知地图组件
   window.handleDriverMapUpdate = handleDriverOrderUpdate
   console.log('✅ 已注册全局司机地图消息处理函数')
   
-  // 初始化司机状态（包括从后端检查当前订单）
-  console.log('🔄 开始初始化司机状态...')
+  // 如果是重新激活且已经初始化过，只需要重新连接必要的服务
+  if (isReactivation && isInitialized) {
+    console.log('🔄 页面重新激活，检查状态同步...')
+    
+    // 确保用户信息完整性
+    try {
+      await userStore.ensureUserInfo()
+    } catch (error) {
+      console.error('❌ 用户状态检查失败:', error.message)
+      ElMessage.error(error.message)
+      return
+    }
+    
+    // 重新加载统计数据
+    loadTodayStats()
+    
+    // 检查订单状态
+    if (currentOrder.value) {
+      console.log('🔄 检测到进行中的订单，确保导航正常...')
+      restoreOrderNavigation()
+    }
+    
+    // 重新连接WebSocket（如果需要）
+    if (!driverStore.isWebSocketConnected) {
+      console.log('🔄 重新连接WebSocket...')
+      await driverStore.connectWebSocket()
+    }
+    
+    return
+  }
+  
+  // 完整初始化流程
+  console.log('🔄 开始完整初始化司机状态...')
   await driverStore.initDriverState()
   console.log('✅ 司机状态初始化完成')
   
-  // 初始化地图和统计数据
-  initMap()
-  loadTodayStats()
+  // 初始化地图
+  if (!map) {
+    initMap()
+  }
   
-  // 延迟一点时间确保所有初始化完成后再处理订单恢复
+  // 加载统计数据
+  setTimeout(() => {
+    loadTodayStats()
+  }, 1000)
+  
+  // 处理订单恢复
   setTimeout(() => {
     console.log('🔄 检查是否需要恢复订单导航...')
     
-    // 检查是否有进行中的订单需要恢复路径规划
     if (currentOrder.value) {
       console.log('🔄 检测到进行中的订单，恢复路径规划...')
       console.log('📋 订单信息:', currentOrder.value)
@@ -248,6 +287,24 @@ onMounted(async () => {
       console.log('📱 没有进行中的订单，无需恢复导航')
     }
   }, 2000)
+  
+  isInitialized = true
+}
+
+onMounted(async () => {
+  await initializeDriverMap(false)
+})
+
+// 页面激活时（从其他页面切换回来）
+onActivated(async () => {
+  console.log('📱 司机地图页面被激活')
+  await initializeDriverMap(true)
+})
+
+// 页面失活时（切换到其他页面）
+onDeactivated(() => {
+  console.log('📱 司机地图页面失活')
+  // 不清理状态，保持连接
 })
 
 onUnmounted(() => {
@@ -1608,7 +1665,22 @@ const stopNavigation = () => {
 // 加载今日统计
 const loadTodayStats = async () => {
   try {
-    const response = await fetch(`/api/drivers/${userStore.user.driverId}/today-stats`, {
+    // 确保用户信息完整性
+    try {
+      await userStore.ensureUserInfo()
+    } catch (error) {
+      console.warn('⚠️ 用户状态检查失败，跳过加载今日统计:', error.message)
+      return
+    }
+
+    // 检查司机ID是否存在
+    const driverId = userStore.user?.driverId || driverStore.driverId
+    if (!driverId) {
+      console.warn('⚠️ 司机ID不存在，跳过加载今日统计')
+      return
+    }
+    
+    const response = await fetch(`/api/drivers/${driverId}/today-stats`, {
       headers: {
         'Authorization': `Bearer ${userStore.token}`
       }

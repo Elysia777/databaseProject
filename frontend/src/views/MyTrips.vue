@@ -162,9 +162,37 @@
             <el-icon><User /></el-icon>
             <span>司机ID: {{ order.driverId }}</span>
           </div>
+
+          <!-- 评价功能 -->
+          <div v-if="order.status === 'COMPLETED'" class="review-section">
+            <div v-if="order.reviewStatus === 'reviewed'" class="review-status">
+              <el-icon><StarFilled /></el-icon>
+              <span>已评价</span>
+              <el-button type="text" @click="viewReview(order)" size="small">查看评价</el-button>
+            </div>
+            <div v-else class="review-actions">
+              <el-button 
+                type="primary" 
+                @click="showReviewDialog(order)"
+                size="small"
+                plain
+              >
+                <el-icon><Star /></el-icon>
+                评价此次行程
+              </el-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- 评价对话框 -->
+    <ReviewDialog
+      v-model="reviewDialogVisible"
+      :order-info="selectedOrderForReview"
+      :driver-info="selectedDriverInfo"
+      @review-submitted="handleReviewSubmitted"
+    />
 
     <!-- 支付对话框 -->
     <el-dialog
@@ -242,8 +270,11 @@ import {
   DocumentRemove, 
   SuccessFilled, 
   WarningFilled, 
-  User 
+  User,
+  Star,
+  StarFilled
 } from '@element-plus/icons-vue'
+import ReviewDialog from '@/components/ReviewDialog.vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import { useRouter } from 'vue-router'
@@ -259,6 +290,11 @@ const paymentLoading = ref(false)
 const paymentDialogVisible = ref(false)
 const selectedOrder = ref(null)
 const selectedPaymentMethod = ref('')
+
+// 评价相关
+const reviewDialogVisible = ref(false)
+const selectedOrderForReview = ref(null)
+const selectedDriverInfo = ref(null)
 
 // 计算属性
 const unpaidCount = computed(() => {
@@ -289,6 +325,9 @@ const loadOrderHistory = async () => {
     if (response.ok && result.code === 200) {
       orders.value = result.data || []
       console.log('✅ 加载到', orders.value.length, '个历史订单')
+      
+      // 为已完成的订单检查评价状态
+      await checkReviewStatus()
     } else {
       ElMessage.error('加载订单历史失败: ' + (result.message || '未知错误'))
     }
@@ -297,6 +336,26 @@ const loadOrderHistory = async () => {
     ElMessage.error('加载失败，请重试')
   } finally {
     loading.value = false
+  }
+}
+
+// 检查订单评价状态
+const checkReviewStatus = async () => {
+  const completedOrders = orders.value.filter(order => order.status === 'COMPLETED')
+  
+  for (const order of completedOrders) {
+    try {
+      const response = await fetch(`/api/reviews/order/${order.id}/exists`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.code === 200) {
+          order.reviewStatus = result.data ? 'reviewed' : 'not_reviewed'
+        }
+      }
+    } catch (error) {
+      console.error('检查评价状态失败:', error)
+      order.reviewStatus = 'not_reviewed'
+    }
   }
 }
 
@@ -455,6 +514,75 @@ const confirmPayment = async () => {
     paymentLoading.value = false
   }
 }
+
+// 显示评价对话框
+const showReviewDialog = async (order) => {
+  selectedOrderForReview.value = order
+  
+  // 获取司机信息
+  try {
+    const response = await fetch(`/api/drivers/${order.driverId}`, {
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200) {
+        selectedDriverInfo.value = result.data
+        
+        // 获取司机车辆信息
+        const vehicleResponse = await fetch(`/api/vehicles/driver/${order.driverId}/active`)
+        if (vehicleResponse.ok) {
+          const vehicleResult = await vehicleResponse.json()
+          if (vehicleResult.code === 200 && vehicleResult.data) {
+            selectedDriverInfo.value.plateNumber = vehicleResult.data.plateNumber
+            selectedDriverInfo.value.carModel = `${vehicleResult.data.brand} ${vehicleResult.data.model}`
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('获取司机信息失败:', error)
+  }
+  
+  reviewDialogVisible.value = true
+}
+
+// 查看评价
+const viewReview = async (order) => {
+  try {
+    const response = await fetch(`/api/reviews/order/${order.id}`)
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200 && result.data) {
+        const review = result.data
+        ElMessageBox.alert(
+          `评分: ${review.rating}分\n评价: ${review.comment || '无文字评价'}`,
+          '我的评价',
+          {
+            confirmButtonText: '确定'
+          }
+        )
+      }
+    }
+  } catch (error) {
+    console.error('获取评价失败:', error)
+    ElMessage.error('获取评价失败')
+  }
+}
+
+// 处理评价提交成功
+const handleReviewSubmitted = (review) => {
+  // 更新本地订单状态
+  const orderIndex = orders.value.findIndex(o => o.id === review.orderId)
+  if (orderIndex !== -1) {
+    orders.value[orderIndex].reviewStatus = 'reviewed'
+  }
+  
+  ElMessage.success('感谢您的评价！')
+}
 </script>
 
 <style scoped>
@@ -561,6 +689,25 @@ const confirmPayment = async () => {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.review-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.review-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #67c23a;
+  font-size: 14px;
+}
+
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .loading, .empty {

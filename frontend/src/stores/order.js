@@ -13,6 +13,7 @@ export const useOrderStore = defineStore("order", () => {
   const driverInfo = ref(null);
   const orderStatus = ref("");
   const hasUnpaidOrders = ref(false);
+  const isWebSocketConnected = ref(false);
 
   // 计算属性
   const hasActiveOrder = computed(() => !!currentOrder.value);
@@ -365,6 +366,7 @@ export const useOrderStore = defineStore("order", () => {
 
       stompClient.onConnect = () => {
         console.log("✅ 全局WebSocket连接成功");
+        isWebSocketConnected.value = true;
 
         const passengerIdStr = passengerId.toString();
         console.log("🆔 乘客ID:", passengerIdStr);
@@ -412,6 +414,7 @@ export const useOrderStore = defineStore("order", () => {
 
       stompClient.onDisconnect = () => {
         console.log("⚠️ WebSocket连接断开");
+        isWebSocketConnected.value = false;
 
         // 如果有进行中的订单，尝试重连
         if (
@@ -586,6 +589,7 @@ export const useOrderStore = defineStore("order", () => {
     driverInfo,
     orderStatus,
     hasUnpaidOrders,
+    isWebSocketConnected,
 
     // 计算属性
     hasActiveOrder,

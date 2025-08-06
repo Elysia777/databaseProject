@@ -17,16 +17,13 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="头像" prop="avatar">
-              <el-upload
-                class="avatar-uploader"
-                action="#"
-                :show-file-list="false"
-                :before-upload="beforeAvatarUpload"
-                :http-request="handleAvatarUpload"
-              >
-                <img v-if="profileForm.avatar" :src="profileForm.avatar" class="avatar" />
-                <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
-              </el-upload>
+              <AvatarUpload 
+                v-if="userStore.user"
+                :userId="userStore.user.id" 
+                :userName="profileForm.realName || userStore.user.username"
+                size="large"
+                @avatar-updated="handleAvatarUpdated"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -136,6 +133,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import AvatarUpload from '@/components/AvatarUpload.vue'
 
 const userStore = useUserStore()
 
@@ -201,28 +199,14 @@ const passwordRules = {
   ]
 }
 
-// 头像上传前的验证
-const beforeAvatarUpload = (file) => {
-  const isJPG = file.type === 'image/jpeg' || file.type === 'image/png'
-  const isLt2M = file.size / 1024 / 1024 < 2
-
-  if (!isJPG) {
-    ElMessage.error('头像只能是 JPG 或 PNG 格式!')
+// 处理头像更新
+const handleAvatarUpdated = (avatarUrl) => {
+  profileForm.avatar = avatarUrl
+  // 更新用户store中的头像
+  if (userStore.user) {
+    userStore.user.avatar = avatarUrl
   }
-  if (!isLt2M) {
-    ElMessage.error('头像大小不能超过 2MB!')
-  }
-  return isJPG && isLt2M
-}
-
-// 处理头像上传
-const handleAvatarUpload = (options) => {
-  // 这里应该调用实际的文件上传API
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    profileForm.avatar = e.target.result
-  }
-  reader.readAsDataURL(options.file)
+  ElMessage.success('头像更新成功！')
 }
 
 // 保存个人资料
@@ -231,12 +215,38 @@ const handleSaveProfile = async () => {
     await profileFormRef.value.validate()
     saveLoading.value = true
     
-    // 这里应该调用实际的API
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用用户信息更新API
+    const response = await fetch(`http://localhost:8080/api/auth/user/${userStore.user.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userStore.token}`
+      },
+      body: JSON.stringify({
+        realName: profileForm.realName,
+        phone: profileForm.phone,
+        email: profileForm.email,
+        avatar: profileForm.avatar
+      })
+    })
     
-    ElMessage.success('个人资料保存成功')
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      // 更新本地用户信息
+      Object.assign(userStore.user, {
+        realName: profileForm.realName,
+        phone: profileForm.phone,
+        email: profileForm.email,
+        avatar: profileForm.avatar
+      })
+      ElMessage.success('个人资料保存成功')
+    } else {
+      throw new Error(result.message || '保存失败')
+    }
   } catch (error) {
-    ElMessage.error('保存失败，请检查输入信息')
+    console.error('保存个人资料失败:', error)
+    ElMessage.error('保存失败: ' + error.message)
   } finally {
     saveLoading.value = false
   }
@@ -248,15 +258,33 @@ const handleChangePassword = async () => {
     await passwordFormRef.value.validate()
     passwordLoading.value = true
     
-    // 这里应该调用实际的API
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用修改密码API
+    const response = await fetch('http://localhost:8080/api/auth/change-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userStore.token}`
+      },
+      body: JSON.stringify({
+        userId: userStore.user.id,
+        oldPassword: passwordForm.oldPassword,
+        newPassword: passwordForm.newPassword
+      })
+    })
     
-    ElMessage.success('密码修改成功')
-    passwordForm.oldPassword = ''
-    passwordForm.newPassword = ''
-    passwordForm.confirmPassword = ''
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      ElMessage.success('密码修改成功')
+      passwordForm.oldPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+    } else {
+      throw new Error(result.message || '密码修改失败')
+    }
   } catch (error) {
-    ElMessage.error('密码修改失败')
+    console.error('修改密码失败:', error)
+    ElMessage.error('密码修改失败: ' + error.message)
   } finally {
     passwordLoading.value = false
   }
@@ -269,16 +297,44 @@ const handleReset = () => {
 }
 
 // 加载用户资料
-const loadUserProfile = () => {
+const loadUserProfile = async () => {
   if (userStore.user) {
-    Object.assign(profileForm, {
-      realName: userStore.user.realName || '',
-      phone: userStore.user.phone || '',
-      email: userStore.user.email || '',
-      gender: userStore.user.gender || '',
-      bio: userStore.user.bio || '',
-      avatar: userStore.user.avatar || ''
-    })
+    try {
+      // 从服务器获取最新的用户信息
+      const response = await fetch(`http://localhost:8080/api/auth/user/${userStore.user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${userStore.token}`
+        }
+      })
+      
+      const result = await response.json()
+      
+      if (result.code === 200) {
+        const userData = result.data
+        Object.assign(profileForm, {
+          realName: userData.realName || '',
+          phone: userData.phone || '',
+          email: userData.email || '',
+          gender: userData.gender || '',
+          bio: userData.bio || '',
+          avatar: userData.avatar || ''
+        })
+        
+        // 更新本地用户信息
+        Object.assign(userStore.user, userData)
+      }
+    } catch (error) {
+      console.error('加载用户资料失败:', error)
+      // 如果API调用失败，使用本地数据
+      Object.assign(profileForm, {
+        realName: userStore.user.realName || '',
+        phone: userStore.user.phone || '',
+        email: userStore.user.email || '',
+        gender: userStore.user.gender || '',
+        bio: userStore.user.bio || '',
+        avatar: userStore.user.avatar || ''
+      })
+    }
   }
 }
 
@@ -311,40 +367,5 @@ onMounted(() => {
   max-width: 600px;
 }
 
-.avatar-uploader {
-  text-align: center;
-}
-
-.avatar-uploader .avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.avatar-uploader .el-upload {
-  border: 1px dashed #d9d9d9;
-  border-radius: 50%;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  width: 100px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.avatar-uploader .el-upload:hover {
-  border-color: #409eff;
-}
-
-.avatar-uploader-icon {
-  font-size: 28px;
-  color: #8c939d;
-  width: 100px;
-  height: 100px;
-  line-height: 100px;
-  text-align: center;
-}
+/* 头像上传组件样式已在AvatarUpload.vue中定义 */
 </style> 

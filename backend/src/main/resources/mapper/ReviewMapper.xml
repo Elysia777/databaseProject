@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.taxi.mapper.ReviewMapper">
+
+    <resultMap id="BaseResultMap" type="com.taxi.entity.Review">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="order_id" property="orderId" jdbcType="BIGINT"/>
+        <result column="rater_id" property="raterId" jdbcType="BIGINT"/>
+        <result column="rated_id" property="ratedId" jdbcType="BIGINT"/>
+        <result column="rating_type" property="ratingType" jdbcType="VARCHAR"/>
+        <result column="rating" property="rating" jdbcType="DECIMAL"/>
+        <result column="comment" property="comment" jdbcType="LONGVARCHAR"/>
+        <result column="tags" property="tags" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, order_id, rater_id, rated_id, rating_type, rating, comment, tags, created_at
+    </sql>
+
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ratings
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByOrderId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ratings
+        WHERE order_id = #{orderId} AND rating_type = 'PASSENGER_TO_DRIVER'
+    </select>
+
+    <select id="selectByPassengerId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ratings
+        WHERE rater_id = #{passengerId} AND rating_type = 'PASSENGER_TO_DRIVER'
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="selectByDriverId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ratings
+        WHERE rated_id = #{driverId} AND rating_type = 'PASSENGER_TO_DRIVER'
+        ORDER BY created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <insert id="insert" parameterType="com.taxi.entity.Review" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ratings (
+            order_id, rater_id, rated_id, rating_type, rating, comment, tags, created_at
+        ) VALUES (
+            #{orderId}, #{raterId}, #{ratedId}, #{ratingType}, #{rating}, #{comment}, #{tags}, #{createdAt}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.taxi.entity.Review">
+        UPDATE ratings
+        SET order_id = #{orderId},
+            rater_id = #{raterId},
+            rated_id = #{ratedId},
+            rating_type = #{ratingType},
+            rating = #{rating},
+            comment = #{comment},
+            tags = #{tags}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM ratings WHERE id = #{id}
+    </delete>
+
+    <select id="selectDriverRatingStats" parameterType="java.lang.Long" resultType="map">
+        SELECT 
+            COUNT(*) as totalReviews,
+            COALESCE(AVG(rating), 0) as averageRating,
+            COALESCE(SUM(CASE WHEN rating &gt;= 4.5 THEN 1 ELSE 0 END), 0) as fiveStars,
+            COALESCE(SUM(CASE WHEN rating &gt;= 3.5 AND rating &lt; 4.5 THEN 1 ELSE 0 END), 0) as fourStars,
+            COALESCE(SUM(CASE WHEN rating &gt;= 2.5 AND rating &lt; 3.5 THEN 1 ELSE 0 END), 0) as threeStars,
+            COALESCE(SUM(CASE WHEN rating &gt;= 1.5 AND rating &lt; 2.5 THEN 1 ELSE 0 END), 0) as twoStars,
+            COALESCE(SUM(CASE WHEN rating &lt; 1.5 THEN 1 ELSE 0 END), 0) as oneStars
+        FROM ratings
+        WHERE rated_id = #{driverId} AND rating_type = 'PASSENGER_TO_DRIVER'
+    </select>
+
+    <select id="countByOrderId" parameterType="java.lang.Long" resultType="int">
+        SELECT COUNT(*)
+        FROM ratings
+        WHERE order_id = #{orderId} AND rating_type = 'PASSENGER_TO_DRIVER'
+    </select>
+
+</mapper>

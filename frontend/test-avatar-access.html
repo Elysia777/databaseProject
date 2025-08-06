@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>头像访问测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .avatar-test {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        .avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid #ddd;
+        }
+        .test-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-btn:hover {
+            background: #0056b3;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ 头像访问测试</h1>
+        
+        <div class="test-section">
+            <h3>1. 测试头像URL访问</h3>
+            <button class="test-btn" onclick="testAvatarUrls()">测试常见头像路径</button>
+            <div id="avatarTests"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 获取用户头像数据</h3>
+            <button class="test-btn" onclick="fetchUserAvatars()">获取所有用户头像</button>
+            <div id="userAvatars"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 测试日志</h3>
+            <button class="test-btn" onclick="clearLog()">清空日志</button>
+            <div id="testLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            logDiv.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('testLog').innerHTML = '';
+        }
+
+        // 测试头像URL访问
+        async function testAvatarUrls() {
+            log('开始测试头像URL访问...');
+            
+            const testUrls = [
+                '/uploads/avatars/test.jpg',
+                '/uploads/avatars/avatar1.jpg',
+                '/uploads/avatars/driver1.jpg'
+            ];
+            
+            const testsDiv = document.getElementById('avatarTests');
+            testsDiv.innerHTML = '';
+            
+            for (const url of testUrls) {
+                const fullUrl = API_BASE + url;
+                log(`测试URL: ${fullUrl}`);
+                
+                const testDiv = document.createElement('div');
+                testDiv.className = 'avatar-test';
+                
+                const img = document.createElement('img');
+                img.className = 'avatar';
+                img.src = fullUrl;
+                img.alt = 'Test Avatar';
+                
+                img.onload = () => {
+                    log(`✅ 头像加载成功: ${fullUrl}`, 'success');
+                };
+                
+                img.onerror = () => {
+                    log(`❌ 头像加载失败: ${fullUrl}`, 'error');
+                    img.src = 'https://via.placeholder.com/60x60/cccccc/666666?text=X';
+                };
+                
+                const info = document.createElement('div');
+                info.innerHTML = `<strong>测试URL:</strong> ${url}`;
+                
+                testDiv.appendChild(img);
+                testDiv.appendChild(info);
+                testsDiv.appendChild(testDiv);
+            }
+        }
+
+        // 获取用户头像数据
+        async function fetchUserAvatars() {
+            log('开始获取用户头像数据...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/users`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                log(`API响应: ${JSON.stringify(result, null, 2)}`);
+                
+                if (result.code === 200 && result.data) {
+                    const users = result.data;
+                    log(`获取到 ${users.length} 个用户`, 'success');
+                    
+                    const avatarsDiv = document.getElementById('userAvatars');
+                    avatarsDiv.innerHTML = '';
+                    
+                    users.forEach(user => {
+                        if (user.userType === 'DRIVER') {
+                            const userDiv = document.createElement('div');
+                            userDiv.className = 'avatar-test';
+                            
+                            const img = document.createElement('img');
+                            img.className = 'avatar';
+                            
+                            if (user.avatar) {
+                                const avatarUrl = user.avatar.startsWith('http') ? user.avatar : API_BASE + user.avatar;
+                                img.src = avatarUrl;
+                                log(`司机 ${user.realName} 头像URL: ${avatarUrl}`);
+                                
+                                img.onload = () => {
+                                    log(`✅ 司机 ${user.realName} 头像加载成功`, 'success');
+                                };
+                                
+                                img.onerror = () => {
+                                    log(`❌ 司机 ${user.realName} 头像加载失败`, 'error');
+                                    img.src = getDefaultAvatar(user.realName);
+                                };
+                            } else {
+                                img.src = getDefaultAvatar(user.realName);
+                                log(`⚠️ 司机 ${user.realName} 没有设置头像，使用默认头像`, 'warning');
+                            }
+                            
+                            const info = document.createElement('div');
+                            info.innerHTML = `
+                                <strong>${user.realName || user.username}</strong><br>
+                                <small>头像路径: ${user.avatar || '无'}</small>
+                            `;
+                            
+                            userDiv.appendChild(img);
+                            userDiv.appendChild(info);
+                            avatarsDiv.appendChild(userDiv);
+                        }
+                    });
+                } else {
+                    log(`API返回错误: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`获取用户数据失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 获取默认头像
+        function getDefaultAvatar(name) {
+            if (!name) return 'https://via.placeholder.com/60x60/cccccc/666666?text=?';
+            const firstChar = name.charAt(0).toUpperCase();
+            return `https://via.placeholder.com/60x60/4CAF50/ffffff?text=${firstChar}`;
+        }
+
+        // 页面加载时初始化
+        window.onload = function() {
+            log('头像访问测试工具已加载');
+            log('点击按钮开始测试...');
+        };
+    </script>
+</body>
+</html>

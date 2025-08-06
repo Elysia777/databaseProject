@@ -167,6 +167,20 @@ public class UserServiceImpl implements UserService {
 
         UserInfo userInfo = new UserInfo();
         BeanUtils.copyProperties(user, userInfo);
+        
+        // 根据用户类型设置对应的ID
+        if ("PASSENGER".equals(user.getUserType())) {
+            Passenger passenger = passengerMapper.selectByUserId(user.getId());
+            if (passenger != null) {
+                userInfo.setPassengerId(passenger.getId());
+            }
+        } else if ("DRIVER".equals(user.getUserType())) {
+            Driver driver = driverMapper.selectByUserId(user.getId());
+            if (driver != null) {
+                userInfo.setDriverId(driver.getId());
+            }
+        }
+        
         return userInfo;
     }
 
@@ -213,5 +227,41 @@ public class UserServiceImpl implements UserService {
             BeanUtils.copyProperties(user, userInfo);
             return userInfo;
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public void updateUserAvatar(Long userId, String avatarUrl) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        
+        user.setAvatar(avatarUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
+
+    @Override
+    public String getUserAvatarUrl(Long userId) {
+        User user = userMapper.selectById(userId);
+        return user != null ? user.getAvatar() : null;
+    }
+
+    @Override
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+        
+        // 验证旧密码
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("当前密码不正确");
+        }
+        
+        // 更新新密码
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
     }
 }

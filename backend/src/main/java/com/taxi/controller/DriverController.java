@@ -3,8 +3,10 @@ package com.taxi.controller;
 import com.taxi.common.Result;
 import com.taxi.entity.Driver;
 import com.taxi.entity.Order;
+import com.taxi.entity.User;
 import com.taxi.mapper.DriverMapper;
 import com.taxi.mapper.OrderMapper;
+import com.taxi.mapper.UserMapper;
 import com.taxi.service.DriverRedisService;
 import com.taxi.service.OrderDispatchService;
 import com.taxi.service.DriverLocationService;
@@ -30,6 +32,9 @@ public class DriverController {
     
     @Autowired
     private OrderMapper orderMapper;
+    
+    @Autowired
+    private UserMapper userMapper;
     
     @Autowired
     private DriverRedisService driverRedisService;
@@ -267,16 +272,39 @@ public class DriverController {
     }
 
     /**
-     * 获取司机信息
+     * 获取司机信息（包含头像）
      */
     @GetMapping("/{driverId}")
-    public Result<Driver> getDriverInfo(@PathVariable Long driverId) {
+    public Result<Map<String, Object>> getDriverInfo(@PathVariable Long driverId) {
         try {
             Driver driver = driverMapper.selectById(driverId);
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            return Result.success(driver);
+            
+            // 获取对应的用户信息（包含头像）
+            User user = null;
+            if (driver.getUserId() != null) {
+                user = userMapper.selectById(driver.getUserId());
+            }
+            
+            // 构建包含头像的司机信息
+            Map<String, Object> driverInfo = new HashMap<>();
+            driverInfo.put("id", driver.getId());
+            driverInfo.put("userId", driver.getUserId());
+            driverInfo.put("name", user != null ? user.getRealName() : driver.getName());
+            driverInfo.put("phone", user != null ? user.getPhone() : driver.getPhone());
+            driverInfo.put("avatar", user != null ? user.getAvatar() : null);
+            driverInfo.put("rating", driver.getRating());
+            driverInfo.put("totalOrders", driver.getTotalOrders());
+            driverInfo.put("completedOrders", driver.getCompletedOrders());
+            driverInfo.put("isOnline", driver.getIsOnline());
+            driverInfo.put("currentLatitude", driver.getCurrentLatitude());
+            driverInfo.put("currentLongitude", driver.getCurrentLongitude());
+            driverInfo.put("createdAt", driver.getCreatedAt());
+            driverInfo.put("updatedAt", driver.getUpdatedAt());
+            
+            return Result.success(driverInfo);
         } catch (Exception e) {
             return Result.error("获取司机信息失败: " + e.getMessage());
         }

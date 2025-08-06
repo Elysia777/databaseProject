@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户状态修复测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 用户状态修复测试</h1>
+        
+        <div class="test-section">
+            <h3>步骤1: 测试新的/auth/user API</h3>
+            <button class="btn" onclick="testAuthUserAPI()">测试 /auth/user API</button>
+            <div id="authUserResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>步骤2: 模拟页面切换场景</h3>
+            <button class="btn" onclick="simulatePageSwitch()">模拟页面切换</button>
+            <div id="pageSwitchResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>步骤3: 测试ensureUserInfo修复</h3>
+            <button class="btn" onclick="testEnsureUserInfo()">测试用户信息确保</button>
+            <div id="ensureUserInfoResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>步骤4: 测试订单创建数据</h3>
+            <button class="btn" onclick="testOrderData()">测试订单数据准备</button>
+            <div id="orderDataResult"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testAuthUserAPI() {
+            const container = document.getElementById('authUserResult');
+            container.innerHTML = '<div>🔄 测试中...</div>';
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    throw new Error('没有找到token，请先登录');
+                }
+
+                const response = await fetch('/api/auth/user', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                container.innerHTML = `
+                    <div class="success">✅ API调用成功</div>
+                    <h4>响应数据:</h4>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                    <p><strong>关键检查:</strong></p>
+                    <ul>
+                        <li>passengerId: ${result.data?.passengerId || '❌ 未设置'}</li>
+                        <li>driverId: ${result.data?.driverId || '❌ 未设置'}</li>
+                        <li>用户类型: ${result.data?.userType}</li>
+                    </ul>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ API测试失败: ${error.message}</div>`;
+            }
+        }
+
+        async function simulatePageSwitch() {
+            const container = document.getElementById('pageSwitchResult');
+            container.innerHTML = '<div>🔄 模拟页面切换...</div>';
+
+            try {
+                // 获取当前用户信息
+                const originalUser = JSON.parse(localStorage.getItem('user') || 'null');
+                
+                container.innerHTML = `
+                    <h4>原始用户信息:</h4>
+                    <pre>${JSON.stringify(originalUser, null, 2)}</pre>
+                `;
+
+                // 模拟用户信息被部分覆盖的情况
+                const corruptedUser = {
+                    ...originalUser,
+                    passengerId: null, // 模拟丢失
+                    driverId: null     // 模拟丢失
+                };
+
+                localStorage.setItem('user', JSON.stringify(corruptedUser));
+
+                container.innerHTML += `
+                    <div class="error">⚠️ 模拟用户信息损坏（passengerId和driverId被清空）</div>
+                    <h4>损坏后的用户信息:</h4>
+                    <pre>${JSON.stringify(corruptedUser, null, 2)}</pre>
+                `;
+
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ 模拟失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testEnsureUserInfo() {
+            const container = document.getElementById('ensureUserInfoResult');
+            container.innerHTML = '<div>🔄 测试用户信息修复...</div>';
+
+            try {
+                const token = localStorage.getItem('token');
+                const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+
+                // 模拟ensureUserInfo的逻辑
+                if (currentUser && currentUser.userType === 'PASSENGER' && !currentUser.passengerId) {
+                    container.innerHTML += '<div class="error">❌ 检测到passengerId缺失，尝试修复...</div>';
+
+                    // 调用/auth/user API获取完整信息
+                    const response = await fetch('/api/auth/user', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.code === 200) {
+                        // 合并用户信息，保留重要字段
+                        const fixedUser = {
+                            ...currentUser,
+                            ...result.data,
+                            token: currentUser.token || token
+                        };
+
+                        localStorage.setItem('user', JSON.stringify(fixedUser));
+
+                        container.innerHTML += `
+                            <div class="success">✅ 用户信息修复成功</div>
+                            <h4>修复后的用户信息:</h4>
+                            <pre>${JSON.stringify(fixedUser, null, 2)}</pre>
+                            <p><strong>修复结果:</strong></p>
+                            <ul>
+                                <li>passengerId: ${fixedUser.passengerId ? '✅ 已恢复' : '❌ 仍然缺失'}</li>
+                                <li>token: ${fixedUser.token ? '✅ 已保留' : '❌ 丢失'}</li>
+                            </ul>
+                        `;
+                    } else {
+                        throw new Error(result.message);
+                    }
+                } else {
+                    container.innerHTML = '<div class="success">✅ 用户信息完整，无需修复</div>';
+                }
+
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ 修复失败: ${error.message}</div>`;
+            }
+        }
+
+        async function testOrderData() {
+            const container = document.getElementById('orderDataResult');
+            container.innerHTML = '<div>🔄 测试订单数据准备...</div>';
+
+            try {
+                const user = JSON.parse(localStorage.getItem('user') || 'null');
+                
+                if (!user) {
+                    throw new Error('用户信息不存在');
+                }
+
+                const passengerId = user.passengerId || user.id;
+                
+                const orderData = {
+                    passengerId: passengerId,
+                    pickupAddress: "测试起点",
+                    pickupLatitude: 39.9042,
+                    pickupLongitude: 116.4074,
+                    destinationAddress: "测试终点",
+                    destinationLatitude: 39.9142,
+                    destinationLongitude: 116.4174,
+                    estimatedDistance: 5.0,
+                    estimatedDuration: 15,
+                    estimatedFare: 25.0
+                };
+
+                const riskLevel = user.passengerId ? '✅ 安全' : '⚠️ 有风险';
+                const riskDescription = user.passengerId ? 
+                    '使用正确的passengerId，不会出现外键约束错误' : 
+                    '使用用户ID作为passengerId，可能导致外键约束错误';
+
+                container.innerHTML = `
+                    <h4>订单数据准备结果:</h4>
+                    <pre>${JSON.stringify(orderData, null, 2)}</pre>
+                    <p><strong>风险评估:</strong> ${riskLevel}</p>
+                    <p><strong>说明:</strong> ${riskDescription}</p>
+                    <p><strong>用户信息:</strong></p>
+                    <ul>
+                        <li>用户ID: ${user.id}</li>
+                        <li>用户类型: ${user.userType}</li>
+                        <li>passengerId: ${user.passengerId || '未设置'}</li>
+                        <li>将使用的ID: ${passengerId}</li>
+                    </ul>
+                `;
+
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ 测试失败: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
