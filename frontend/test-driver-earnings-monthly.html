@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机收入统计按月查询测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card.earnings {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .stat-card.orders {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .stat-card.average {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .stat-card.distance {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .chart-container {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .api-result {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #67C23A; }
+        .error { color: #F56C6C; }
+        .warning { color: #E6A23C; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>司机收入统计按月查询测试</h1>
+                <div>
+                    <el-date-picker
+                        v-model="selectedMonth"
+                        type="month"
+                        placeholder="选择月份"
+                        format="YYYY年MM月"
+                        value-format="YYYY-MM"
+                        @change="loadEarningsData"
+                        style="margin-right: 10px;">
+                    </el-date-picker>
+                    <el-button type="primary" @click="loadEarningsData" :loading="loading">
+                        查询收入
+                    </el-button>
+                </div>
+            </div>
+
+            <!-- 收入统计卡片 -->
+            <div class="stats-cards">
+                <div class="stat-card earnings">
+                    <div class="stat-value">¥{{ earningsData.totalEarnings.toFixed(2) }}</div>
+                    <div class="stat-label">总收入</div>
+                </div>
+                <div class="stat-card orders">
+                    <div class="stat-value">{{ earningsData.totalOrders }}</div>
+                    <div class="stat-label">完成订单</div>
+                </div>
+                <div class="stat-card average">
+                    <div class="stat-value">¥{{ earningsData.averageEarnings.toFixed(2) }}</div>
+                    <div class="stat-label">平均单价</div>
+                </div>
+                <div class="stat-card distance">
+                    <div class="stat-value">{{ earningsData.totalDistance.toFixed(1) }}km</div>
+                    <div class="stat-label">总里程</div>
+                </div>
+            </div>
+
+            <!-- 测试区域 -->
+            <div class="test-section">
+                <div class="test-title">1. 司机信息测试</div>
+                <div>
+                    <el-input v-model="testDriverId" placeholder="输入司机ID" style="width: 200px; margin-right: 10px;"></el-input>
+                    <el-button @click="testDriverInfo">获取司机信息</el-button>
+                </div>
+                <div class="api-result" v-if="driverInfoResult">{{ driverInfoResult }}</div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">2. 收入统计API测试</div>
+                <div>
+                    <span>司机ID: {{ testDriverId || '请输入司机ID' }}</span>
+                    <span style="margin-left: 20px;">查询月份: {{ selectedMonth || '请选择月份' }}</span>
+                    <el-button @click="testEarningsAPI" style="margin-left: 20px;">测试收入API</el-button>
+                </div>
+                <div class="api-result" v-if="earningsAPIResult">{{ earningsAPIResult }}</div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">3. 每日收入明细</div>
+                <el-table :data="dailyEarnings" style="width: 100%" v-loading="loading">
+                    <el-table-column prop="date" label="日期" width="120"></el-table-column>
+                    <el-table-column prop="orderCount" label="订单数" width="100" align="center"></el-table-column>
+                    <el-table-column prop="totalDistance" label="总里程(km)" width="120" align="center">
+                        <template #default="{ row }">
+                            {{ parseFloat(row.totalDistance || 0).toFixed(1) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="totalEarnings" label="总收入" width="120" align="center">
+                        <template #default="{ row }">
+                            <span style="color: #67C23A; font-weight: bold;">
+                                ¥{{ parseFloat(row.totalEarnings || 0).toFixed(2) }}
+                            </span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="averageEarnings" label="平均单价" width="120" align="center">
+                        <template #default="{ row }">
+                            ¥{{ parseFloat(row.averageEarnings || 0).toFixed(2) }}
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">4. 图表数据测试</div>
+                <div>
+                    <el-radio-group v-model="chartType" @change="loadChartData">
+                        <el-radio label="daily">按日统计</el-radio>
+                        <el-radio label="weekly">按周统计</el-radio>
+                    </el-radio-group>
+                    <el-button @click="loadChartData" style="margin-left: 20px;">加载图表数据</el-button>
+                </div>
+                <div class="chart-container" v-if="chartData.dates.length > 0">
+                    <h4>{{ selectedMonth }} 收入趋势图 ({{ chartType === 'daily' ? '按日' : '按周' }})</h4>
+                    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                        <div v-for="(date, index) in chartData.dates" :key="index" style="text-align: center; flex: 1;">
+                            <div style="height: 100px; background: #409EFF; margin-bottom: 5px; display: flex; align-items: end; justify-content: center; color: white; font-weight: bold;"
+                                 :style="{ height: Math.max(20, (chartData.earnings[index] / Math.max(...chartData.earnings)) * 100) + 'px' }">
+                                ¥{{ chartData.earnings[index].toFixed(0) }}
+                            </div>
+                            <div style="font-size: 12px;">{{ date }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="api-result" v-if="chartAPIResult">{{ chartAPIResult }}</div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">5. 完整API响应</div>
+                <div class="api-result" v-if="fullAPIResponse">{{ fullAPIResponse }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        
+        createApp({
+            setup() {
+                const loading = ref(false);
+                const testDriverId = ref('1'); // 默认司机ID
+                const selectedMonth = ref(new Date().toISOString().slice(0, 7)); // 当前月份
+                const chartType = ref('daily');
+                
+                // 收入数据
+                const earningsData = reactive({
+                    totalEarnings: 0,
+                    totalOrders: 0,
+                    averageEarnings: 0,
+                    totalDistance: 0
+                });
+                
+                const dailyEarnings = ref([]);
+                const chartData = reactive({
+                    dates: [],
+                    earnings: []
+                });
+                
+                // 测试结果
+                const driverInfoResult = ref('');
+                const earningsAPIResult = ref('');
+                const chartAPIResult = ref('');
+                const fullAPIResponse = ref('');
+                
+                // 测试司机信息
+                const testDriverInfo = async () => {
+                    if (!testDriverId.value) {
+                        ElementPlus.ElMessage.error('请输入司机ID');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`/api/drivers/${testDriverId.value}`);
+                        const result = await response.json();
+                        driverInfoResult.value = JSON.stringify(result, null, 2);
+                        
+                        if (result.code === 200) {
+                            ElementPlus.ElMessage.success('司机信息获取成功');
+                        } else {
+                            ElementPlus.ElMessage.error(result.message || '获取司机信息失败');
+                        }
+                    } catch (error) {
+                        driverInfoResult.value = '请求失败: ' + error.message;
+                        ElementPlus.ElMessage.error('网络请求失败');
+                    }
+                };
+                
+                // 测试收入统计API
+                const testEarningsAPI = async () => {
+                    if (!testDriverId.value || !selectedMonth.value) {
+                        ElementPlus.ElMessage.error('请输入司机ID和选择月份');
+                        return;
+                    }
+                    
+                    try {
+                        const params = new URLSearchParams({
+                            month: selectedMonth.value,
+                            page: '1',
+                            size: '20'
+                        });
+                        
+                        const response = await fetch(`/api/drivers/${testDriverId.value}/earnings?${params}`);
+                        const result = await response.json();
+                        earningsAPIResult.value = JSON.stringify(result, null, 2);
+                        
+                        if (result.code === 200) {
+                            ElementPlus.ElMessage.success('收入统计API测试成功');
+                        } else {
+                            ElementPlus.ElMessage.error(result.message || 'API调用失败');
+                        }
+                    } catch (error) {
+                        earningsAPIResult.value = '请求失败: ' + error.message;
+                        ElementPlus.ElMessage.error('网络请求失败');
+                    }
+                };
+                
+                // 加载收入数据
+                const loadEarningsData = async () => {
+                    if (!testDriverId.value || !selectedMonth.value) {
+                        ElementPlus.ElMessage.warning('请输入司机ID和选择月份');
+                        return;
+                    }
+                    
+                    loading.value = true;
+                    try {
+                        const params = new URLSearchParams({
+                            month: selectedMonth.value,
+                            page: '1',
+                            size: '31' // 一个月最多31天
+                        });
+                        
+                        const response = await fetch(`/api/drivers/${testDriverId.value}/earnings?${params}`);
+                        const result = await response.json();
+                        
+                        fullAPIResponse.value = JSON.stringify(result, null, 2);
+                        
+                        if (result.code === 200 && result.data) {
+                            // 更新汇总数据
+                            if (result.data.summary) {
+                                Object.assign(earningsData, {
+                                    totalEarnings: result.data.summary.totalEarnings || 0,
+                                    totalOrders: result.data.summary.totalOrders || 0,
+                                    averageEarnings: result.data.summary.averageEarnings || 0,
+                                    totalDistance: result.data.summary.totalDistance || 0
+                                });
+                            }
+                            
+                            // 更新每日明细
+                            dailyEarnings.value = result.data.records || [];
+                            
+                            ElementPlus.ElMessage.success(`成功加载 ${selectedMonth.value} 的收入数据`);
+                        } else {
+                            ElementPlus.ElMessage.error(result.message || '加载收入数据失败');
+                        }
+                    } catch (error) {
+                        console.error('加载收入数据失败:', error);
+                        ElementPlus.ElMessage.error('网络请求失败');
+                        fullAPIResponse.value = '请求失败: ' + error.message;
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+                
+                // 加载图表数据
+                const loadChartData = async () => {
+                    if (!testDriverId.value || !selectedMonth.value) {
+                        ElementPlus.ElMessage.warning('请输入司机ID和选择月份');
+                        return;
+                    }
+                    
+                    try {
+                        const params = new URLSearchParams({
+                            month: selectedMonth.value,
+                            type: chartType.value
+                        });
+                        
+                        const response = await fetch(`/api/drivers/${testDriverId.value}/earnings/chart?${params}`);
+                        const result = await response.json();
+                        
+                        chartAPIResult.value = JSON.stringify(result, null, 2);
+                        
+                        if (result.code === 200 && result.data) {
+                            chartData.dates = result.data.dates || [];
+                            chartData.earnings = result.data.earnings || [];
+                            ElementPlus.ElMessage.success('图表数据加载成功');
+                        } else {
+                            ElementPlus.ElMessage.error(result.message || '加载图表数据失败');
+                        }
+                    } catch (error) {
+                        console.error('加载图表数据失败:', error);
+                        ElementPlus.ElMessage.error('网络请求失败');
+                        chartAPIResult.value = '请求失败: ' + error.message;
+                    }
+                };
+                
+                // 组件挂载时的初始化
+                onMounted(() => {
+                    console.log('司机收入统计测试页面已加载');
+                    console.log('默认司机ID:', testDriverId.value);
+                    console.log('默认查询月份:', selectedMonth.value);
+                });
+                
+                return {
+                    loading,
+                    testDriverId,
+                    selectedMonth,
+                    chartType,
+                    earningsData,
+                    dailyEarnings,
+                    chartData,
+                    driverInfoResult,
+                    earningsAPIResult,
+                    chartAPIResult,
+                    fullAPIResponse,
+                    testDriverInfo,
+                    testEarningsAPI,
+                    loadEarningsData,
+                    loadChartData
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

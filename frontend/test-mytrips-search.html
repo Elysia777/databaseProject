@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的订单搜索功能测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 8px;
+        }
+        .filter-demo {
+            border: 1px solid #e4e7ed;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            background: #fafafa;
+        }
+        .order-item {
+            border: 1px solid #e4e7ed;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+        }
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .order-number {
+            font-weight: bold;
+            color: #333;
+        }
+        .status-tag {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .order-info {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+        .button-group {
+            margin: 15px 0;
+        }
+        .button-group button {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .stats-display {
+            background: #e1f5fe;
+            border: 1px solid #0288d1;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>我的订单搜索功能测试</h1>
+            
+            <!-- 1. 筛选功能演示 -->
+            <div class="test-section">
+                <div class="section-title">1. 筛选功能演示</div>
+                
+                <div class="filter-demo">
+                    <h4>筛选条件</h4>
+                    <el-form :model="filters" inline>
+                        <el-form-item label="订单状态">
+                            <el-select v-model="filters.status" placeholder="选择状态" clearable style="width: 140px">
+                                <el-option label="全部" value="" />
+                                <el-option label="已完成" value="COMPLETED" />
+                                <el-option label="已取消" value="CANCELLED" />
+                                <el-option label="等待接单" value="PENDING" />
+                            </el-select>
+                        </el-form-item>
+                        
+                        <el-form-item label="支付状态">
+                            <el-select v-model="filters.paymentStatus" placeholder="支付状态" clearable style="width: 120px">
+                                <el-option label="全部" value="" />
+                                <el-option label="已支付" value="PAID" />
+                                <el-option label="未支付" value="UNPAID" />
+                            </el-select>
+                        </el-form-item>
+                        
+                        <el-form-item label="关键词">
+                            <el-input
+                                v-model="filters.keyword"
+                                placeholder="搜索订单号、地址"
+                                clearable
+                                style="width: 200px"
+                            />
+                        </el-form-item>
+                        
+                        <el-form-item>
+                            <el-button type="primary" @click="applyFilters">搜索</el-button>
+                            <el-button @click="resetFilters">重置</el-button>
+                        </el-form-item>
+                    </el-form>
+                    
+                    <!-- 快速筛选 -->
+                    <div style="margin-top: 15px;">
+                        <span style="margin-right: 10px;">快速筛选：</span>
+                        <el-tag 
+                            v-for="quickFilter in quickFilters" 
+                            :key="quickFilter.key"
+                            :type="activeQuickFilter === quickFilter.key ? 'primary' : 'info'"
+                            :effect="activeQuickFilter === quickFilter.key ? 'dark' : 'plain'"
+                            @click="applyQuickFilter(quickFilter.key)"
+                            style="margin-right: 8px; cursor: pointer;"
+                        >
+                            {{ quickFilter.label }}
+                        </el-tag>
+                    </div>
+                </div>
+                
+                <div class="stats-display">
+                    <strong>筛选结果统计：</strong>
+                    共找到 {{ filteredOrders.length }} 条订单
+                    <span v-if="filters.status || filters.paymentStatus || filters.keyword">(已筛选)</span>
+                </div>
+            </div>
+
+            <!-- 2. 订单列表展示 -->
+            <div class="test-section">
+                <div class="section-title">2. 订单列表展示</div>
+                
+                <div class="button-group">
+                    <el-button type="primary" @click="loadTestData">加载测试数据</el-button>
+                    <el-button @click="clearData">清除数据</el-button>
+                </div>
+                
+                <div v-if="filteredOrders.length === 0" style="text-align: center; padding: 40px; color: #999;">
+                    暂无订单数据
+                </div>
+                
+                <div v-else>
+                    <div v-for="order in paginatedOrders" :key="order.id" class="order-item">
+                        <div class="order-header">
+                            <div class="order-number">{{ order.orderNumber }}</div>
+                            <div class="status-tag" :class="'status-' + order.status.toLowerCase()">
+                                {{ getStatusText(order.status) }}
+                            </div>
+                        </div>
+                        <div class="order-info">
+                            <div>{{ order.pickupAddress }} → {{ order.destinationAddress }}</div>
+                            <div>费用: ¥{{ order.estimatedFare }} | 支付状态: {{ getPaymentStatusText(order.paymentStatus) }}</div>
+                            <div>创建时间: {{ formatTime(order.createdAt) }}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 分页 -->
+                    <div v-if="filteredOrders.length > pageSize" style="display: flex; justify-content: center; margin-top: 20px;">
+                        <el-pagination
+                            v-model:current-page="currentPage"
+                            v-model:page-size="pageSize"
+                            :page-sizes="[5, 10, 20]"
+                            :total="filteredOrders.length"
+                            layout="total, sizes, prev, pager, next"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 功能测试 -->
+            <div class="test-section">
+                <div class="section-title">3. 功能测试</div>
+                
+                <div class="button-group">
+                    <el-button @click="testStatusFilter">测试状态筛选</el-button>
+                    <el-button @click="testPaymentFilter">测试支付筛选</el-button>
+                    <el-button @click="testKeywordSearch">测试关键词搜索</el-button>
+                    <el-button @click="testQuickFilters">测试快速筛选</el-button>
+                </div>
+                
+                <div v-if="testResult" style="margin-top: 15px; padding: 10px; background: #f0f9ff; border: 1px solid #409EFF; border-radius: 4px;">
+                    {{ testResult }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                // 响应式数据
+                const orders = ref([]);
+                const filters = ref({
+                    status: '',
+                    paymentStatus: '',
+                    keyword: ''
+                });
+                const activeQuickFilter = ref('');
+                const currentPage = ref(1);
+                const pageSize = ref(10);
+                const testResult = ref('');
+
+                // 快速筛选选项
+                const quickFilters = [
+                    { key: '', label: '全部订单' },
+                    { key: 'unpaid', label: '待支付' },
+                    { key: 'completed', label: '已完成' },
+                    { key: 'cancelled', label: '已取消' }
+                ];
+
+                // 计算属性
+                const filteredOrders = computed(() => {
+                    let result = [...orders.value];
+                    
+                    // 状态筛选
+                    if (filters.value.status) {
+                        result = result.filter(order => order.status === filters.value.status);
+                    }
+                    
+                    // 支付状态筛选
+                    if (filters.value.paymentStatus) {
+                        if (filters.value.paymentStatus === 'UNPAID') {
+                            result = result.filter(order => order.status === 'COMPLETED' && order.paymentStatus !== 'PAID');
+                        } else {
+                            result = result.filter(order => order.paymentStatus === filters.value.paymentStatus);
+                        }
+                    }
+                    
+                    // 关键词搜索
+                    if (filters.value.keyword && filters.value.keyword.trim()) {
+                        const keyword = filters.value.keyword.trim().toLowerCase();
+                        result = result.filter(order => 
+                            order.orderNumber.toLowerCase().includes(keyword) ||
+                            order.pickupAddress.toLowerCase().includes(keyword) ||
+                            order.destinationAddress.toLowerCase().includes(keyword)
+                        );
+                    }
+                    
+                    return result;
+                });
+
+                const paginatedOrders = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value;
+                    const end = start + pageSize.value;
+                    return filteredOrders.value.slice(start, end);
+                });
+
+                // 方法
+                const loadTestData = () => {
+                    orders.value = [
+                        {
+                            id: 1,
+                            orderNumber: 'ORD001',
+                            status: 'COMPLETED',
+                            paymentStatus: 'PAID',
+                            pickupAddress: '北京市朝阳区三里屯',
+                            destinationAddress: '北京市海淀区中关村',
+                            estimatedFare: 45.50,
+                            createdAt: '2025-01-08T10:30:00'
+                        },
+                        {
+                            id: 2,
+                            orderNumber: 'ORD002',
+                            status: 'COMPLETED',
+                            paymentStatus: 'UNPAID',
+                            pickupAddress: '北京市西城区西单',
+                            destinationAddress: '北京市东城区王府井',
+                            estimatedFare: 28.00,
+                            createdAt: '2025-01-08T14:15:00'
+                        },
+                        {
+                            id: 3,
+                            orderNumber: 'ORD003',
+                            status: 'CANCELLED',
+                            paymentStatus: 'REFUNDED',
+                            pickupAddress: '北京市丰台区丰台站',
+                            destinationAddress: '北京市石景山区万达广场',
+                            estimatedFare: 35.00,
+                            createdAt: '2025-01-07T16:45:00'
+                        },
+                        {
+                            id: 4,
+                            orderNumber: 'ORD004',
+                            status: 'PENDING',
+                            paymentStatus: 'UNPAID',
+                            pickupAddress: '北京市昌平区回龙观',
+                            destinationAddress: '北京市朝阳区国贸',
+                            estimatedFare: 65.00,
+                            createdAt: '2025-01-08T09:20:00'
+                        },
+                        {
+                            id: 5,
+                            orderNumber: 'ORD005',
+                            status: 'COMPLETED',
+                            paymentStatus: 'PAID',
+                            pickupAddress: '北京市海淀区五道口',
+                            destinationAddress: '北京市朝阳区望京',
+                            estimatedFare: 42.50,
+                            createdAt: '2025-01-06T20:10:00'
+                        }
+                    ];
+                    ElMessage.success('测试数据加载完成');
+                };
+
+                const clearData = () => {
+                    orders.value = [];
+                    resetFilters();
+                    ElMessage.info('数据已清除');
+                };
+
+                const applyFilters = () => {
+                    currentPage.value = 1;
+                    activeQuickFilter.value = '';
+                    ElMessage.success(`筛选完成，找到 ${filteredOrders.value.length} 条订单`);
+                };
+
+                const resetFilters = () => {
+                    filters.value = {
+                        status: '',
+                        paymentStatus: '',
+                        keyword: ''
+                    };
+                    activeQuickFilter.value = '';
+                    currentPage.value = 1;
+                    ElMessage.info('筛选条件已重置');
+                };
+
+                const applyQuickFilter = (filterKey) => {
+                    filters.value = {
+                        status: '',
+                        paymentStatus: '',
+                        keyword: ''
+                    };
+                    
+                    activeQuickFilter.value = filterKey;
+                    currentPage.value = 1;
+                    
+                    switch (filterKey) {
+                        case 'unpaid':
+                            filters.value.paymentStatus = 'UNPAID';
+                            break;
+                        case 'completed':
+                            filters.value.status = 'COMPLETED';
+                            break;
+                        case 'cancelled':
+                            filters.value.status = 'CANCELLED';
+                            break;
+                    }
+                    
+                    ElMessage.success(`应用快速筛选: ${quickFilters.find(f => f.key === filterKey)?.label}`);
+                };
+
+                const getStatusText = (status) => {
+                    const statusMap = {
+                        'PENDING': '等待接单',
+                        'COMPLETED': '已完成',
+                        'CANCELLED': '已取消'
+                    };
+                    return statusMap[status] || status;
+                };
+
+                const getPaymentStatusText = (status) => {
+                    const statusMap = {
+                        'PAID': '已支付',
+                        'UNPAID': '未支付',
+                        'REFUNDED': '已退款'
+                    };
+                    return statusMap[status] || status;
+                };
+
+                const formatTime = (timeStr) => {
+                    return new Date(timeStr).toLocaleString('zh-CN');
+                };
+
+                // 测试方法
+                const testStatusFilter = () => {
+                    if (orders.value.length === 0) {
+                        ElMessage.warning('请先加载测试数据');
+                        return;
+                    }
+                    
+                    filters.value.status = 'COMPLETED';
+                    applyFilters();
+                    testResult.value = `状态筛选测试：筛选"已完成"订单，结果 ${filteredOrders.value.length} 条`;
+                };
+
+                const testPaymentFilter = () => {
+                    if (orders.value.length === 0) {
+                        ElMessage.warning('请先加载测试数据');
+                        return;
+                    }
+                    
+                    filters.value.paymentStatus = 'UNPAID';
+                    applyFilters();
+                    testResult.value = `支付筛选测试：筛选"未支付"订单，结果 ${filteredOrders.value.length} 条`;
+                };
+
+                const testKeywordSearch = () => {
+                    if (orders.value.length === 0) {
+                        ElMessage.warning('请先加载测试数据');
+                        return;
+                    }
+                    
+                    filters.value.keyword = '三里屯';
+                    applyFilters();
+                    testResult.value = `关键词搜索测试：搜索"三里屯"，结果 ${filteredOrders.value.length} 条`;
+                };
+
+                const testQuickFilters = () => {
+                    if (orders.value.length === 0) {
+                        ElMessage.warning('请先加载测试数据');
+                        return;
+                    }
+                    
+                    applyQuickFilter('unpaid');
+                    testResult.value = `快速筛选测试：筛选"待支付"订单，结果 ${filteredOrders.value.length} 条`;
+                };
+
+                return {
+                    orders,
+                    filters,
+                    activeQuickFilter,
+                    currentPage,
+                    pageSize,
+                    testResult,
+                    quickFilters,
+                    filteredOrders,
+                    paginatedOrders,
+                    loadTestData,
+                    clearData,
+                    applyFilters,
+                    resetFilters,
+                    applyQuickFilter,
+                    getStatusText,
+                    getPaymentStatusText,
+                    formatTime,
+                    testStatusFilter,
+                    testPaymentFilter,
+                    testKeywordSearch,
+                    testQuickFilters
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

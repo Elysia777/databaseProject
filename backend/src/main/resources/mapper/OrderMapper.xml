@@ -139,6 +139,27 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
+    <!-- 按日期范围查询司机的订单 -->
+    <select id="selectDriverOrdersByDateRange" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
+        ORDER BY completion_time DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 按状态和日期范围查询司机的订单 -->
+    <select id="selectDriverOrdersByStatusAndDateRange" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId} 
+        AND status = #{status}
+        AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
+        ORDER BY completion_time DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
     <select id="selectAll" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders

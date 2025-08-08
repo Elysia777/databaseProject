@@ -38,4 +38,7 @@ public interface VehicleMapper {
 
     /** 取消司机所有车辆的激活状态 */
     int deactivateAllByDriverId(Long driverId);
+
+    /** 查询所有车辆（包含司机信息） */
+    List<java.util.Map<String, Object>> selectAllWithDriverInfo();
 }

@@ -32,4 +32,16 @@ public interface VehicleService {
 
     /** 设置激活车辆 */
     boolean setActiveVehicle(Long driverId, Long vehicleId);
+
+    /** 获取所有车辆（包含司机信息） */
+    List<java.util.Map<String, Object>> getAllVehiclesWithDriverInfo();
+
+    /** 审核通过车辆 */
+    boolean approveVehicle(Long id);
+
+    /** 拒绝车辆 */
+    boolean rejectVehicle(Long id);
+
+    /** 停用车辆 */
+    boolean deactivateVehicle(Long id);
 }

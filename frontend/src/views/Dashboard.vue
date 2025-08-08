@@ -31,6 +31,15 @@
           <span>订单管理</span>
         </el-menu-item>
         
+        <el-menu-item index="/dashboard/review-management">
+          <el-icon><Star /></el-icon>
+          <span>评价管理</span>
+        </el-menu-item>
+        
+        <el-menu-item index="/dashboard/vehicle-management">
+          <el-icon><Van /></el-icon>
+          <span>车辆管理</span>
+        </el-menu-item>
 
         </template>
         
@@ -133,6 +142,8 @@ const pageTitleMap = computed(() => {
       '/dashboard/admin-overview': '管理概览',
       '/dashboard/user-management': '用户管理',
       '/dashboard/order-management': '订单管理',
+      '/dashboard/review-management': '评价管理',
+      '/dashboard/vehicle-management': '车辆管理',
       '/dashboard/profile': '个人设置'
     }
   } else if (userStore.isPassenger) {

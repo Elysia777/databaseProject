@@ -51,8 +51,14 @@ public class Vehicle {
     /** 年检到期日期 */
     private LocalDate inspectionExpiry;
 
+    /** 车辆状态 (ACTIVE, PENDING, REJECTED, INACTIVE) */
+    private String status;
+
     /** 是否激活 */
     private Boolean isActive;
+
+    /** 车辆图片 */
+    private String vehicleImage;
 
     /** 创建时间 */
     private LocalDateTime createdAt;

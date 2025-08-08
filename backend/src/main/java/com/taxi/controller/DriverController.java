@@ -531,21 +531,36 @@ public class DriverController {
     public Result<List<Order>> getDriverOrders(@PathVariable Long driverId,
                                               @RequestParam(defaultValue = "1") int page,
                                               @RequestParam(defaultValue = "20") int size,
-                                              @RequestParam(required = false) String status) {
+                                              @RequestParam(required = false) String status,
+                                              @RequestParam(required = false) String startDate,
+                                              @RequestParam(required = false) String endDate) {
         try {
             System.out.println("=== 获取司机历史订单 ===");
             System.out.println("司机ID: " + driverId);
             System.out.println("页码: " + page + ", 大小: " + size);
             System.out.println("状态筛选: " + status);
+            System.out.println("日期范围: " + startDate + " 到 " + endDate);
             
             // 计算偏移量
             int offset = (page - 1) * size;
             
             List<Order> orders;
-            if (status != null && !status.isEmpty()) {
-                orders = orderMapper.selectDriverOrdersByStatus(driverId, status, offset, size);
+            
+            // 如果有日期范围参数，使用日期范围查询
+            if (startDate != null && endDate != null) {
+                if (status != null && !status.isEmpty()) {
+                    orders = orderMapper.selectDriverOrdersByStatusAndDateRange(driverId, status, startDate, endDate, offset, size);
+                } else {
+                    orders = orderMapper.selectDriverOrdersByDateRange(driverId, startDate, endDate, offset, size);
+                }
+                System.out.println("按日期范围查询: " + startDate + " 到 " + endDate);
             } else {
-                orders = orderMapper.selectDriverOrders(driverId, offset, size);
+                // 原有的查询逻辑
+                if (status != null && !status.isEmpty()) {
+                    orders = orderMapper.selectDriverOrdersByStatus(driverId, status, offset, size);
+                } else {
+                    orders = orderMapper.selectDriverOrders(driverId, offset, size);
+                }
             }
             
             System.out.println("查询到 " + orders.size() + " 条订单记录");

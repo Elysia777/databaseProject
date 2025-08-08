@@ -65,9 +65,138 @@
       </div>
     </div>
 
+    <!-- 筛选条件 -->
+    <div class="filter-section">
+      <el-card class="filter-card">
+        <div class="filter-header">
+          <h3>📋 {{ orderStore.currentOrder ? '历史订单' : '我的订单' }}</h3>
+          <el-button 
+            type="text" 
+            @click="toggleFilters"
+            class="toggle-filters"
+          >
+            <el-icon><Filter /></el-icon>
+            {{ showFilters ? '收起筛选' : '展开筛选' }}
+          </el-button>
+        </div>
+        
+        <div v-show="showFilters" class="filters-content">
+          <el-form :model="filters" inline class="filter-form">
+            <el-form-item label="订单状态">
+              <el-select 
+                v-model="filters.status" 
+                placeholder="选择状态" 
+                clearable
+                style="width: 140px"
+                @change="applyFilters"
+              >
+                <el-option label="全部" value="" />
+                <el-option label="预约中" value="SCHEDULED" />
+                <el-option label="等待接单" value="PENDING" />
+                <el-option label="司机已接单" value="ASSIGNED" />
+                <el-option label="司机已到达" value="PICKUP" />
+                <el-option label="行程中" value="IN_PROGRESS" />
+                <el-option label="已完成" value="COMPLETED" />
+                <el-option label="已取消" value="CANCELLED" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="支付状态">
+              <el-select 
+                v-model="filters.paymentStatus" 
+                placeholder="支付状态" 
+                clearable
+                style="width: 120px"
+                @change="applyFilters"
+              >
+                <el-option label="全部" value="" />
+                <el-option label="已支付" value="PAID" />
+                <el-option label="未支付" value="UNPAID" />
+                <el-option label="已退款" value="REFUNDED" />
+              </el-select>
+            </el-form-item>
+            
+            <el-form-item label="时间范围">
+              <el-date-picker
+                v-model="filters.dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 240px"
+                @change="applyFilters"
+              />
+            </el-form-item>
+            
+            <el-form-item label="关键词">
+              <el-input
+                v-model="filters.keyword"
+                placeholder="搜索订单号、地址"
+                clearable
+                style="width: 200px"
+                @input="debounceSearch"
+              >
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+            </el-form-item>
+            
+            <el-form-item>
+              <el-button type="primary" @click="applyFilters">
+                <el-icon><Search /></el-icon>
+                搜索
+              </el-button>
+              <el-button @click="resetFilters">
+                <el-icon><Refresh /></el-icon>
+                重置
+              </el-button>
+            </el-form-item>
+          </el-form>
+          
+          <!-- 快速筛选标签 -->
+          <div class="quick-filters">
+            <span class="quick-filter-label">快速筛选：</span>
+            <el-tag 
+              v-for="quickFilter in quickFilters" 
+              :key="quickFilter.key"
+              :type="activeQuickFilter === quickFilter.key ? 'primary' : 'info'"
+              :effect="activeQuickFilter === quickFilter.key ? 'dark' : 'plain'"
+              @click="applyQuickFilter(quickFilter.key)"
+              class="quick-filter-tag"
+            >
+              {{ quickFilter.label }}
+            </el-tag>
+          </div>
+        </div>
+      </el-card>
+    </div>
+
     <!-- 历史订单列表 -->
     <div class="orders-container">
-      <h3 v-if="orderStore.currentOrder">📋 历史订单</h3>
+      <div class="orders-header">
+        <div class="orders-count">
+          共找到 {{ filteredOrders.length }} 条订单
+          <span v-if="filters.status || filters.paymentStatus || filters.dateRange || filters.keyword" class="filter-tip">
+            (已筛选)
+          </span>
+        </div>
+        <div class="sort-options">
+          <el-select 
+            v-model="sortBy" 
+            placeholder="排序方式" 
+            style="width: 140px"
+            @change="applySorting"
+          >
+            <el-option label="时间倒序" value="time_desc" />
+            <el-option label="时间正序" value="time_asc" />
+            <el-option label="费用高到低" value="fare_desc" />
+            <el-option label="费用低到高" value="fare_asc" />
+          </el-select>
+        </div>
+      </div>
       
       <div v-if="loading" class="loading">
         <el-icon class="is-loading"><Loading /></el-icon>
@@ -81,7 +210,7 @@
 
       <div v-else class="orders-list">
         <div 
-          v-for="order in orders" 
+          v-for="order in paginatedOrders" 
           :key="order.id" 
           class="order-item"
           :class="{ 'unpaid': isUnpaid(order) }"
@@ -183,6 +312,19 @@
             </div>
           </div>
         </div>
+        
+        <!-- 分页 -->
+        <div v-if="filteredOrders.length > pageSize" class="pagination-container">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[5, 10, 20, 50]"
+            :total="filteredOrders.length"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
       </div>
     </div>
 
@@ -272,7 +414,10 @@ import {
   WarningFilled, 
   User,
   Star,
-  StarFilled
+  StarFilled,
+  Filter,
+  Search,
+  Refresh
 } from '@element-plus/icons-vue'
 import ReviewDialog from '@/components/ReviewDialog.vue'
 import { useUserStore } from '@/stores/user'
@@ -296,9 +441,96 @@ const reviewDialogVisible = ref(false)
 const selectedOrderForReview = ref(null)
 const selectedDriverInfo = ref(null)
 
+// 筛选和分页相关
+const showFilters = ref(false)
+const filters = ref({
+  status: '',
+  paymentStatus: '',
+  dateRange: null,
+  keyword: ''
+})
+const activeQuickFilter = ref('')
+const sortBy = ref('time_desc')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const searchTimeout = ref(null)
+
+// 快速筛选选项
+const quickFilters = [
+  { key: '', label: '全部订单' },
+  { key: 'unpaid', label: '待支付' },
+  { key: 'completed', label: '已完成' },
+  { key: 'cancelled', label: '已取消' },
+  { key: 'today', label: '今日订单' },
+  { key: 'this_week', label: '本周订单' }
+]
+
 // 计算属性
 const unpaidCount = computed(() => {
   return orders.value.filter(order => isUnpaid(order)).length
+})
+
+// 筛选后的订单
+const filteredOrders = computed(() => {
+  let result = [...orders.value]
+  
+  // 状态筛选
+  if (filters.value.status) {
+    result = result.filter(order => order.status === filters.value.status)
+  }
+  
+  // 支付状态筛选
+  if (filters.value.paymentStatus) {
+    if (filters.value.paymentStatus === 'UNPAID') {
+      result = result.filter(order => isUnpaid(order))
+    } else {
+      result = result.filter(order => order.paymentStatus === filters.value.paymentStatus)
+    }
+  }
+  
+  // 时间范围筛选
+  if (filters.value.dateRange && filters.value.dateRange.length === 2) {
+    const [startDate, endDate] = filters.value.dateRange
+    result = result.filter(order => {
+      const orderDate = new Date(order.createdAt).toISOString().split('T')[0]
+      return orderDate >= startDate && orderDate <= endDate
+    })
+  }
+  
+  // 关键词搜索
+  if (filters.value.keyword && filters.value.keyword.trim()) {
+    const keyword = filters.value.keyword.trim().toLowerCase()
+    result = result.filter(order => 
+      order.orderNumber?.toLowerCase().includes(keyword) ||
+      order.pickupAddress?.toLowerCase().includes(keyword) ||
+      order.destinationAddress?.toLowerCase().includes(keyword)
+    )
+  }
+  
+  // 排序
+  result.sort((a, b) => {
+    switch (sortBy.value) {
+      case 'time_asc':
+        return new Date(a.createdAt) - new Date(b.createdAt)
+      case 'time_desc':
+        return new Date(b.createdAt) - new Date(a.createdAt)
+      case 'fare_asc':
+        return (a.actualFare || a.estimatedFare || 0) - (b.actualFare || b.estimatedFare || 0)
+      case 'fare_desc':
+        return (b.actualFare || b.estimatedFare || 0) - (a.actualFare || a.estimatedFare || 0)
+      default:
+        return new Date(b.createdAt) - new Date(a.createdAt)
+    }
+  })
+  
+  return result
+})
+
+// 分页后的订单
+const paginatedOrders = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredOrders.value.slice(start, end)
 })
 
 // 页面加载时获取订单历史
@@ -582,6 +814,87 @@ const handleReviewSubmitted = (review) => {
   }
   
   ElMessage.success('感谢您的评价！')
+}
+
+// 筛选和分页相关方法
+const toggleFilters = () => {
+  showFilters.value = !showFilters.value
+}
+
+const applyFilters = () => {
+  currentPage.value = 1 // 重置到第一页
+  activeQuickFilter.value = '' // 清除快速筛选状态
+}
+
+const resetFilters = () => {
+  filters.value = {
+    status: '',
+    paymentStatus: '',
+    dateRange: null,
+    keyword: ''
+  }
+  activeQuickFilter.value = ''
+  currentPage.value = 1
+  sortBy.value = 'time_desc'
+}
+
+const applyQuickFilter = (filterKey) => {
+  // 重置其他筛选条件
+  filters.value = {
+    status: '',
+    paymentStatus: '',
+    dateRange: null,
+    keyword: ''
+  }
+  
+  activeQuickFilter.value = filterKey
+  currentPage.value = 1
+  
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  
+  switch (filterKey) {
+    case 'unpaid':
+      filters.value.paymentStatus = 'UNPAID'
+      break
+    case 'completed':
+      filters.value.status = 'COMPLETED'
+      break
+    case 'cancelled':
+      filters.value.status = 'CANCELLED'
+      break
+    case 'today':
+      filters.value.dateRange = [todayStr, todayStr]
+      break
+    case 'this_week':
+      const weekStart = new Date(today)
+      weekStart.setDate(today.getDate() - today.getDay())
+      const weekStartStr = weekStart.toISOString().split('T')[0]
+      filters.value.dateRange = [weekStartStr, todayStr]
+      break
+  }
+}
+
+const applySorting = () => {
+  // 排序逻辑在计算属性中处理
+}
+
+const debounceSearch = () => {
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value)
+  }
+  searchTimeout.value = setTimeout(() => {
+    applyFilters()
+  }, 500)
+}
+
+const handleSizeChange = (size) => {
+  pageSize.value = size
+  currentPage.value = 1
+}
+
+const handleCurrentChange = (page) => {
+  currentPage.value = page
 }
 </script>
 
@@ -996,9 +1309,120 @@ const handleReviewSubmitted = (review) => {
   gap: 10px;
 }
 
+/* 筛选相关样式 */
+.filter-section {
+  margin-bottom: 20px;
+}
+
+.filter-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.filter-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.toggle-filters {
+  color: #409EFF;
+  font-size: 14px;
+}
+
+.filters-content {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 15px;
+}
+
+.filter-form {
+  margin-bottom: 15px;
+}
+
+.quick-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-filter-label {
+  font-size: 14px;
+  color: #666;
+  margin-right: 8px;
+}
+
+.quick-filter-tag {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.quick-filter-tag:hover {
+  transform: translateY(-1px);
+}
+
+.orders-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.orders-count {
+  font-size: 14px;
+  color: #666;
+}
+
+.filter-tip {
+  color: #409EFF;
+  font-weight: bold;
+}
+
+.sort-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
 @media (max-width: 768px) {
   .my-trips {
     padding: 10px;
+  }
+  
+  .filter-form {
+    flex-direction: column;
+  }
+  
+  .filter-form .el-form-item {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .orders-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .quick-filters {
+    flex-direction: column;
+    align-items: flex-start;
   }
   
   .trip-info {

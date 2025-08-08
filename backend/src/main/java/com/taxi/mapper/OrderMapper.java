@@ -71,6 +71,21 @@ public interface OrderMapper {
                                           @Param("offset") int offset, 
                                           @Param("size") int size);
     
+    /** 按日期范围查询司机的订单（分页） */
+    List<Order> selectDriverOrdersByDateRange(@Param("driverId") Long driverId,
+                                             @Param("startDate") String startDate,
+                                             @Param("endDate") String endDate,
+                                             @Param("offset") int offset,
+                                             @Param("size") int size);
+    
+    /** 按状态和日期范围查询司机的订单（分页） */
+    List<Order> selectDriverOrdersByStatusAndDateRange(@Param("driverId") Long driverId,
+                                                      @Param("status") String status,
+                                                      @Param("startDate") String startDate,
+                                                      @Param("endDate") String endDate,
+                                                      @Param("offset") int offset,
+                                                      @Param("size") int size);
+    
     /** 统计司机订单数量 */
     int countDriverOrders(@Param("driverId") Long driverId, @Param("status") String status);
     

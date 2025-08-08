@@ -48,9 +48,14 @@ public class VehicleServiceImpl implements VehicleService {
             throw new RuntimeException("车牌号已存在");
         }
 
-        // 设置创建时间
+        // 设置创建时间和默认状态
         vehicle.setCreatedAt(LocalDateTime.now());
         vehicle.setUpdatedAt(LocalDateTime.now());
+        
+        // 设置默认状态为待审核
+        if (vehicle.getStatus() == null) {
+            vehicle.setStatus("PENDING");
+        }
         
         // 如果是司机的第一辆车，自动设为激活状态
         List<Vehicle> existingVehicles = vehicleMapper.selectByDriverId(vehicle.getDriverId());
@@ -109,5 +114,49 @@ public class VehicleServiceImpl implements VehicleService {
         }
 
         return vehicleMapper.setActiveVehicle(driverId, vehicleId) > 0;
+    }
+
+    @Override
+    public List<java.util.Map<String, Object>> getAllVehiclesWithDriverInfo() {
+        return vehicleMapper.selectAllWithDriverInfo();
+    }
+
+    @Override
+    @Transactional
+    public boolean approveVehicle(Long id) {
+        Vehicle vehicle = vehicleMapper.selectById(id);
+        if (vehicle == null) {
+            throw new RuntimeException("车辆不存在");
+        }
+        
+        vehicle.setStatus("ACTIVE");
+        vehicle.setUpdatedAt(LocalDateTime.now());
+        return vehicleMapper.updateById(vehicle) > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean rejectVehicle(Long id) {
+        Vehicle vehicle = vehicleMapper.selectById(id);
+        if (vehicle == null) {
+            throw new RuntimeException("车辆不存在");
+        }
+        
+        vehicle.setStatus("REJECTED");
+        vehicle.setUpdatedAt(LocalDateTime.now());
+        return vehicleMapper.updateById(vehicle) > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean deactivateVehicle(Long id) {
+        Vehicle vehicle = vehicleMapper.selectById(id);
+        if (vehicle == null) {
+            throw new RuntimeException("车辆不存在");
+        }
+        
+        vehicle.setStatus("INACTIVE");
+        vehicle.setUpdatedAt(LocalDateTime.now());
+        return vehicleMapper.updateById(vehicle) > 0;
     }
 }

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机收入统计功能验证</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        .test-item {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .test-controls {
+            margin: 10px 0;
+        }
+        .test-controls input, .test-controls select, .test-controls button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-controls button {
+            background: #409EFF;
+            color: white;
+            cursor: pointer;
+        }
+        .test-controls button:hover {
+            background: #337ecc;
+        }
+        .result {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .success { color: #67C23A; }
+        .error { color: #F56C6C; }
+        .warning { color: #E6A23C; }
+        .stats-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>司机收入统计功能验证</h1>
+        <p>此页面用于验证司机收入统计按月份查询功能是否正常工作。</p>
+
+        <!-- 基础配置 -->
+        <div class="test-item">
+            <div class="test-title">1. 基础配置</div>
+            <div class="test-controls">
+                <label>司机ID: </label>
+                <input type="number" id="driverId" value="1" min="1">
+                <label>查询月份: </label>
+                <input type="month" id="queryMonth" value="">
+                <button onclick="updateConfig()">更新配置</button>
+            </div>
+            <div id="configResult" class="result"></div>
+        </div>
+
+        <!-- 司机信息验证 -->
+        <div class="test-item">
+            <div class="test-title">2. 司机信息验证</div>
+            <div class="test-controls">
+                <button onclick="testDriverInfo()">获取司机信息</button>
+            </div>
+            <div id="driverInfoResult" class="result"></div>
+        </div>
+
+        <!-- 收入统计API测试 -->
+        <div class="test-item">
+            <div class="test-title">3. 收入统计API测试</div>
+            <div class="test-controls">
+                <button onclick="testEarningsAPI()">测试收入统计API</button>
+                <button onclick="testEarningsChart()">测试图表数据API</button>
+            </div>
+            <div class="stats-display" id="statsDisplay" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalEarnings">¥0.00</div>
+                    <div class="stat-label">总收入</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalOrders">0</div>
+                    <div class="stat-label">完成订单</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="averageEarnings">¥0.00</div>
+                    <div class="stat-label">平均单价</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalDistance">0.0km</div>
+                    <div class="stat-label">总里程</div>
+                </div>
+            </div>
+            <div id="earningsResult" class="result"></div>
+        </div>
+
+        <!-- 月份查询测试 -->
+        <div class="test-item">
+            <div class="test-title">4. 多月份对比测试</div>
+            <div class="test-controls">
+                <button onclick="testMultipleMonths()">测试近3个月数据</button>
+            </div>
+            <div id="multiMonthResult" class="result"></div>
+        </div>
+
+        <!-- 数据完整性检查 -->
+        <div class="test-item">
+            <div class="test-title">5. 数据完整性检查</div>
+            <div class="test-controls">
+                <button onclick="checkDataIntegrity()">检查数据完整性</button>
+            </div>
+            <div id="integrityResult" class="result"></div>
+        </div>
+
+        <!-- 性能测试 -->
+        <div class="test-item">
+            <div class="test-title">6. 性能测试</div>
+            <div class="test-controls">
+                <button onclick="performanceTest()">执行性能测试</button>
+            </div>
+            <div id="performanceResult" class="result"></div>
+        </div>
+
+        <!-- 功能验证总结 -->
+        <div class="test-item">
+            <div class="test-title">7. 功能验证总结</div>
+            <div class="test-controls">
+                <button onclick="runAllTests()">运行所有测试</button>
+            </div>
+            <div id="summaryResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局配置
+        let config = {
+            driverId: 1,
+            queryMonth: new Date().toISOString().slice(0, 7)
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('queryMonth').value = config.queryMonth;
+            updateConfig();
+        });
+
+        // 更新配置
+        function updateConfig() {
+            config.driverId = document.getElementById('driverId').value;
+            config.queryMonth = document.getElementById('queryMonth').value;
+            
+            const result = `配置已更新:
+司机ID: ${config.driverId}
+查询月份: ${config.queryMonth}
+当前时间: ${new Date().toLocaleString()}`;
+            
+            document.getElementById('configResult').textContent = result;
+            document.getElementById('configResult').className = 'result success';
+        }
+
+        // 测试司机信息
+        async function testDriverInfo() {
+            const resultDiv = document.getElementById('driverInfoResult');
+            resultDiv.textContent = '正在获取司机信息...';
+            
+            try {
+                const response = await fetch(`/api/drivers/${config.driverId}`);
+                const result = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                resultDiv.className = result.code === 200 ? 'result success' : 'result error';
+                
+                return result.code === 200;
+            } catch (error) {
+                resultDiv.textContent = `请求失败: ${error.message}`;
+                resultDiv.className = 'result error';
+                return false;
+            }
+        }
+
+        // 测试收入统计API
+        async function testEarningsAPI() {
+            const resultDiv = document.getElementById('earningsResult');
+            resultDiv.textContent = '正在查询收入统计...';
+            
+            try {
+                const params = new URLSearchParams({
+                    month: config.queryMonth,
+                    page: '1',
+                    size: '31'
+                });
+                
+                const response = await fetch(`/api/drivers/${config.driverId}/earnings?${params}`);
+                const result = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                
+                if (result.code === 200 && result.data && result.data.summary) {
+                    // 更新统计显示
+                    const summary = result.data.summary;
+                    document.getElementById('totalEarnings').textContent = `¥${(summary.totalEarnings || 0).toFixed(2)}`;
+                    document.getElementById('totalOrders').textContent = summary.totalOrders || 0;
+                    document.getElementById('averageEarnings').textContent = `¥${(summary.averageEarnings || 0).toFixed(2)}`;
+                    document.getElementById('totalDistance').textContent = `${(summary.totalDistance || 0).toFixed(1)}km`;
+                    document.getElementById('statsDisplay').style.display = 'grid';
+                    
+                    resultDiv.className = 'result success';
+                    return true;
+                } else {
+                    resultDiv.className = 'result error';
+                    return false;
+                }
+            } catch (error) {
+                resultDiv.textContent = `请求失败: ${error.message}`;
+                resultDiv.className = 'result error';
+                return false;
+            }
+        }
+
+        // 测试图表数据API
+        async function testEarningsChart() {
+            const resultDiv = document.getElementById('earningsResult');
+            
+            try {
+                const params = new URLSearchParams({
+                    month: config.queryMonth,
+                    type: 'daily'
+                });
+                
+                const response = await fetch(`/api/drivers/${config.driverId}/earnings/chart?${params}`);
+                const result = await response.json();
+                
+                const chartResult = `图表数据API测试结果:
+${JSON.stringify(result, null, 2)}`;
+                
+                resultDiv.textContent += '\n\n' + chartResult;
+                return result.code === 200;
+            } catch (error) {
+                resultDiv.textContent += `\n\n图表数据API请求失败: ${error.message}`;
+                return false;
+            }
+        }
+
+        // 测试多个月份
+        async function testMultipleMonths() {
+            const resultDiv = document.getElementById('multiMonthResult');
+            resultDiv.textContent = '正在测试多月份查询...';
+            
+            const months = [];
+            const now = new Date();
+            for (let i = 0; i < 3; i++) {
+                const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                months.push(month.toISOString().slice(0, 7));
+            }
+            
+            const results = [];
+            
+            for (const month of months) {
+                try {
+                    const params = new URLSearchParams({
+                        month: month,
+                        page: '1',
+                        size: '10'
+                    });
+                    
+                    const response = await fetch(`/api/drivers/${config.driverId}/earnings?${params}`);
+                    const result = await response.json();
+                    
+                    results.push({
+                        month: month,
+                        success: result.code === 200,
+                        data: result.data?.summary || null,
+                        error: result.message
+                    });
+                } catch (error) {
+                    results.push({
+                        month: month,
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+            
+            let output = '多月份查询测试结果:\n\n';
+            results.forEach(result => {
+                output += `${result.month}: `;
+                if (result.success && result.data) {
+                    output += `成功 - 收入: ¥${(result.data.totalEarnings || 0).toFixed(2)}, 订单: ${result.data.totalOrders || 0}\n`;
+                } else {
+                    output += `失败 - ${result.error || '未知错误'}\n`;
+                }
+            });
+            
+            resultDiv.textContent = output;
+            resultDiv.className = 'result';
+        }
+
+        // 检查数据完整性
+        async function checkDataIntegrity() {
+            const resultDiv = document.getElementById('integrityResult');
+            resultDiv.textContent = '正在检查数据完整性...';
+            
+            const checks = [];
+            
+            // 检查司机信息
+            try {
+                const driverResponse = await fetch(`/api/drivers/${config.driverId}`);
+                const driverResult = await driverResponse.json();
+                checks.push({
+                    name: '司机信息',
+                    success: driverResult.code === 200,
+                    message: driverResult.code === 200 ? '司机信息正常' : driverResult.message
+                });
+            } catch (error) {
+                checks.push({
+                    name: '司机信息',
+                    success: false,
+                    message: error.message
+                });
+            }
+            
+            // 检查订单数据
+            try {
+                const ordersResponse = await fetch(`/api/drivers/${config.driverId}/orders?page=1&size=5`);
+                const ordersResult = await ordersResponse.json();
+                checks.push({
+                    name: '订单数据',
+                    success: ordersResult.code === 200,
+                    message: ordersResult.code === 200 ? 
+                        `找到 ${ordersResult.data?.length || 0} 条订单记录` : 
+                        ordersResult.message
+                });
+            } catch (error) {
+                checks.push({
+                    name: '订单数据',
+                    success: false,
+                    message: error.message
+                });
+            }
+            
+            let output = '数据完整性检查结果:\n\n';
+            checks.forEach(check => {
+                output += `${check.name}: ${check.success ? '✓' : '✗'} ${check.message}\n`;
+            });
+            
+            resultDiv.textContent = output;
+            resultDiv.className = 'result';
+        }
+
+        // 性能测试
+        async function performanceTest() {
+            const resultDiv = document.getElementById('performanceResult');
+            resultDiv.textContent = '正在执行性能测试...';
+            
+            const tests = [];
+            
+            // 测试收入统计API响应时间
+            const startTime = performance.now();
+            try {
+                const params = new URLSearchParams({
+                    month: config.queryMonth,
+                    page: '1',
+                    size: '31'
+                });
+                
+                const response = await fetch(`/api/drivers/${config.driverId}/earnings?${params}`);
+                const result = await response.json();
+                const endTime = performance.now();
+                
+                tests.push({
+                    name: '收入统计API',
+                    time: (endTime - startTime).toFixed(2),
+                    success: result.code === 200
+                });
+            } catch (error) {
+                const endTime = performance.now();
+                tests.push({
+                    name: '收入统计API',
+                    time: (endTime - startTime).toFixed(2),
+                    success: false,
+                    error: error.message
+                });
+            }
+            
+            let output = '性能测试结果:\n\n';
+            tests.forEach(test => {
+                output += `${test.name}: ${test.time}ms ${test.success ? '✓' : '✗'}`;
+                if (test.error) output += ` (${test.error})`;
+                output += '\n';
+            });
+            
+            resultDiv.textContent = output;
+            resultDiv.className = 'result';
+        }
+
+        // 运行所有测试
+        async function runAllTests() {
+            const resultDiv = document.getElementById('summaryResult');
+            resultDiv.textContent = '正在运行所有测试...';
+            
+            const testResults = [];
+            
+            // 依次运行所有测试
+            testResults.push({ name: '司机信息', success: await testDriverInfo() });
+            testResults.push({ name: '收入统计API', success: await testEarningsAPI() });
+            
+            await testMultipleMonths();
+            await checkDataIntegrity();
+            await performanceTest();
+            
+            // 生成总结报告
+            const successCount = testResults.filter(r => r.success).length;
+            const totalCount = testResults.length;
+            
+            let summary = `功能验证总结报告:
+测试时间: ${new Date().toLocaleString()}
+司机ID: ${config.driverId}
+查询月份: ${config.queryMonth}
+
+核心功能测试结果:
+`;
+            
+            testResults.forEach(result => {
+                summary += `- ${result.name}: ${result.success ? '✓ 通过' : '✗ 失败'}\n`;
+            });
+            
+            summary += `\n总体结果: ${successCount}/${totalCount} 项测试通过`;
+            
+            if (successCount === totalCount) {
+                summary += '\n\n🎉 所有核心功能测试通过！司机收入统计按月份查询功能正常工作。';
+                resultDiv.className = 'result success';
+            } else {
+                summary += '\n\n⚠️ 部分测试失败，请检查相关功能。';
+                resultDiv.className = 'result warning';
+            }
+            
+            resultDiv.textContent = summary;
+        }
+    </script>
+</body>
+</html>

@@ -105,6 +105,11 @@ const routes = [
         name: "ReviewManagement",
         component: () => import("@/views/ReviewManagement.vue"),
       },
+      {
+        path: "vehicle-management",
+        name: "VehicleManagement",
+        component: () => import("@/views/VehicleManagement.vue"),
+      },
     ],
   },
 ];

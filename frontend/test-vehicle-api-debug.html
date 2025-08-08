@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>车辆API调试测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 8px;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #f0f9ff;
+            border: 1px solid #67c23a;
+            color: #67c23a;
+        }
+        .error {
+            background: #fef0f0;
+            border: 1px solid #f56c6c;
+            color: #f56c6c;
+        }
+        .warning {
+            background: #fdf6ec;
+            border: 1px solid #e6a23c;
+            color: #e6a23c;
+        }
+        .data-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .button-group {
+            margin: 15px 0;
+        }
+        .button-group button {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .info-box {
+            background: #e1f5fe;
+            border: 1px solid #0288d1;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .error-details {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>车辆API调试测试</h1>
+            
+            <div class="info-box">
+                <h4>问题诊断</h4>
+                <p>如果vehicleMapper为null，可能的原因：</p>
+                <ul>
+                    <li>数据库表缺少字段（status, vehicle_image）</li>
+                    <li>MyBatis映射配置问题</li>
+                    <li>Spring依赖注入问题</li>
+                </ul>
+            </div>
+            
+            <!-- 1. 基础连接测试 -->
+            <div class="test-section">
+                <div class="section-title">1. 基础连接测试</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="testBasicConnection">测试基础连接</el-button>
+                    <el-button @click="testOtherAPIs">测试其他API</el-button>
+                </div>
+                <div v-if="basicResult" class="test-result" :class="basicResult.type">
+                    {{ basicResult.message }}
+                </div>
+                <div v-if="basicData" class="data-display">{{ JSON.stringify(basicData, null, 2) }}</div>
+            </div>
+
+            <!-- 2. 车辆API测试 -->
+            <div class="test-section">
+                <div class="section-title">2. 车辆API详细测试</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="testVehicleAllAPI">测试 /api/vehicles/all</el-button>
+                    <el-button @click="testVehicleByDriverAPI">测试 /api/vehicles/driver/1</el-button>
+                    <el-button @click="testVehicleAddAPI">测试添加车辆</el-button>
+                </div>
+                <div v-if="vehicleResult" class="test-result" :class="vehicleResult.type">
+                    {{ vehicleResult.message }}
+                </div>
+                <div v-if="vehicleData" class="data-display">{{ JSON.stringify(vehicleData, null, 2) }}</div>
+                
+                <div v-if="vehicleError" class="error-details">
+                    <h4>错误详情</h4>
+                    <div class="data-display">{{ vehicleError }}</div>
+                </div>
+            </div>
+
+            <!-- 3. 数据库字段检查 -->
+            <div class="test-section">
+                <div class="section-title">3. 数据库字段检查</div>
+                <div class="info-box">
+                    <p><strong>预期字段：</strong></p>
+                    <p>id, driver_id, plate_number, brand, model, color, year, seats, vehicle_type, fuel_type, insurance_number, insurance_expiry, inspection_expiry, <strong>status</strong>, <strong>vehicle_image</strong>, is_active, created_at, updated_at</p>
+                </div>
+                <div class="button-group">
+                    <el-button type="primary" @click="checkDatabaseFields">检查数据库字段</el-button>
+                    <el-button @click="generateFixSQL">生成修复SQL</el-button>
+                </div>
+                <div v-if="dbResult" class="test-result" :class="dbResult.type">
+                    {{ dbResult.message }}
+                </div>
+                <div v-if="fixSQL" class="data-display">{{ fixSQL }}</div>
+            </div>
+
+            <!-- 4. 简化测试 -->
+            <div class="test-section">
+                <div class="section-title">4. 简化车辆查询测试</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="testSimpleVehicleQuery">测试简化查询</el-button>
+                    <el-button @click="testVehicleCount">测试车辆数量</el-button>
+                </div>
+                <div v-if="simpleResult" class="test-result" :class="simpleResult.type">
+                    {{ simpleResult.message }}
+                </div>
+                <div v-if="simpleData" class="data-display">{{ JSON.stringify(simpleData, null, 2) }}</div>
+            </div>
+
+            <!-- 5. 错误日志 -->
+            <div class="test-section">
+                <div class="section-title">5. 错误日志和调试信息</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="collectDebugInfo">收集调试信息</el-button>
+                    <el-button @click="clearLogs">清除日志</el-button>
+                </div>
+                <div v-if="debugInfo" class="data-display">{{ debugInfo }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                // 响应式数据
+                const basicResult = ref(null);
+                const basicData = ref(null);
+                const vehicleResult = ref(null);
+                const vehicleData = ref(null);
+                const vehicleError = ref(null);
+                const dbResult = ref(null);
+                const fixSQL = ref(null);
+                const simpleResult = ref(null);
+                const simpleData = ref(null);
+                const debugInfo = ref(null);
+
+                // 测试基础连接
+                const testBasicConnection = async () => {
+                    try {
+                        basicResult.value = { type: 'warning', message: '正在测试基础连接...' };
+                        
+                        const response = await fetch('/api/test', {
+                            method: 'GET'
+                        });
+                        
+                        basicData.value = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: Object.fromEntries(response.headers.entries()),
+                            url: response.url
+                        };
+                        
+                        if (response.ok) {
+                            const data = await response.text();
+                            basicData.value.body = data;
+                            basicResult.value = { 
+                                type: 'success', 
+                                message: '基础连接测试成功' 
+                            };
+                        } else {
+                            basicResult.value = { 
+                                type: 'error', 
+                                message: `基础连接测试失败: ${response.status}` 
+                            };
+                        }
+                    } catch (error) {
+                        basicResult.value = { type: 'error', message: '基础连接测试失败: ' + error.message };
+                        basicData.value = { error: error.message, stack: error.stack };
+                    }
+                };
+
+                // 测试其他API
+                const testOtherAPIs = async () => {
+                    try {
+                        basicResult.value = { type: 'warning', message: '正在测试其他API...' };
+                        
+                        const apis = [
+                            '/api/users',
+                            '/api/drivers',
+                            '/api/orders/with-names'
+                        ];
+                        
+                        const results = {};
+                        
+                        for (const api of apis) {
+                            try {
+                                const response = await fetch(api);
+                                const data = await response.json();
+                                results[api] = {
+                                    status: response.status,
+                                    success: data.success || data.code === 200,
+                                    dataCount: data.data ? data.data.length : 0
+                                };
+                            } catch (error) {
+                                results[api] = {
+                                    error: error.message
+                                };
+                            }
+                        }
+                        
+                        basicData.value = results;
+                        
+                        const successCount = Object.values(results).filter(r => r.success).length;
+                        if (successCount > 0) {
+                            basicResult.value = { 
+                                type: 'success', 
+                                message: `其他API测试完成：${successCount}/${apis.length}个成功` 
+                            };
+                        } else {
+                            basicResult.value = { 
+                                type: 'error', 
+                                message: '所有其他API都失败了' 
+                            };
+                        }
+                    } catch (error) {
+                        basicResult.value = { type: 'error', message: '测试其他API失败: ' + error.message };
+                    }
+                };
+
+                // 测试车辆API
+                const testVehicleAllAPI = async () => {
+                    try {
+                        vehicleResult.value = { type: 'warning', message: '正在测试车辆API...' };
+                        vehicleError.value = null;
+                        
+                        const response = await fetch('/api/vehicles/all');
+                        
+                        vehicleData.value = {
+                            status: response.status,
+                            statusText: response.statusText,
+                            headers: Object.fromEntries(response.headers.entries())
+                        };
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            vehicleData.value.response = data;
+                            
+                            if (data.code === 200 && data.data) {
+                                vehicleResult.value = { 
+                                    type: 'success', 
+                                    message: `车辆API测试成功！返回${data.data.length}条数据` 
+                                };
+                            } else if (data.code === 500) {
+                                vehicleResult.value = { 
+                                    type: 'error', 
+                                    message: `服务器内部错误：${data.message}` 
+                                };
+                                vehicleError.value = data.message;
+                            } else {
+                                vehicleResult.value = { 
+                                    type: 'warning', 
+                                    message: `API返回异常：${data.message || '未知错误'}` 
+                                };
+                            }
+                        } else {
+                            const errorText = await response.text();
+                            vehicleData.value.errorBody = errorText;
+                            vehicleResult.value = { 
+                                type: 'error', 
+                                message: `HTTP错误：${response.status} ${response.statusText}` 
+                            };
+                            vehicleError.value = errorText;
+                        }
+                    } catch (error) {
+                        vehicleResult.value = { type: 'error', message: '车辆API测试失败: ' + error.message };
+                        vehicleError.value = error.stack;
+                        console.error('车辆API测试失败:', error);
+                    }
+                };
+
+                // 测试按司机查询车辆
+                const testVehicleByDriverAPI = async () => {
+                    try {
+                        vehicleResult.value = { type: 'warning', message: '正在测试按司机查询车辆...' };
+                        
+                        const response = await fetch('/api/vehicles/driver/1');
+                        const data = await response.json();
+                        
+                        vehicleData.value = {
+                            api: '/api/vehicles/driver/1',
+                            status: response.status,
+                            response: data
+                        };
+                        
+                        if (response.ok && (data.success || data.code === 200)) {
+                            vehicleResult.value = { 
+                                type: 'success', 
+                                message: `按司机查询成功！返回${data.data ? data.data.length : 0}条数据` 
+                            };
+                        } else {
+                            vehicleResult.value = { 
+                                type: 'error', 
+                                message: `按司机查询失败：${data.message}` 
+                            };
+                        }
+                    } catch (error) {
+                        vehicleResult.value = { type: 'error', message: '按司机查询失败: ' + error.message };
+                    }
+                };
+
+                // 测试添加车辆
+                const testVehicleAddAPI = async () => {
+                    try {
+                        vehicleResult.value = { type: 'warning', message: '正在测试添加车辆...' };
+                        
+                        const testVehicle = {
+                            plateNumber: '测试' + Math.random().toString().substr(2, 4),
+                            brand: '测试品牌',
+                            model: '测试型号',
+                            color: '白色',
+                            vehicleType: 'SEDAN',
+                            driverId: 1
+                        };
+                        
+                        const response = await fetch('/api/vehicles', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(testVehicle)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        vehicleData.value = {
+                            api: 'POST /api/vehicles',
+                            request: testVehicle,
+                            status: response.status,
+                            response: data
+                        };
+                        
+                        if (response.ok && (data.success || data.code === 200)) {
+                            vehicleResult.value = { 
+                                type: 'success', 
+                                message: '添加车辆测试成功！' 
+                            };
+                        } else {
+                            vehicleResult.value = { 
+                                type: 'error', 
+                                message: `添加车辆失败：${data.message}` 
+                            };
+                        }
+                    } catch (error) {
+                        vehicleResult.value = { type: 'error', message: '添加车辆测试失败: ' + error.message };
+                    }
+                };
+
+                // 检查数据库字段
+                const checkDatabaseFields = () => {
+                    dbResult.value = { 
+                        type: 'warning', 
+                        message: '数据库字段检查：根据错误信息，可能缺少status和vehicle_image字段' 
+                    };
+                };
+
+                // 生成修复SQL
+                const generateFixSQL = () => {
+                    fixSQL.value = `-- 为vehicles表添加缺失的字段
+
+-- 添加status字段（车辆状态）
+ALTER TABLE vehicles ADD COLUMN status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '车辆状态: ACTIVE-活跃, PENDING-待审核, REJECTED-已拒绝, INACTIVE-已停用';
+
+-- 添加vehicle_image字段（车辆图片）
+ALTER TABLE vehicles ADD COLUMN vehicle_image VARCHAR(255) COMMENT '车辆图片路径';
+
+-- 更新现有数据的status字段为ACTIVE
+UPDATE vehicles SET status = 'ACTIVE' WHERE status IS NULL;
+
+-- 查看更新后的表结构
+DESCRIBE vehicles;
+
+-- 查看更新后的数据
+SELECT id, plate_number, brand, model, status, vehicle_image, is_active FROM vehicles LIMIT 5;`;
+
+                    dbResult.value = { 
+                        type: 'success', 
+                        message: '修复SQL已生成，请在数据库中执行' 
+                    };
+                };
+
+                // 测试简化查询
+                const testSimpleVehicleQuery = async () => {
+                    try {
+                        simpleResult.value = { type: 'warning', message: '正在测试简化查询...' };
+                        
+                        // 尝试一个更简单的查询
+                        const response = await fetch('/api/vehicles/driver/1');
+                        const data = await response.json();
+                        
+                        simpleData.value = {
+                            api: '简化查询测试',
+                            status: response.status,
+                            response: data
+                        };
+                        
+                        if (response.ok) {
+                            simpleResult.value = { 
+                                type: 'success', 
+                                message: '简化查询测试成功' 
+                            };
+                        } else {
+                            simpleResult.value = { 
+                                type: 'error', 
+                                message: '简化查询测试失败' 
+                            };
+                        }
+                    } catch (error) {
+                        simpleResult.value = { type: 'error', message: '简化查询测试失败: ' + error.message };
+                    }
+                };
+
+                // 测试车辆数量
+                const testVehicleCount = async () => {
+                    try {
+                        simpleResult.value = { type: 'warning', message: '正在测试车辆数量...' };
+                        
+                        // 这里可以添加一个简单的计数API
+                        simpleData.value = {
+                            message: '需要后端提供一个简单的计数API来测试基础连接'
+                        };
+                        
+                        simpleResult.value = { 
+                            type: 'warning', 
+                            message: '车辆数量测试需要额外的API支持' 
+                        };
+                    } catch (error) {
+                        simpleResult.value = { type: 'error', message: '车辆数量测试失败: ' + error.message };
+                    }
+                };
+
+                // 收集调试信息
+                const collectDebugInfo = () => {
+                    debugInfo.value = `调试信息收集 - ${new Date().toISOString()}
+
+问题分析：
+1. vehicleMapper为null通常表示Spring依赖注入失败
+2. 可能的原因：
+   - 数据库表结构与实体类不匹配
+   - MyBatis映射文件配置错误
+   - Spring Boot扫描配置问题
+
+建议解决步骤：
+1. 执行SQL脚本添加缺失字段：
+   ALTER TABLE vehicles ADD COLUMN status VARCHAR(20) DEFAULT 'ACTIVE';
+   ALTER TABLE vehicles ADD COLUMN vehicle_image VARCHAR(255);
+
+2. 重启Spring Boot应用
+
+3. 检查日志中的具体错误信息
+
+4. 验证@MapperScan注解是否正确配置
+
+当前测试结果：
+- 基础连接: ${basicResult.value?.type || '未测试'}
+- 车辆API: ${vehicleResult.value?.type || '未测试'}
+- 简化查询: ${simpleResult.value?.type || '未测试'}`;
+                };
+
+                // 清除日志
+                const clearLogs = () => {
+                    basicResult.value = null;
+                    basicData.value = null;
+                    vehicleResult.value = null;
+                    vehicleData.value = null;
+                    vehicleError.value = null;
+                    dbResult.value = null;
+                    fixSQL.value = null;
+                    simpleResult.value = null;
+                    simpleData.value = null;
+                    debugInfo.value = null;
+                    ElMessage.success('日志已清除');
+                };
+
+                return {
+                    basicResult,
+                    basicData,
+                    vehicleResult,
+                    vehicleData,
+                    vehicleError,
+                    dbResult,
+                    fixSQL,
+                    simpleResult,
+                    simpleData,
+                    debugInfo,
+                    testBasicConnection,
+                    testOtherAPIs,
+                    testVehicleAllAPI,
+                    testVehicleByDriverAPI,
+                    testVehicleAddAPI,
+                    checkDatabaseFields,
+                    generateFixSQL,
+                    testSimpleVehicleQuery,
+                    testVehicleCount,
+                    collectDebugInfo,
+                    clearLogs
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

@@ -105,4 +105,75 @@ public class VehicleController {
             return Result.error("设置激活车辆失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 管理员获取所有车辆（包含司机信息）
+     */
+    @GetMapping("/all")
+    public Result<List<java.util.Map<String, Object>>> getAllVehiclesWithDriverInfo() {
+        try {
+            System.out.println("开始获取所有车辆信息...");
+            List<java.util.Map<String, Object>> vehicles = vehicleService.getAllVehiclesWithDriverInfo();
+            System.out.println("获取到车辆数量: " + (vehicles != null ? vehicles.size() : "null"));
+            if (vehicles != null && !vehicles.isEmpty()) {
+                System.out.println("第一辆车信息: " + vehicles.get(0));
+            }
+            return Result.success(vehicles);
+        } catch (Exception e) {
+            System.err.println("获取车辆列表失败: " + e.getMessage());
+            e.printStackTrace();
+            return Result.error("获取车辆列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 审核车辆
+     */
+    @PostMapping("/{id}/approve")
+    public Result<Void> approveVehicle(@PathVariable Long id) {
+        try {
+            boolean success = vehicleService.approveVehicle(id);
+            if (success) {
+                return Result.success(null);
+            } else {
+                return Result.error("审核车辆失败");
+            }
+        } catch (Exception e) {
+            return Result.error("审核车辆失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 拒绝车辆
+     */
+    @PostMapping("/{id}/reject")
+    public Result<Void> rejectVehicle(@PathVariable Long id) {
+        try {
+            boolean success = vehicleService.rejectVehicle(id);
+            if (success) {
+                return Result.success(null);
+            } else {
+                return Result.error("拒绝车辆失败");
+            }
+        } catch (Exception e) {
+            return Result.error("拒绝车辆失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 停用车辆
+     */
+    @PostMapping("/{id}/deactivate")
+    public Result<Void> deactivateVehicle(@PathVariable Long id) {
+        try {
+            boolean success = vehicleService.deactivateVehicle(id);
+            if (success) {
+                return Result.success(null);
+            } else {
+                return Result.error("停用车辆失败");
+            }
+        } catch (Exception e) {
+            return Result.error("停用车辆失败: " + e.getMessage());
+        }
+    }
 }
