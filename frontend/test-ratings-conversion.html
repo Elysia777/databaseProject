@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ratings ID转换测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .warning { color: #e6a23c; }
+        .info { color: #409eff; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>Ratings ID转换测试</h1>
+            <p>测试将ratings表中的passenger_id和driver_id转换为user_id后的效果</p>
+            
+            <!-- 转换前后对比 -->
+            <div class="test-section">
+                <h3>转换效果测试</h3>
+                <el-button type="primary" @click="testConversion" :loading="loading.test">
+                    测试转换效果
+                </el-button>
+                <div v-if="results.test" class="result-box" :class="testStatus">
+                    {{ results.test }}
+                </div>
+            </div>
+
+            <!-- 评价数据展示 -->
+            <div class="test-section" v-if="reviews.length > 0">
+                <h3>转换后的评价数据</h3>
+                <el-table :data="reviews" style="width: 100%">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    
+                    <el-table-column label="评价者" width="180">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <el-tag size="small" :type="scope.row.reviewerName && scope.row.reviewerName !== 'null' ? 'success' : 'danger'">
+                                    ID: {{ scope.row.reviewerId }}
+                                </el-tag>
+                                <img 
+                                    :src="getAvatarUrl(scope.row.reviewerAvatar)" 
+                                    :alt="scope.row.reviewerName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span :class="scope.row.reviewerName && scope.row.reviewerName !== 'null' ? 'success' : 'error'">
+                                    {{ scope.row.reviewerName || '❌ 未找到' }}
+                                </span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="被评价者" width="180">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <el-tag size="small" :type="scope.row.revieweeName && scope.row.revieweeName !== 'null' ? 'success' : 'danger'">
+                                    ID: {{ scope.row.revieweeId }}
+                                </el-tag>
+                                <img 
+                                    :src="getAvatarUrl(scope.row.revieweeAvatar)" 
+                                    :alt="scope.row.revieweeName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span :class="scope.row.revieweeName && scope.row.revieweeName !== 'null' ? 'success' : 'error'">
+                                    {{ scope.row.revieweeName || '❌ 未找到' }}
+                                </span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="评分" width="120">
+                        <template #default="scope">
+                            <el-rate v-model="scope.row.rating" disabled show-score />
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="comment" label="评价内容" min-width="200">
+                        <template #default="scope">
+                            {{ scope.row.comment || '无评价内容' }}
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="状态" width="100">
+                        <template #default="scope">
+                            <el-tag :type="getStatusType(scope.row)">
+                                {{ getStatusText(scope.row) }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <!-- 转换统计 -->
+            <div class="test-section" v-if="stats.total > 0">
+                <h3>转换统计</h3>
+                <el-row :gutter="20">
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold; color: #409eff;">{{ stats.total }}</div>
+                                <div style="color: #666; font-size: 12px;">总评价数</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold; color: #67c23a;">{{ stats.withBothNames }}</div>
+                                <div style="color: #666; font-size: 12px;">完整用户名</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold; color: #e6a23c;">{{ stats.missingRater }}</div>
+                                <div style="color: #666; font-size: 12px;">缺失评价者</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold; color: #f56c6c;">{{ stats.missingRated }}</div>
+                                <div style="color: #666; font-size: 12px;">缺失被评价者</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold; color: #909399;">{{ stats.successRate }}%</div>
+                                <div style="color: #666; font-size: 12px;">成功率</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="4">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 20px; font-weight: bold;" :style="{ color: getSuccessRateColor() }">
+                                    {{ getSuccessRateText() }}
+                                </div>
+                                <div style="color: #666; font-size: 12px;">转换状态</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                </el-row>
+            </div>
+
+            <!-- 操作建议 -->
+            <div class="test-section" v-if="suggestions.length > 0">
+                <h3>操作建议</h3>
+                <el-alert
+                    v-for="(suggestion, index) in suggestions"
+                    :key="index"
+                    :title="suggestion.title"
+                    :description="suggestion.description"
+                    :type="suggestion.type"
+                    style="margin-bottom: 10px;"
+                    show-icon
+                />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = reactive({
+                    test: false
+                });
+
+                const results = reactive({
+                    test: ''
+                });
+
+                const reviews = ref([]);
+                const suggestions = ref([]);
+
+                const stats = reactive({
+                    total: 0,
+                    withBothNames: 0,
+                    missingRater: 0,
+                    missingRated: 0,
+                    successRate: 0
+                });
+
+                const testStatus = computed(() => {
+                    if (stats.successRate >= 90) return 'success';
+                    if (stats.successRate >= 70) return 'warning';
+                    return 'error';
+                });
+
+                const testConversion = async () => {
+                    loading.test = true;
+                    try {
+                        const response = await fetch('/api/reviews/all');
+                        const data = await response.json();
+                        
+                        console.log('API响应:', data);
+                        
+                        if (response.ok && (data.success === true || data.code === 200)) {
+                            if (data.data && Array.isArray(data.data)) {
+                                reviews.value = data.data;
+                                analyzeConversion(data.data);
+                                
+                                const summary = `🔄 ID转换效果测试完成\n\n📊 转换统计:\n- 总评价数: ${stats.total}\n- 成功关联用户: ${stats.withBothNames}\n- 缺失评价者: ${stats.missingRater}\n- 缺失被评价者: ${stats.missingRated}\n- 转换成功率: ${stats.successRate}%\n\n${getConversionAnalysis()}\n\n${data.data.length > 0 ? '📝 示例数据:\n' + JSON.stringify(data.data[0], null, 2) : ''}`;
+                                
+                                results.test = summary;
+                                generateSuggestions();
+                                
+                                ElMessage.success(`转换测试完成，成功率: ${stats.successRate}%`);
+                            } else {
+                                results.test = `⚠️ 数据格式异常\ndata字段: ${JSON.stringify(data.data)}`;
+                                ElMessage.warning('数据格式异常');
+                            }
+                        } else {
+                            results.test = `❌ API调用失败\n状态: ${response.status}\n错误: ${data.message || '未知错误'}`;
+                            ElMessage.error('API调用失败');
+                        }
+                    } catch (error) {
+                        results.test = `❌ 请求失败: ${error.message}`;
+                        ElMessage.error('请求失败');
+                    } finally {
+                        loading.test = false;
+                    }
+                };
+
+                const analyzeConversion = (data) => {
+                    stats.total = data.length;
+                    stats.withBothNames = data.filter(r => 
+                        r.reviewerName && r.revieweeName && 
+                        r.reviewerName !== 'null' && r.revieweeName !== 'null'
+                    ).length;
+                    stats.missingRater = data.filter(r => 
+                        !r.reviewerName || r.reviewerName === 'null'
+                    ).length;
+                    stats.missingRated = data.filter(r => 
+                        !r.revieweeName || r.revieweeName === 'null'
+                    ).length;
+                    
+                    if (stats.total > 0) {
+                        stats.successRate = Math.round((stats.withBothNames / stats.total) * 100);
+                    } else {
+                        stats.successRate = 0;
+                    }
+                };
+
+                const getConversionAnalysis = () => {
+                    if (stats.successRate >= 90) {
+                        return '✅ 转换效果优秀！大部分评价都能正确关联到用户信息。';
+                    } else if (stats.successRate >= 70) {
+                        return '⚠️ 转换效果一般，部分评价无法关联到用户信息。';
+                    } else if (stats.successRate >= 50) {
+                        return '❌ 转换效果较差，大量评价无法关联到用户信息。';
+                    } else {
+                        return '💥 转换失败！大部分评价都无法关联到用户信息，需要执行ID转换脚本。';
+                    }
+                };
+
+                const generateSuggestions = () => {
+                    suggestions.value = [];
+                    
+                    if (stats.successRate < 50) {
+                        suggestions.value.push({
+                            title: '需要执行ID转换',
+                            description: `转换成功率只有 ${stats.successRate}%，建议执行 convert_ratings_to_user_ids.sql 脚本将 passenger_id 和 driver_id 转换为 user_id。`,
+                            type: 'error'
+                        });
+                    } else if (stats.successRate < 80) {
+                        suggestions.value.push({
+                            title: '部分数据需要修复',
+                            description: `转换成功率为 ${stats.successRate}%，建议检查并修复缺失的用户记录。`,
+                            type: 'warning'
+                        });
+                    } else {
+                        suggestions.value.push({
+                            title: '转换效果良好',
+                            description: `转换成功率为 ${stats.successRate}%，系统运行正常。`,
+                            type: 'success'
+                        });
+                    }
+                    
+                    if (stats.missingRater > 0) {
+                        suggestions.value.push({
+                            title: '缺失评价者信息',
+                            description: `${stats.missingRater} 条评价缺失评价者姓名。检查 rater_id 是否正确转换为 user_id。`,
+                            type: 'warning'
+                        });
+                    }
+                    
+                    if (stats.missingRated > 0) {
+                        suggestions.value.push({
+                            title: '缺失被评价者信息',
+                            description: `${stats.missingRated} 条评价缺失被评价者姓名。检查 rated_id 是否正确转换为 user_id。`,
+                            type: 'warning'
+                        });
+                    }
+                    
+                    suggestions.value.push({
+                        title: 'SQL转换脚本',
+                        description: '使用 convert_ratings_to_user_ids.sql 脚本可以自动将 ratings 表中的 passenger_id 和 driver_id 转换为对应的 user_id。',
+                        type: 'info'
+                    });
+                };
+
+                const getStatusType = (review) => {
+                    if (review.reviewerName && review.revieweeName && 
+                        review.reviewerName !== 'null' && review.revieweeName !== 'null') {
+                        return 'success';
+                    }
+                    return 'danger';
+                };
+
+                const getStatusText = (review) => {
+                    if (review.reviewerName && review.revieweeName && 
+                        review.reviewerName !== 'null' && review.revieweeName !== 'null') {
+                        return '正常';
+                    }
+                    if (!review.reviewerName || review.reviewerName === 'null') {
+                        return '缺失评价者';
+                    }
+                    if (!review.revieweeName || review.revieweeName === 'null') {
+                        return '缺失被评价者';
+                    }
+                    return '异常';
+                };
+
+                const getSuccessRateColor = () => {
+                    if (stats.successRate >= 90) return '#67c23a';
+                    if (stats.successRate >= 70) return '#e6a23c';
+                    return '#f56c6c';
+                };
+
+                const getSuccessRateText = () => {
+                    if (stats.successRate >= 90) return '优秀';
+                    if (stats.successRate >= 70) return '良好';
+                    if (stats.successRate >= 50) return '一般';
+                    return '较差';
+                };
+
+                const getAvatarUrl = (avatar) => {
+                    if (!avatar || avatar === 'null' || avatar === 'undefined') {
+                        return 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                    }
+                    if (avatar.startsWith('http')) return avatar;
+                    return `/api/files/avatar/${avatar}`;
+                };
+
+                const handleImageError = (event) => {
+                    event.target.src = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                };
+
+                onMounted(() => {
+                    console.log('Ratings ID转换测试页面已加载');
+                    // 自动测试转换效果
+                    testConversion();
+                });
+
+                return {
+                    loading,
+                    results,
+                    reviews,
+                    suggestions,
+                    stats,
+                    testStatus,
+                    testConversion,
+                    getStatusType,
+                    getStatusText,
+                    getSuccessRateColor,
+                    getSuccessRateText,
+                    getAvatarUrl,
+                    handleImageError
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

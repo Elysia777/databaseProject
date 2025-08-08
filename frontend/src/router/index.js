@@ -39,21 +39,14 @@ const routes = [
             return "/dashboard/passenger-map";
           } else if (userStore.isDriver) {
             return "/dashboard/driver-map";
+          } else if (userStore.isAdmin) {
+            return "/dashboard/admin-overview";
           }
-          return "/dashboard/statistics";
+          return "/dashboard/admin-overview";
         },
       },
 
-      {
-        path: "drivers",
-        name: "Drivers",
-        component: () => import("@/views/Drivers.vue"),
-      },
-      {
-        path: "admin-vehicles",
-        name: "Vehicles",
-        component: () => import("@/views/Vehicles.vue"),
-      },
+
 
       {
         path: "passenger-map",
@@ -86,20 +79,31 @@ const routes = [
         component: () => import("@/views/DriverVehiclesFixed.vue"),
       },
 
-      {
-        path: "complaints",
-        name: "Complaints",
-        component: () => import("@/views/Complaints.vue"),
-      },
-      {
-        path: "statistics",
-        name: "Statistics",
-        component: () => import("@/views/Statistics.vue"),
-      },
+
       {
         path: "profile",
         name: "Profile",
         component: () => import("@/views/Profile.vue"),
+      },
+      {
+        path: "admin-overview",
+        name: "AdminOverview",
+        component: () => import("@/views/AdminDashboard.vue"),
+      },
+      {
+        path: "user-management",
+        name: "UserManagement",
+        component: () => import("@/views/UserManagement.vue"),
+      },
+      {
+        path: "order-management",
+        name: "OrderManagement",
+        component: () => import("@/views/OrderManagement.vue"),
+      },
+      {
+        path: "review-management",
+        name: "ReviewManagement",
+        component: () => import("@/views/ReviewManagement.vue"),
       },
     ],
   },

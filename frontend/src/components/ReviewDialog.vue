@@ -184,8 +184,8 @@ const submitReview = async () => {
   try {
     const reviewData = {
       orderId: props.orderInfo.id,
-      raterId: props.orderInfo.passengerId,
-      ratedId: props.orderInfo.driverId,
+      raterId: props.orderInfo.passengerUserId || props.orderInfo.passengerId,  // 优先使用passengerUserId
+      ratedId: props.orderInfo.driverUserId || props.orderInfo.driverId,        // 优先使用driverUserId
       rating: rating.value,
       comment: comment.value.trim(),
       tags: JSON.stringify(selectedTags.value)

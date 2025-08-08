@@ -68,6 +68,27 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateProfile" parameterType="map">
+        UPDATE users
+        SET updated_at = #{updatedAt}
+        <if test="realName != null">
+            , real_name = #{realName}
+        </if>
+        <if test="phone != null">
+            , phone = #{phone}
+        </if>
+        <if test="email != null">
+            , email = #{email}
+        </if>
+        <if test="avatar != null">
+            , avatar = #{avatar}
+        </if>
+        <if test="idCard != null">
+            , id_card = #{idCard}
+        </if>
+        WHERE id = #{id}
+    </update>
+
     <delete id="deleteById" parameterType="java.lang.Long">
         DELETE FROM users WHERE id = #{id}
     </delete>

@@ -16,25 +16,22 @@
       >
         <!-- 管理员菜单 -->
         <template v-if="userStore.isAdmin">
-        <el-menu-item index="/dashboard/drivers">
+        <el-menu-item index="/dashboard/admin-overview">
+          <el-icon><Monitor /></el-icon>
+          <span>管理概览</span>
+        </el-menu-item>
+        
+        <el-menu-item index="/dashboard/user-management">
           <el-icon><User /></el-icon>
-          <span>司机管理</span>
+          <span>用户管理</span>
         </el-menu-item>
         
-        <el-menu-item index="/dashboard/admin-vehicles">
-          <el-icon><Van /></el-icon>
-          <span>车辆管理</span>
+        <el-menu-item index="/dashboard/order-management">
+          <el-icon><Document /></el-icon>
+          <span>订单管理</span>
         </el-menu-item>
         
-        <el-menu-item index="/dashboard/complaints">
-          <el-icon><Warning /></el-icon>
-          <span>投诉处理</span>
-        </el-menu-item>
-        
-        <el-menu-item index="/dashboard/statistics">
-          <el-icon><TrendCharts /></el-icon>
-          <span>数据统计</span>
-        </el-menu-item>
+
         </template>
         
         <!-- 乘客菜单 -->
@@ -133,10 +130,9 @@ const userStore = useUserStore()
 const pageTitleMap = computed(() => {
   if (userStore.isAdmin) {
     return {
-      '/dashboard/drivers': '司机管理',
-      '/dashboard/admin-vehicles': '车辆管理',
-      '/dashboard/complaints': '投诉处理',
-      '/dashboard/statistics': '数据统计',
+      '/dashboard/admin-overview': '管理概览',
+      '/dashboard/user-management': '用户管理',
+      '/dashboard/order-management': '订单管理',
       '/dashboard/profile': '个人设置'
     }
   } else if (userStore.isPassenger) {

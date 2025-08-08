@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乘客司机映射调试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .test-button {
+            background: #409eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .test-button:hover {
+            background: #66b1ff;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            background-color: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            color: #0c4a6e;
+        }
+        .error {
+            background-color: #fef2f2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 乘客司机映射调试工具</h1>
+        
+        <div class="section">
+            <div class="section-title">1. 获取乘客数据</div>
+            <button class="test-button" onclick="loadPassengerData()">加载乘客数据</button>
+            <div id="passenger-data-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. 获取司机数据</div>
+            <button class="test-button" onclick="loadDriverData()">加载司机数据</button>
+            <div id="driver-data-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">3. 获取订单数据</div>
+            <button class="test-button" onclick="loadOrderData()">加载订单数据</button>
+            <div id="order-data-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">4. 映射分析</div>
+            <button class="test-button" onclick="analyzeMapping()">分析映射关系</button>
+            <div id="mapping-analysis" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">5. 修复后的订单显示</div>
+            <button class="test-button" onclick="showFixedOrders()">显示修复后的订单</button>
+            <div id="fixed-orders-table"></div>
+        </div>
+    </div>
+
+    <script>
+        let passengerData = null;
+        let driverData = null;
+        let orderData = null;
+        let passengerMap = new Map();
+        let driverMap = new Map();
+
+        function showResult(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        async function loadPassengerData() {
+            try {
+                showResult('passenger-data-result', '正在加载乘客数据...', 'success');
+                
+                // 尝试不同的API端点
+                const endpoints = ['/api/passengers', '/api/passenger', '/api/auth/passengers'];
+                let response = null;
+                let data = null;
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        response = await fetch(endpoint);
+                        if (response.ok) {
+                            data = await response.json();
+                            console.log(`乘客API响应 (${endpoint}):`, data);
+                            break;
+                        }
+                    } catch (e) {
+                        console.log(`端点 ${endpoint} 失败:`, e.message);
+                    }
+                }
+                
+                if (response && response.ok) {
+                    const isSuccess = data.success === true || data.code === 200;
+                    if (isSuccess && data.data) {
+                        passengerData = data.data;
+                        
+                        // 建立乘客映射
+                        passengerMap.clear();
+                        passengerData.forEach(passenger => {
+                            // 尝试不同的字段名
+                            const name = passenger.realName || passenger.name || passenger.username || `乘客${passenger.id}`;
+                            passengerMap.set(passenger.id, name);
+                        });
+                        
+                        const message = `✅ 成功加载乘客数据
+乘客数量: ${passengerData.length}
+乘客映射示例:
+${Array.from(passengerMap.entries()).slice(0, 5).map(([id, name]) => `  ID ${id} -> ${name}`).join('\n')}
+
+第一个乘客完整数据:
+${JSON.stringify(passengerData[0], null, 2)}`;
+                        showResult('passenger-data-result', message, 'success');
+                    } else {
+                        showResult('passenger-data-result', `❌ 乘客API返回失败\n响应: ${JSON.stringify(data, null, 2)}`, 'error');
+                    }
+                } else {
+                    showResult('passenger-data-result', `❌ 所有乘客API端点都失败`, 'error');
+                }
+            } catch (error) {
+                showResult('passenger-data-result', `❌ 乘客数据网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadDriverData() {
+            try {
+                showResult('driver-data-result', '正在加载司机数据...', 'success');
+                
+                // 尝试不同的API端点
+                const endpoints = ['/api/drivers', '/api/driver', '/api/auth/drivers'];
+                let response = null;
+                let data = null;
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        response = await fetch(endpoint);
+                        if (response.ok) {
+                            data = await response.json();
+                            console.log(`司机API响应 (${endpoint}):`, data);
+                            break;
+                        }
+                    } catch (e) {
+                        console.log(`端点 ${endpoint} 失败:`, e.message);
+                    }
+                }
+                
+                if (response && response.ok) {
+                    const isSuccess = data.success === true || data.code === 200;
+                    if (isSuccess && data.data) {
+                        driverData = data.data;
+                        
+                        // 建立司机映射
+                        driverMap.clear();
+                        driverData.forEach(driver => {
+                            // 尝试不同的字段名
+                            const name = driver.realName || driver.name || driver.username || `司机${driver.id}`;
+                            driverMap.set(driver.id, name);
+                        });
+                        
+                        const message = `✅ 成功加载司机数据
+司机数量: ${driverData.length}
+司机映射示例:
+${Array.from(driverMap.entries()).slice(0, 5).map(([id, name]) => `  ID ${id} -> ${name}`).join('\n')}
+
+第一个司机完整数据:
+${JSON.stringify(driverData[0], null, 2)}`;
+                        showResult('driver-data-result', message, 'success');
+                    } else {
+                        showResult('driver-data-result', `❌ 司机API返回失败\n响应: ${JSON.stringify(data, null, 2)}`, 'error');
+                    }
+                } else {
+                    showResult('driver-data-result', `❌ 所有司机API端点都失败`, 'error');
+                }
+            } catch (error) {
+                showResult('driver-data-result', `❌ 司机数据网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadOrderData() {
+            try {
+                showResult('order-data-result', '正在加载订单数据...', 'success');
+                
+                const response = await fetch('/api/orders');
+                const data = await response.json();
+                
+                console.log('订单API响应:', data);
+                
+                if (response.ok) {
+                    const isSuccess = data.success === true || data.code === 200;
+                    if (isSuccess) {
+                        orderData = data.data;
+                        
+                        const message = `✅ 成功加载订单数据
+订单数量: ${orderData.length}
+
+第一个订单的关键字段:
+  ID: ${orderData[0].id}
+  乘客ID: ${orderData[0].passengerId}
+  司机ID: ${orderData[0].driverId}
+  费用字段: totalFare=${orderData[0].totalFare}, estimatedFare=${orderData[0].estimatedFare}, actualFare=${orderData[0].actualFare}`;
+                        showResult('order-data-result', message, 'success');
+                    } else {
+                        showResult('order-data-result', `❌ 订单API返回失败\n响应: ${JSON.stringify(data, null, 2)}`, 'error');
+                    }
+                } else {
+                    showResult('order-data-result', `❌ 订单HTTP请求失败\n状态码: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showResult('order-data-result', `❌ 订单数据网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        function analyzeMapping() {
+            if (!passengerData || !driverData || !orderData) {
+                showResult('mapping-analysis', '请先加载乘客、司机和订单数据', 'error');
+                return;
+            }
+
+            let analysis = `映射关系分析:
+
+乘客数据统计:
+- 总乘客数: ${passengerData.length}
+- 乘客ID范围: ${Math.min(...passengerData.map(p => p.id))} - ${Math.max(...passengerData.map(p => p.id))}
+
+司机数据统计:
+- 总司机数: ${driverData.length}
+- 司机ID范围: ${Math.min(...driverData.map(d => d.id))} - ${Math.max(...driverData.map(d => d.id))}
+
+订单数据统计:
+- 总订单数: ${orderData.length}
+- 有乘客ID的订单: ${orderData.filter(o => o.passengerId).length}
+- 有司机ID的订单: ${orderData.filter(o => o.driverId).length}
+
+ID映射检查:`;
+
+            // 检查前5个订单的映射情况
+            orderData.slice(0, 5).forEach((order, index) => {
+                const passengerName = passengerMap.get(order.passengerId) || '未找到';
+                const driverName = driverMap.get(order.driverId) || '未找到';
+                
+                analysis += `
+订单 ${index + 1} (ID: ${order.id}):
+  - 乘客ID: ${order.passengerId} -> ${passengerName}
+  - 司机ID: ${order.driverId} -> ${driverName}
+  - 费用: totalFare=${order.totalFare}, estimatedFare=${order.estimatedFare}, actualFare=${order.actualFare}`;
+            });
+
+            // 统计未映射的ID
+            const unmappedPassengerIds = new Set();
+            const unmappedDriverIds = new Set();
+            
+            orderData.forEach(order => {
+                if (order.passengerId && !passengerMap.has(order.passengerId)) {
+                    unmappedPassengerIds.add(order.passengerId);
+                }
+                if (order.driverId && !passengerMap.has(order.driverId)) {
+                    unmappedDriverIds.add(order.driverId);
+                }
+            });
+
+            analysis += `
+
+未映射的ID统计:
+- 未找到的乘客ID: ${Array.from(unmappedPassengerIds).join(', ') || '无'}
+- 未找到的司机ID: ${Array.from(unmappedDriverIds).join(', ') || '无'}`;
+
+            showResult('mapping-analysis', analysis, 'success');
+        }
+
+        function showFixedOrders() {
+            const container = document.getElementById('fixed-orders-table');
+            
+            if (!orderData) {
+                container.innerHTML = '<p style="color: red;">请先加载订单数据</p>';
+                return;
+            }
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>订单号</th>
+                            <th>乘客ID</th>
+                            <th>乘客姓名</th>
+                            <th>司机ID</th>
+                            <th>司机姓名</th>
+                            <th>起点</th>
+                            <th>终点</th>
+                            <th>状态</th>
+                            <th>总费用</th>
+                            <th>预估费用</th>
+                            <th>实际费用</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            orderData.slice(0, 10).forEach(order => {
+                const passengerName = order.passengerId ? (passengerMap.get(order.passengerId) || `未知乘客(ID:${order.passengerId})`) : '-';
+                const driverName = order.driverId ? (driverMap.get(order.driverId) || `未知司机(ID:${order.driverId})`) : '-';
+                const displayFare = order.actualFare || order.totalFare || order.estimatedFare || 0;
+                
+                tableHTML += `
+                    <tr>
+                        <td>${order.id || '-'}</td>
+                        <td>${order.passengerId || '-'}</td>
+                        <td>${passengerName}</td>
+                        <td>${order.driverId || '-'}</td>
+                        <td>${driverName}</td>
+                        <td>${order.pickupAddress || '-'}</td>
+                        <td>${order.destinationAddress || '-'}</td>
+                        <td>${order.status || '-'}</td>
+                        <td>¥${displayFare}</td>
+                        <td>¥${order.estimatedFare || 0}</td>
+                        <td>¥${order.actualFare || 0}</td>
+                        <td>${order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+                <p style="margin-top: 10px; color: #666;">显示前10个订单，共 ${orderData.length} 个订单</p>
+            `;
+
+            container.innerHTML = tableHTML;
+        }
+
+        // 页面加载时自动加载数据
+        window.onload = function() {
+            loadPassengerData().then(() => {
+                loadDriverData().then(() => {
+                    loadOrderData();
+                });
+            });
+        };
+    </script>
+</body>
+</html>

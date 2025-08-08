@@ -267,11 +267,99 @@ CREATE TABLE system_configs (
     INDEX idx_config_key (config_key)
 ) COMMENT '系统配置表';
 
+-- 13. 管理员详细信息表
+CREATE TABLE admin_users (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '管理员ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    role ENUM('SUPER_ADMIN', 'ADMIN', 'OPERATOR') NOT NULL DEFAULT 'ADMIN' COMMENT '管理员角色',
+    permissions JSON COMMENT '权限配置',
+    department VARCHAR(50) COMMENT '部门',
+    position VARCHAR(50) COMMENT '职位',
+    last_login_at TIMESTAMP COMMENT '最后登录时间',
+    last_login_ip VARCHAR(45) COMMENT '最后登录IP',
+    login_count INT DEFAULT 0 COMMENT '登录次数',
+    is_active BOOLEAN DEFAULT TRUE COMMENT '是否激活',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_role (role),
+    INDEX idx_is_active (is_active)
+) COMMENT '管理员详细信息表';
+
+-- 14. 管理员操作日志表
+CREATE TABLE admin_operation_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '日志ID',
+    admin_id BIGINT NOT NULL COMMENT '管理员ID',
+    operation_type VARCHAR(50) NOT NULL COMMENT '操作类型',
+    operation_desc TEXT COMMENT '操作描述',
+    target_type VARCHAR(50) COMMENT '操作对象类型',
+    target_id BIGINT COMMENT '操作对象ID',
+    request_method VARCHAR(10) COMMENT '请求方法',
+    request_url VARCHAR(255) COMMENT '请求URL',
+    request_params JSON COMMENT '请求参数',
+    response_status INT COMMENT '响应状态码',
+    ip_address VARCHAR(45) COMMENT 'IP地址',
+    user_agent TEXT COMMENT '用户代理',
+    execution_time INT COMMENT '执行时间(毫秒)',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_operation_type (operation_type),
+    INDEX idx_target_type (target_type),
+    INDEX idx_created_at (created_at)
+) COMMENT '管理员操作日志表';
+
+-- 15. 系统通知表
+CREATE TABLE system_notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '通知ID',
+    title VARCHAR(100) NOT NULL COMMENT '通知标题',
+    content TEXT NOT NULL COMMENT '通知内容',
+    notification_type ENUM('SYSTEM', 'ANNOUNCEMENT', 'ALERT', 'MAINTENANCE') NOT NULL COMMENT '通知类型',
+    target_type ENUM('ALL', 'DRIVER', 'PASSENGER', 'SPECIFIC') NOT NULL COMMENT '目标类型',
+    target_users JSON COMMENT '目标用户ID列表(当target_type为SPECIFIC时)',
+    priority ENUM('LOW', 'NORMAL', 'HIGH', 'URGENT') DEFAULT 'NORMAL' COMMENT '优先级',
+    send_method ENUM('APP', 'SMS', 'EMAIL', 'ALL') DEFAULT 'APP' COMMENT '发送方式',
+    status ENUM('DRAFT', 'SCHEDULED', 'SENT', 'CANCELLED') DEFAULT 'DRAFT' COMMENT '状态',
+    scheduled_time DATETIME COMMENT '定时发送时间',
+    sent_time DATETIME COMMENT '实际发送时间',
+    sender_id BIGINT NOT NULL COMMENT '发送者ID',
+    read_count INT DEFAULT 0 COMMENT '已读数量',
+    total_count INT DEFAULT 0 COMMENT '总发送数量',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_notification_type (notification_type),
+    INDEX idx_target_type (target_type),
+    INDEX idx_status (status),
+    INDEX idx_scheduled_time (scheduled_time),
+    INDEX idx_created_at (created_at)
+) COMMENT '系统通知表';
+
+-- 16. 用户通知记录表
+CREATE TABLE user_notifications (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '记录ID',
+    notification_id BIGINT NOT NULL COMMENT '通知ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    is_read BOOLEAN DEFAULT FALSE COMMENT '是否已读',
+    read_time DATETIME COMMENT '阅读时间',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    FOREIGN KEY (notification_id) REFERENCES system_notifications(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_notification_id (notification_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_read (is_read)
+) COMMENT '用户通知记录表';
+
 -- 插入初始数据
 
 -- 插入管理员用户
 INSERT INTO users (username, password, phone, email, real_name, user_type) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', '13800000000', 'admin@taxi.com', '系统管理员', 'ADMIN');
+('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', '13800000000', 'admin@taxi.com', '系统管理员', 'ADMIN'),
+('superadmin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', '13800000001', 'superadmin@taxi.com', '超级管理员', 'ADMIN');
+
+-- 插入管理员详细信息
+INSERT INTO admin_users (user_id, role, department, position, permissions) VALUES
+(1, 'SUPER_ADMIN', '技术部', '系统管理员', '["ALL"]'),
+(2, 'ADMIN', '运营部', '运营管理员', '["USER_MANAGEMENT", "ORDER_MANAGEMENT", "REVIEW_MANAGEMENT", "STATISTICS"]');
 
 -- 插入系统配置
 INSERT INTO system_configs (config_key, config_value, config_type, description) VALUES

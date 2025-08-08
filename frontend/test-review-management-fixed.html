@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评价管理修复测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>评价管理修复测试</h1>
+            
+            <!-- 测试数据获取 -->
+            <div class="test-section">
+                <h3>1. 测试数据获取</h3>
+                <el-button type="primary" @click="testGetReviews" :loading="loading.get">
+                    获取评价数据
+                </el-button>
+                <div v-if="result.get" class="result-box">
+                    {{ result.get }}
+                </div>
+            </div>
+
+            <!-- 测试筛选功能 -->
+            <div class="test-section">
+                <h3>2. 测试筛选功能</h3>
+                <el-form inline>
+                    <el-form-item label="评分">
+                        <el-select v-model="testFilters.rating" placeholder="选择评分" clearable style="width: 120px;">
+                            <el-option label="5星" :value="5" />
+                            <el-option label="4星" :value="4" />
+                            <el-option label="3星" :value="3" />
+                            <el-option label="2星" :value="2" />
+                            <el-option label="1星" :value="1" />
+                        </el-select>
+                    </el-form-item>
+                    
+                    <el-form-item label="关键词">
+                        <el-input v-model="testFilters.keyword" placeholder="搜索内容" style="width: 150px;" />
+                    </el-form-item>
+                    
+                    <el-form-item>
+                        <el-button type="primary" @click="testFilter" :loading="loading.filter">
+                            测试筛选
+                        </el-button>
+                        <el-button @click="resetTestFilters">重置</el-button>
+                    </el-form-item>
+                </el-form>
+                <div v-if="result.filter" class="result-box">
+                    {{ result.filter }}
+                </div>
+            </div>
+
+            <!-- 评价数据展示 -->
+            <div class="test-section" v-if="reviews.length > 0">
+                <h3>3. 评价数据展示 ({{ reviews.length }} 条)</h3>
+                <el-table :data="reviews" style="width: 100%">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    
+                    <el-table-column label="评分" width="120">
+                        <template #default="scope">
+                            <el-rate v-model="scope.row.rating" disabled show-score />
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="评价者" width="150">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <img 
+                                    :src="getAvatarUrl(scope.row.reviewerAvatar)" 
+                                    :alt="scope.row.reviewerName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span>{{ scope.row.reviewerName }}</span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="被评价者" width="150">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <img 
+                                    :src="getAvatarUrl(scope.row.revieweeAvatar)" 
+                                    :alt="scope.row.revieweeName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span>{{ scope.row.revieweeName }}</span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="评价类型" width="120">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.reviewType === 'PASSENGER_TO_DRIVER' ? 'primary' : 'success'">
+                                {{ scope.row.reviewType === 'PASSENGER_TO_DRIVER' ? '乘客→司机' : '司机→乘客' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="comment" label="评价内容" min-width="200">
+                        <template #default="scope">
+                            {{ scope.row.comment || '无评价内容' }}
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="orderId" label="订单ID" width="80" />
+                    
+                    <el-table-column label="评价时间" width="160">
+                        <template #default="scope">
+                            {{ formatTime(scope.row.createdAt) }}
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="test-section" v-if="stats.totalReviews > 0">
+                <h3>4. 统计信息</h3>
+                <el-row :gutter="20">
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #409eff;">{{ stats.totalReviews }}</div>
+                                <div style="color: #666;">总评价数</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #67c23a;">{{ stats.averageRating }}</div>
+                                <div style="color: #666;">平均评分</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #e6a23c;">{{ stats.todayReviews }}</div>
+                                <div style="color: #666;">今日评价</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #f56c6c;">{{ stats.lowRatingReviews }}</div>
+                                <div style="color: #666;">低分评价</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                </el-row>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = reactive({
+                    get: false,
+                    filter: false
+                });
+
+                const result = reactive({
+                    get: '',
+                    filter: ''
+                });
+
+                const reviews = ref([]);
+                const allReviews = ref([]);
+
+                const testFilters = reactive({
+                    rating: null,
+                    keyword: ''
+                });
+
+                const stats = reactive({
+                    totalReviews: 0,
+                    averageRating: 0,
+                    todayReviews: 0,
+                    lowRatingReviews: 0
+                });
+
+                const testGetReviews = async () => {
+                    loading.get = true;
+                    try {
+                        const response = await fetch('/api/reviews/all');
+                        const data = await response.json();
+                        
+                        console.log('API响应:', data);
+                        
+                        if (response.ok && (data.success === true || data.code === 200)) {
+                            if (data.data && Array.isArray(data.data)) {
+                                allReviews.value = data.data;
+                                
+                                // 处理数据
+                                reviews.value = data.data.map(review => ({
+                                    ...review,
+                                    reviewerName: review.reviewerName || review.raterName || '未知用户',
+                                    revieweeName: review.revieweeName || review.ratedName || '未知用户',
+                                    reviewerAvatar: review.reviewerAvatar || review.raterAvatar || null,
+                                    revieweeAvatar: review.revieweeAvatar || review.ratedAvatar || null,
+                                    reviewType: review.reviewType || 'PASSENGER_TO_DRIVER'
+                                }));
+                                
+                                updateStats(reviews.value);
+                                
+                                result.get = `✅ 成功获取 ${data.data.length} 条评价数据\n\n数据处理结果:\n- 有用户名的评价: ${reviews.value.filter(r => r.reviewerName !== '未知用户' && r.revieweeName !== '未知用户').length}\n- 有头像的评价: ${reviews.value.filter(r => r.reviewerAvatar || r.revieweeAvatar).length}\n\n示例数据:\n${JSON.stringify(reviews.value[0] || {}, null, 2)}`;
+                                
+                                ElMessage.success(`获取到 ${data.data.length} 条评价数据`);
+                            } else {
+                                result.get = `⚠️ 数据格式异常\ndata字段: ${JSON.stringify(data.data)}`;
+                                ElMessage.warning('数据格式异常');
+                            }
+                        } else {
+                            result.get = `❌ API调用失败\n状态: ${response.status}\n错误: ${data.message || '未知错误'}`;
+                            ElMessage.error('API调用失败');
+                        }
+                    } catch (error) {
+                        result.get = `❌ 请求失败: ${error.message}`;
+                        ElMessage.error('请求失败');
+                    } finally {
+                        loading.get = false;
+                    }
+                };
+
+                const testFilter = async () => {
+                    loading.filter = true;
+                    try {
+                        let filteredData = [...allReviews.value];
+                        
+                        // 按评分筛选
+                        if (testFilters.rating !== null) {
+                            filteredData = filteredData.filter(review => 
+                                Math.floor(review.rating) === testFilters.rating
+                            );
+                        }
+                        
+                        // 按关键词搜索
+                        if (testFilters.keyword && testFilters.keyword.trim()) {
+                            const keyword = testFilters.keyword.trim().toLowerCase();
+                            filteredData = filteredData.filter(review => 
+                                (review.comment && review.comment.toLowerCase().includes(keyword)) ||
+                                (review.reviewerName && review.reviewerName.toLowerCase().includes(keyword)) ||
+                                (review.revieweeName && review.revieweeName.toLowerCase().includes(keyword))
+                            );
+                        }
+                        
+                        // 处理筛选后的数据
+                        reviews.value = filteredData.map(review => ({
+                            ...review,
+                            reviewerName: review.reviewerName || review.raterName || '未知用户',
+                            revieweeName: review.revieweeName || review.ratedName || '未知用户',
+                            reviewerAvatar: review.reviewerAvatar || review.raterAvatar || null,
+                            revieweeAvatar: review.revieweeAvatar || review.ratedAvatar || null,
+                            reviewType: review.reviewType || 'PASSENGER_TO_DRIVER'
+                        }));
+                        
+                        updateStats(reviews.value);
+                        
+                        result.filter = `✅ 筛选完成\n原始数据: ${allReviews.value.length} 条\n筛选后: ${reviews.value.length} 条\n\n筛选条件:\n- 评分: ${testFilters.rating || '无'}\n- 关键词: ${testFilters.keyword || '无'}`;
+                        
+                        ElMessage.success(`找到 ${reviews.value.length} 条符合条件的评价`);
+                    } catch (error) {
+                        result.filter = `❌ 筛选失败: ${error.message}`;
+                        ElMessage.error('筛选失败');
+                    } finally {
+                        loading.filter = false;
+                    }
+                };
+
+                const resetTestFilters = () => {
+                    testFilters.rating = null;
+                    testFilters.keyword = '';
+                    reviews.value = [...allReviews.value].map(review => ({
+                        ...review,
+                        reviewerName: review.reviewerName || review.raterName || '未知用户',
+                        revieweeName: review.revieweeName || review.ratedName || '未知用户',
+                        reviewerAvatar: review.reviewerAvatar || review.raterAvatar || null,
+                        revieweeAvatar: review.revieweeAvatar || review.ratedAvatar || null,
+                        reviewType: review.reviewType || 'PASSENGER_TO_DRIVER'
+                    }));
+                    updateStats(reviews.value);
+                    result.filter = '';
+                };
+
+                const updateStats = (reviewsData) => {
+                    stats.totalReviews = reviewsData.length;
+                    
+                    if (reviewsData.length > 0) {
+                        const totalRating = reviewsData.reduce((sum, review) => sum + (review.rating || 0), 0);
+                        stats.averageRating = (totalRating / reviewsData.length).toFixed(1);
+                    } else {
+                        stats.averageRating = 0;
+                    }
+                    
+                    // 今日评价数
+                    const today = new Date().toISOString().split('T')[0];
+                    stats.todayReviews = reviewsData.filter(review => {
+                        const reviewDate = review.createdAt || review.created_at;
+                        return reviewDate && reviewDate.startsWith(today);
+                    }).length;
+                    
+                    // 低分评价数（1-2星）
+                    stats.lowRatingReviews = reviewsData.filter(review => review.rating <= 2).length;
+                };
+
+                const getAvatarUrl = (avatar) => {
+                    if (!avatar || avatar === 'null' || avatar === 'undefined') {
+                        return 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                    }
+                    if (avatar.startsWith('http')) return avatar;
+                    return `/api/files/avatar/${avatar}`;
+                };
+
+                const handleImageError = (event) => {
+                    event.target.src = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                };
+
+                const formatTime = (time) => {
+                    if (!time) return '-';
+                    return new Date(time).toLocaleString();
+                };
+
+                onMounted(() => {
+                    console.log('评价管理修复测试页面已加载');
+                });
+
+                return {
+                    loading,
+                    result,
+                    reviews,
+                    testFilters,
+                    stats,
+                    testGetReviews,
+                    testFilter,
+                    resetTestFilters,
+                    getAvatarUrl,
+                    handleImageError,
+                    formatTime
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

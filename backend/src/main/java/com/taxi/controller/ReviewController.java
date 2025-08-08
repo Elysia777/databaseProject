@@ -101,4 +101,31 @@ public class ReviewController {
             return Result.error("获取司机评分统计失败: " + e.getMessage());
         }
     }
+
+    /**
+     * 管理员获取所有评价（带用户名称）
+     */
+    @GetMapping("/all")
+    public Result<List<Map<String, Object>>> getAllReviewsWithNames() {
+        try {
+            List<Map<String, Object>> reviews = reviewService.getAllReviewsWithNames();
+            System.out.println("测试"+reviews);
+            return Result.success(reviews);
+        } catch (Exception e) {
+            return Result.error("获取评价列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除评价（管理员功能）
+     */
+    @DeleteMapping("/{reviewId}")
+    public Result<Void> deleteReview(@PathVariable Long reviewId) {
+        try {
+            reviewService.deleteReview(reviewId);
+            return Result.success(null);
+        } catch (Exception e) {
+            return Result.error("删除评价失败: " + e.getMessage());
+        }
+    }
 }

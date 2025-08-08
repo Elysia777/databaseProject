@@ -150,6 +150,17 @@ public class OrderController {
         }
     }
 
+    /** 获取所有订单列表（包含用户姓名） */
+    @GetMapping("/with-names")
+    public Result<List<java.util.Map<String, Object>>> getAllOrdersWithNames() {
+        try {
+            List<java.util.Map<String, Object>> orders = orderMapper.selectAllWithUserNames();
+            return Result.success(orders);
+        } catch (Exception e) {
+            return Result.error("获取订单列表失败: " + e.getMessage());
+        }
+    }
+
     /** 获取所有订单列表 - 兼容 /all 路径 */
     @GetMapping("/all")
     public Result<List<Order>> getAllOrdersCompat() {

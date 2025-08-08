@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评价系统调试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .debug-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .warning { color: #e6a23c; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>评价系统调试</h1>
+            
+            <!-- 步骤1: 检查数据库表是否存在 -->
+            <div class="debug-section">
+                <h3>步骤1: 检查数据库表结构</h3>
+                <p>首先检查reviews表是否存在以及表结构</p>
+                <el-button type="primary" @click="checkTableStructure" :loading="loading.table">
+                    检查表结构
+                </el-button>
+                <div v-if="results.table" class="result-box" :class="results.table.success ? 'success' : 'error'">
+                    {{ results.table.message }}
+                </div>
+            </div>
+
+            <!-- 步骤2: 检查是否有评价数据 -->
+            <div class="debug-section">
+                <h3>步骤2: 检查评价数据</h3>
+                <p>检查数据库中是否有评价数据</p>
+                <el-button type="primary" @click="checkReviewData" :loading="loading.data">
+                    检查评价数据
+                </el-button>
+                <div v-if="results.data" class="result-box" :class="results.data.success ? 'success' : 'error'">
+                    {{ results.data.message }}
+                </div>
+            </div>
+
+            <!-- 步骤3: 测试API调用 -->
+            <div class="debug-section">
+                <h3>步骤3: 测试API调用</h3>
+                <p>直接调用评价API并查看详细响应</p>
+                <el-button type="primary" @click="testAPI" :loading="loading.api">
+                    测试API
+                </el-button>
+                <div v-if="results.api" class="result-box" :class="results.api.success ? 'success' : 'error'">
+                    {{ results.api.message }}
+                </div>
+            </div>
+
+            <!-- 步骤4: 创建测试数据 -->
+            <div class="debug-section">
+                <h3>步骤4: 创建测试数据</h3>
+                <p>如果没有数据，创建一些测试评价数据</p>
+                <el-button type="warning" @click="createTestData" :loading="loading.create">
+                    创建测试数据
+                </el-button>
+                <div v-if="results.create" class="result-box" :class="results.create.success ? 'success' : 'error'">
+                    {{ results.create.message }}
+                </div>
+            </div>
+
+            <!-- 步骤5: 验证修复结果 -->
+            <div class="debug-section">
+                <h3>步骤5: 验证修复结果</h3>
+                <p>重新测试API是否能正常返回数据</p>
+                <el-button type="success" @click="verifyFix" :loading="loading.verify">
+                    验证修复
+                </el-button>
+                <div v-if="results.verify" class="result-box" :class="results.verify.success ? 'success' : 'error'">
+                    {{ results.verify.message }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = reactive({
+                    table: false,
+                    data: false,
+                    api: false,
+                    create: false,
+                    verify: false
+                });
+
+                const results = reactive({
+                    table: null,
+                    data: null,
+                    api: null,
+                    create: null,
+                    verify: null
+                });
+
+                const checkTableStructure = async () => {
+                    loading.table = true;
+                    try {
+                        // 通过查询用户表来验证数据库连接
+                        const response = await fetch('/api/auth/users');
+                        const data = await response.json();
+                        
+                        if (response.ok && (data.success || data.code === 200)) {
+                            results.table = {
+                                success: true,
+                                message: `数据库连接正常\n用户表查询成功，获取到 ${data.data?.length || 0} 个用户\n\n用户表字段示例:\n${data.data && data.data.length > 0 ? JSON.stringify(data.data[0], null, 2) : '无数据'}`
+                            };
+                            ElMessage.success('数据库连接正常');
+                        } else {
+                            results.table = {
+                                success: false,
+                                message: `数据库连接异常\n响应状态: ${response.status}\n错误信息: ${data.message || '未知错误'}`
+                            };
+                            ElMessage.error('数据库连接异常');
+                        }
+                    } catch (error) {
+                        results.table = {
+                            success: false,
+                            message: `数据库连接失败\n错误: ${error.message}`
+                        };
+                        ElMessage.error('数据库连接失败');
+                    } finally {
+                        loading.table = false;
+                    }
+                };
+
+                const checkReviewData = async () => {
+                    loading.data = true;
+                    try {
+                        // 尝试获取订单数据，看看是否有可以评价的订单
+                        const ordersResponse = await fetch('/api/orders/with-names');
+                        const ordersData = await ordersResponse.json();
+                        
+                        let message = '';
+                        
+                        if (ordersResponse.ok && (ordersData.success || ordersData.code === 200)) {
+                            const orders = ordersData.data || [];
+                            message += `订单数据: 找到 ${orders.length} 个订单\n`;
+                            
+                            if (orders.length > 0) {
+                                message += `示例订单:\n${JSON.stringify(orders.slice(0, 2), null, 2)}\n\n`;
+                            }
+                        } else {
+                            message += `订单数据获取失败: ${ordersData.message || '未知错误'}\n`;
+                        }
+                        
+                        // 检查是否有司机数据
+                        const driversResponse = await fetch('/api/auth/users');
+                        const driversData = await driversResponse.json();
+                        
+                        if (driversResponse.ok && (driversData.success || driversData.code === 200)) {
+                            const users = driversData.data || [];
+                            const drivers = users.filter(u => u.userType === 'DRIVER');
+                            const passengers = users.filter(u => u.userType === 'PASSENGER');
+                            
+                            message += `用户数据:\n- 司机: ${drivers.length} 个\n- 乘客: ${passengers.length} 个\n`;
+                        }
+                        
+                        results.data = {
+                            success: true,
+                            message: message
+                        };
+                        
+                        ElMessage.success('数据检查完成');
+                    } catch (error) {
+                        results.data = {
+                            success: false,
+                            message: `数据检查失败\n错误: ${error.message}`
+                        };
+                        ElMessage.error('数据检查失败');
+                    } finally {
+                        loading.data = false;
+                    }
+                };
+
+                const testAPI = async () => {
+                    loading.api = true;
+                    try {
+                        console.log('开始测试评价API...');
+                        
+                        const response = await fetch('/api/reviews/all', {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        console.log('API响应状态:', response.status);
+                        console.log('API响应头:', [...response.headers.entries()]);
+                        
+                        const responseText = await response.text();
+                        console.log('API原始响应:', responseText);
+                        
+                        let data;
+                        try {
+                            data = JSON.parse(responseText);
+                        } catch (parseError) {
+                            throw new Error(`JSON解析失败: ${parseError.message}\n原始响应: ${responseText}`);
+                        }
+                        
+                        console.log('API解析后数据:', data);
+                        
+                        let message = `API调用详情:\n`;
+                        message += `- 响应状态: ${response.status}\n`;
+                        message += `- 响应类型: ${response.headers.get('content-type')}\n`;
+                        message += `- 数据结构: ${JSON.stringify(data, null, 2)}\n`;
+                        
+                        if (response.ok) {
+                            if (data.success === true || data.code === 200) {
+                                if (data.data && Array.isArray(data.data)) {
+                                    message += `\n✅ API调用成功\n获取到 ${data.data.length} 条评价数据`;
+                                    results.api = { success: true, message: message };
+                                    ElMessage.success('API调用成功');
+                                } else {
+                                    message += `\n⚠️ API调用成功但数据为空\ndata字段: ${data.data}`;
+                                    results.api = { success: false, message: message };
+                                    ElMessage.warning('API调用成功但数据为空');
+                                }
+                            } else {
+                                message += `\n❌ API返回失败状态\n错误信息: ${data.message || '未知错误'}`;
+                                results.api = { success: false, message: message };
+                                ElMessage.error('API返回失败状态');
+                            }
+                        } else {
+                            message += `\n❌ HTTP请求失败\n状态码: ${response.status}`;
+                            results.api = { success: false, message: message };
+                            ElMessage.error('HTTP请求失败');
+                        }
+                        
+                    } catch (error) {
+                        console.error('API测试失败:', error);
+                        results.api = {
+                            success: false,
+                            message: `API测试失败\n错误: ${error.message}\n\n请检查:\n1. 后端服务是否运行在8080端口\n2. reviews表是否存在\n3. 数据库连接是否正常`
+                        };
+                        ElMessage.error('API测试失败');
+                    } finally {
+                        loading.api = false;
+                    }
+                };
+
+                const createTestData = async () => {
+                    loading.create = true;
+                    try {
+                        // 这里我们不能直接创建数据，但可以提供创建数据的SQL
+                        const sql = `
+-- 确保reviews表存在
+CREATE TABLE IF NOT EXISTS reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '评价ID',
+    order_id BIGINT NOT NULL COMMENT '订单ID',
+    passenger_id BIGINT NOT NULL COMMENT '乘客ID',
+    driver_id BIGINT NOT NULL COMMENT '司机ID',
+    rating DECIMAL(2,1) NOT NULL COMMENT '评分(1-5分)',
+    comment TEXT COMMENT '评价内容',
+    tags VARCHAR(500) COMMENT '评价标签(JSON格式)',
+    is_anonymous BOOLEAN DEFAULT FALSE COMMENT '是否匿名评价',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    INDEX idx_order_id (order_id),
+    INDEX idx_passenger_id (passenger_id),
+    INDEX idx_driver_id (driver_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评价表';
+
+-- 插入测试数据（需要根据实际的用户ID调整）
+INSERT INTO reviews (order_id, passenger_id, driver_id, rating, comment, tags, is_anonymous) VALUES
+(1, 1, 1, 5.0, '司机师傅很好，服务态度很棒！', '["服务好", "准时", "车辆干净"]', FALSE),
+(2, 1, 1, 4.5, '总体不错，就是路上有点堵车', '["服务好", "驾驶平稳"]', FALSE),
+(3, 2, 1, 4.0, '司机很准时，车辆干净', '["准时", "车辆干净"]', FALSE);
+                        `;
+                        
+                        results.create = {
+                            success: true,
+                            message: `请在数据库中执行以下SQL来创建测试数据:\n\n${sql}\n\n注意：需要根据实际的用户ID和订单ID调整数据`
+                        };
+                        
+                        ElMessage.success('测试数据SQL已生成，请在数据库中执行');
+                    } catch (error) {
+                        results.create = {
+                            success: false,
+                            message: `生成测试数据失败\n错误: ${error.message}`
+                        };
+                        ElMessage.error('生成测试数据失败');
+                    } finally {
+                        loading.create = false;
+                    }
+                };
+
+                const verifyFix = async () => {
+                    loading.verify = true;
+                    try {
+                        // 重新测试API
+                        await testAPI();
+                        
+                        // 如果API测试成功，再测试前端页面
+                        if (results.api && results.api.success) {
+                            results.verify = {
+                                success: true,
+                                message: '✅ 修复验证成功！\n\n评价系统现在应该可以正常工作了。\n你可以访问管理员仪表板的评价管理页面。'
+                            };
+                            ElMessage.success('修复验证成功');
+                        } else {
+                            results.verify = {
+                                success: false,
+                                message: '❌ 修复验证失败\n\n请检查:\n1. 是否已创建reviews表\n2. 是否已插入测试数据\n3. 后端服务是否正常运行'
+                            };
+                            ElMessage.error('修复验证失败');
+                        }
+                    } catch (error) {
+                        results.verify = {
+                            success: false,
+                            message: `修复验证失败\n错误: ${error.message}`
+                        };
+                        ElMessage.error('修复验证失败');
+                    } finally {
+                        loading.verify = false;
+                    }
+                };
+
+                onMounted(() => {
+                    console.log('评价系统调试页面已加载');
+                });
+
+                return {
+                    loading,
+                    results,
+                    checkTableStructure,
+                    checkReviewData,
+                    testAPI,
+                    createTestData,
+                    verifyFix
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

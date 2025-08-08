@@ -30,6 +30,15 @@ public interface UserMapper {
     /** 更新用户 */
     int updateById(User user);
 
+    /** 更新用户资料（只更新传递的字段） */
+    int updateProfile(@Param("id") Long id, 
+                     @Param("realName") String realName,
+                     @Param("phone") String phone,
+                     @Param("email") String email,
+                     @Param("avatar") String avatar,
+                     @Param("idCard") String idCard,
+                     @Param("updatedAt") java.time.LocalDateTime updatedAt);
+
     /** 删除用户 */
     int deleteById(@Param("id") Long id);
 

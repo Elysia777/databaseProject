@@ -122,12 +122,12 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="品牌" prop="brand">
-              <el-input v-model="vehicleForm.brand" placeholder="如：丰田" />
+              <el-input v-model="vehicleForm.brand"  />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="型号" prop="model">
-              <el-input v-model="vehicleForm.model" placeholder="如：凯美瑞" />
+              <el-input v-model="vehicleForm.model"  />
             </el-form-item>
           </el-col>
         </el-row>

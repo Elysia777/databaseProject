@@ -33,4 +33,10 @@ public interface ReviewService {
 
     /** 更新司机评分 */
     void updateDriverRating(Long driverId);
+
+    /** 获取所有评价（带用户名称） */
+    List<Map<String, Object>> getAllReviewsWithNames();
+
+    /** 删除评价 */
+    void deleteReview(Long reviewId);
 }

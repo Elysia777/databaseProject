@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员登录 - 网约车运营系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            width: 400px;
+            max-width: 90vw;
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .login-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .login-subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .login-form {
+            margin-top: 30px;
+        }
+        
+        .form-item {
+            margin-bottom: 20px;
+        }
+        
+        .login-button {
+            width: 100%;
+            height: 45px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .admin-info {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .admin-info h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .admin-account {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        
+        .quick-login {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .quick-login button {
+            flex: 1;
+            height: 32px;
+            font-size: 12px;
+        }
+        
+        .system-status {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #52c41a;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="login-title">管理员登录</div>
+                <div class="login-subtitle">网约车运营系统管理后台</div>
+            </div>
+            
+            <el-form 
+                ref="loginForm" 
+                :model="loginForm" 
+                :rules="loginRules" 
+                class="login-form"
+                @submit.prevent="handleLogin"
+            >
+                <div class="form-item">
+                    <el-form-item prop="username">
+                        <el-input
+                            v-model="loginForm.username"
+                            placeholder="请输入管理员用户名"
+                            size="large"
+                            prefix-icon="User"
+                            :disabled="loading"
+                        />
+                    </el-form-item>
+                </div>
+                
+                <div class="form-item">
+                    <el-form-item prop="password">
+                        <el-input
+                            v-model="loginForm.password"
+                            type="password"
+                            placeholder="请输入密码"
+                            size="large"
+                            prefix-icon="Lock"
+                            :disabled="loading"
+                            show-password
+                            @keyup.enter="handleLogin"
+                        />
+                    </el-form-item>
+                </div>
+                
+                <div class="form-item">
+                    <el-form-item>
+                        <el-checkbox v-model="loginForm.rememberMe" :disabled="loading">
+                            记住我
+                        </el-checkbox>
+                    </el-form-item>
+                </div>
+                
+                <div class="form-item">
+                    <el-button 
+                        type="primary" 
+                        class="login-button"
+                        :loading="loading"
+                        @click="handleLogin"
+                    >
+                        {{ loading ? '登录中...' : '登录' }}
+                    </el-button>
+                </div>
+            </el-form>
+            
+            <!-- 测试账号信息 -->
+            <div class="admin-info">
+                <h4>🔑 测试账号</h4>
+                <div class="admin-account">
+                    <span><strong>超级管理员:</strong> superadmin / 123456</span>
+                </div>
+                <div class="admin-account">
+                    <span><strong>普通管理员:</strong> admin / 123456</span>
+                </div>
+                
+                <div class="quick-login">
+                    <el-button size="small" @click="quickLogin('superadmin')">
+                        超级管理员登录
+                    </el-button>
+                    <el-button size="small" @click="quickLogin('admin')">
+                        普通管理员登录
+                    </el-button>
+                </div>
+            </div>
+            
+            <!-- 系统状态 -->
+            <div class="system-status">
+                <span class="status-indicator"></span>
+                系统运行正常
+            </div>
+        </div>
+        
+        <!-- 登录成功后的管理员信息展示 -->
+        <el-dialog
+            v-model="showAdminInfo"
+            title="登录成功"
+            width="500px"
+            :close-on-click-modal="false"
+        >
+            <div v-if="adminInfo">
+                <el-descriptions title="管理员信息" :column="2" border>
+                    <el-descriptions-item label="用户名">{{ adminInfo.username }}</el-descriptions-item>
+                    <el-descriptions-item label="真实姓名">{{ adminInfo.realName }}</el-descriptions-item>
+                    <el-descriptions-item label="角色">{{ adminInfo.roleName }}</el-descriptions-item>
+                    <el-descriptions-item label="部门">{{ adminInfo.department }}</el-descriptions-item>
+                    <el-descriptions-item label="职位">{{ adminInfo.position }}</el-descriptions-item>
+                    <el-descriptions-item label="手机号">{{ adminInfo.phone }}</el-descriptions-item>
+                    <el-descriptions-item label="邮箱">{{ adminInfo.email }}</el-descriptions-item>
+                    <el-descriptions-item label="登录次数">{{ adminInfo.loginCount }}</el-descriptions-item>
+                </el-descriptions>
+                
+                <div style="margin-top: 20px;">
+                    <h4>权限列表:</h4>
+                    <el-tag 
+                        v-for="permission in adminPermissions" 
+                        :key="permission" 
+                        style="margin: 2px;"
+                        type="success"
+                    >
+                        {{ getPermissionName(permission) }}
+                    </el-tag>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h4>可访问菜单:</h4>
+                    <el-tag 
+                        v-for="menu in adminMenus" 
+                        :key="menu.id" 
+                        style="margin: 2px;"
+                        type="primary"
+                    >
+                        {{ menu.name }}
+                    </el-tag>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h4>JWT Token:</h4>
+                    <el-input
+                        v-model="jwtToken"
+                        type="textarea"
+                        :rows="3"
+                        readonly
+                        style="font-family: monospace; font-size: 12px;"
+                    />
+                </div>
+            </div>
+            
+            <template #footer>
+                <el-button @click="showAdminInfo = false">关闭</el-button>
+                <el-button type="primary" @click="goToAdminDashboard">进入管理后台</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loginForm = reactive({
+                    username: '',
+                    password: '',
+                    rememberMe: false
+                });
+
+                const loginRules = {
+                    username: [
+                        { required: true, message: '请输入用户名', trigger: 'blur' }
+                    ],
+                    password: [
+                        { required: true, message: '请输入密码', trigger: 'blur' },
+                        { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+                    ]
+                };
+
+                const loading = ref(false);
+                const showAdminInfo = ref(false);
+                const adminInfo = ref(null);
+                const adminPermissions = ref([]);
+                const adminMenus = ref([]);
+                const jwtToken = ref('');
+
+                // 快速登录
+                const quickLogin = (username) => {
+                    loginForm.username = username;
+                    loginForm.password = '123456';
+                    handleLogin();
+                };
+
+                // 处理登录
+                const handleLogin = async () => {
+                    if (!loginForm.username || !loginForm.password) {
+                        ElMessage.warning('请输入用户名和密码');
+                        return;
+                    }
+
+                    loading.value = true;
+
+                    try {
+                        const response = await fetch('http://localhost:8080/api/admin/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(loginForm)
+                        });
+
+                        const result = await response.json();
+                        console.log('登录响应:', result);
+
+                        if (response.ok && result.code === 200) {
+                            ElMessage.success('登录成功！');
+                            
+                            // 保存登录信息
+                            const loginData = result.data;
+                            adminInfo.value = loginData.adminInfo;
+                            adminPermissions.value = loginData.permissions || [];
+                            adminMenus.value = loginData.menus || [];
+                            jwtToken.value = loginData.token;
+                            
+                            // 保存到localStorage
+                            if (loginForm.rememberMe) {
+                                localStorage.setItem('admin_token', loginData.token);
+                                localStorage.setItem('admin_info', JSON.stringify(loginData.adminInfo));
+                            }
+                            
+                            // 显示管理员信息
+                            showAdminInfo.value = true;
+                            
+                        } else {
+                            ElMessage.error(result.message || '登录失败');
+                        }
+
+                    } catch (error) {
+                        console.error('登录错误:', error);
+                        ElMessage.error('网络错误，请检查服务器连接');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // 获取权限名称
+                const getPermissionName = (permission) => {
+                    const permissionMap = {
+                        'ALL': '所有权限',
+                        'USER_MANAGEMENT': '用户管理',
+                        'ORDER_MANAGEMENT': '订单管理',
+                        'REVIEW_MANAGEMENT': '评价管理',
+                        'STATISTICS': '数据统计',
+                        'SYSTEM_MONITOR': '系统监控'
+                    };
+                    return permissionMap[permission] || permission;
+                };
+
+                // 进入管理后台
+                const goToAdminDashboard = () => {
+                    ElMessage.success('正在跳转到管理后台...');
+                    // 跳转到管理后台仪表板
+                    setTimeout(() => {
+                        window.location.href = 'admin-dashboard.html';
+                    }, 1000);
+                };
+
+                return {
+                    loginForm,
+                    loginRules,
+                    loading,
+                    showAdminInfo,
+                    adminInfo,
+                    adminPermissions,
+                    adminMenus,
+                    jwtToken,
+                    quickLogin,
+                    handleLogin,
+                    getPermissionName,
+                    goToAdminDashboard
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

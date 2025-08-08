@@ -44,4 +44,16 @@ public interface ReviewMapper {
 
     /** 检查订单是否已评价 */
     int countByOrderId(Long orderId);
+
+    /** 获取所有评价（带用户名称） */
+    List<Map<String, Object>> selectAllWithNames();
+
+    /** 检查用户ID是否存在 */
+    boolean checkUserExists(@Param("userId") Long userId);
+
+    /** 通过乘客ID获取用户ID */
+    Long getPassengerUserIdByPassengerId(@Param("passengerId") Long passengerId);
+
+    /** 通过司机ID获取用户ID */
+    Long getDriverUserIdByDriverId(@Param("driverId") Long driverId);
 }

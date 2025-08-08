@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网约车管理后台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+        }
+        
+        .admin-layout {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: #304156;
+            color: white;
+            overflow-y: auto;
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            background: #263445;
+            text-align: center;
+            border-bottom: 1px solid #3a4a5c;
+        }
+        
+        .sidebar-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .sidebar-menu {
+            padding: 0;
+        }
+        
+        .menu-item {
+            display: block;
+            padding: 15px 20px;
+            color: #bfcbd9;
+            text-decoration: none;
+            border-bottom: 1px solid #3a4a5c;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .menu-item:hover,
+        .menu-item.active {
+            background: #409eff;
+            color: white;
+        }
+        
+        .menu-item i {
+            margin-right: 10px;
+            width: 16px;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .header {
+            height: 60px;
+            background: white;
+            border-bottom: 1px solid #e6e6e6;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 1px 4px rgba(0,21,41,.08);
+        }
+        
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .header-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .content-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            border-left: 4px solid #409eff;
+        }
+        
+        .stat-card.success {
+            border-left-color: #67c23a;
+        }
+        
+        .stat-card.warning {
+            border-left-color: #e6a23c;
+        }
+        
+        .stat-card.danger {
+            border-left-color: #f56c6c;
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .change {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .chart {
+            width: 100%;
+            height: 300px;
+        }
+        
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #f56c6c;
+        }
+        
+        @media (max-width: 768px) {
+            .admin-layout {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: auto;
+            }
+            
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="admin-layout">
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h2>🚗 网约车管理后台</h2>
+                </div>
+                <nav class="sidebar-menu">
+                    <a class="menu-item" :class="{active: currentView === 'dashboard'}" @click="setView('dashboard')">
+                        <i>📊</i> 数据概览
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'users'}" @click="setView('users')">
+                        <i>👥</i> 用户管理
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'orders'}" @click="setView('orders')">
+                        <i>📋</i> 订单管理
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'reviews'}" @click="setView('reviews')">
+                        <i>⭐</i> 评价管理
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'statistics'}" @click="setView('statistics')">
+                        <i>📈</i> 数据统计
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'system'}" @click="setView('system')">
+                        <i>⚙️</i> 系统监控
+                    </a>
+                    <a class="menu-item" :class="{active: currentView === 'settings'}" @click="setView('settings')">
+                        <i>🔧</i> 系统设置
+                    </a>
+                </nav>
+            </div>
+            
+            <!-- 主内容区 -->
+            <div class="main-content">
+                <!-- 顶部导航 -->
+                <div class="header">
+                    <div class="header-title">{{ getViewTitle() }}</div>
+                    <div class="header-user">
+                        <span>管理员：{{ adminInfo.realName || 'Admin' }}</span>
+                        <el-button size="small" @click="logout">退出登录</el-button>
+                    </div>
+                </div>
+                
+                <!-- 内容区域 -->
+                <div class="content-area">
+                    <!-- 仪表板视图 -->
+                    <div v-if="currentView === 'dashboard'">
+                        <div class="dashboard-cards">
+                            <div class="stat-card">
+                                <h3>总用户数</h3>
+                                <div class="number">{{ stats.totalUsers }}</div>
+                                <div class="change">较昨日 +{{ stats.userGrowth }}</div>
+                            </div>
+                            <div class="stat-card success">
+                                <h3>在线司机</h3>
+                                <div class="number">{{ stats.onlineDrivers }}</div>
+                                <div class="change">当前在线</div>
+                            </div>
+                            <div class="stat-card warning">
+                                <h3>今日订单</h3>
+                                <div class="number">{{ stats.todayOrders }}</div>
+                                <div class="change">较昨日 +{{ stats.orderGrowth }}%</div>
+                            </div>
+                            <div class="stat-card danger">
+                                <h3>今日收入</h3>
+                                <div class="number">¥{{ stats.todayRevenue }}</div>
+                                <div class="change">较昨日 +{{ stats.revenueGrowth }}%</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-title">订单趋势</div>
+                            <div ref="orderChart" class="chart"></div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-title">用户分布</div>
+                            <div ref="userChart" class="chart"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 用户管理视图 -->
+                    <div v-if="currentView === 'users'">
+                        <div class="data-table">
+                            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <h3>用户列表</h3>
+                                <div>
+                                    <el-input v-model="userSearch" placeholder="搜索用户" style="width: 200px; margin-right: 10px;" />
+                                    <el-select v-model="userTypeFilter" placeholder="用户类型" style="width: 120px;">
+                                        <el-option label="全部" value="" />
+                                        <el-option label="乘客" value="PASSENGER" />
+                                        <el-option label="司机" value="DRIVER" />
+                                        <el-option label="管理员" value="ADMIN" />
+                                    </el-select>
+                                </div>
+                            </div>
+                            
+                            <el-table :data="filteredUsers" style="width: 100%" v-loading="loading.users">
+                                <el-table-column prop="id" label="ID" width="80" />
+                                <el-table-column prop="username" label="用户名" width="120" />
+                                <el-table-column prop="realName" label="真实姓名" width="120" />
+                                <el-table-column prop="phone" label="手机号" width="130" />
+                                <el-table-column prop="userType" label="用户类型" width="100">
+                                    <template #default="scope">
+                                        <el-tag :type="getUserTypeColor(scope.row.userType)">
+                                            {{ getUserTypeText(scope.row.userType) }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="status" label="状态" width="100">
+                                    <template #default="scope">
+                                        <el-tag :type="scope.row.status === 'ACTIVE' ? 'success' : 'danger'">
+                                            {{ scope.row.status === 'ACTIVE' ? '正常' : '禁用' }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="createdAt" label="注册时间" width="180" />
+                                <el-table-column label="操作" width="200">
+                                    <template #default="scope">
+                                        <el-button size="small" @click="viewUser(scope.row)">查看</el-button>
+                                        <el-button 
+                                            size="small" 
+                                            :type="scope.row.status === 'ACTIVE' ? 'danger' : 'success'"
+                                            @click="toggleUserStatus(scope.row)">
+                                            {{ scope.row.status === 'ACTIVE' ? '禁用' : '启用' }}
+                                        </el-button>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                    
+                    <!-- 订单管理视图 -->
+                    <div v-if="currentView === 'orders'">
+                        <div class="data-table">
+                            <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <h3>订单列表</h3>
+                                <div>
+                                    <el-select v-model="orderStatusFilter" placeholder="订单状态" style="width: 120px;">
+                                        <el-option label="全部" value="" />
+                                        <el-option label="待接单" value="PENDING" />
+                                        <el-option label="进行中" value="IN_PROGRESS" />
+                                        <el-option label="已完成" value="COMPLETED" />
+                                        <el-option label="已取消" value="CANCELLED" />
+                                    </el-select>
+                                </div>
+                            </div>
+                            
+                            <el-table :data="orders" style="width: 100%" v-loading="loading.orders">
+                                <el-table-column prop="id" label="订单号" width="100" />
+                                <el-table-column prop="passengerName" label="乘客" width="120" />
+                                <el-table-column prop="driverName" label="司机" width="120" />
+                                <el-table-column prop="startAddress" label="起点" width="200" />
+                                <el-table-column prop="endAddress" label="终点" width="200" />
+                                <el-table-column prop="status" label="状态" width="100">
+                                    <template #default="scope">
+                                        <el-tag :type="getOrderStatusColor(scope.row.status)">
+                                            {{ getOrderStatusText(scope.row.status) }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="totalFare" label="费用" width="100">
+                                    <template #default="scope">
+                                        ¥{{ scope.row.totalFare }}
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="createdAt" label="创建时间" width="180" />
+                                <el-table-column label="操作" width="120">
+                                    <template #default="scope">
+                                        <el-button size="small" @click="viewOrder(scope.row)">查看详情</el-button>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                    
+                    <!-- 其他视图的占位符 -->
+                    <div v-if="['reviews', 'statistics', 'system', 'settings'].includes(currentView)">
+                        <div class="loading">
+                            <h3>{{ getViewTitle() }}</h3>
+                            <p>此功能正在开发中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+
+        createApp({
+            setup() {
+                const API_BASE = 'http://localhost:8080';
+                
+                // 状态管理
+                const currentView = ref('dashboard');
+                const adminInfo = reactive({
+                    username: 'admin',
+                    realName: '系统管理员'
+                });
+                
+                // 统计数据
+                const stats = reactive({
+                    totalUsers: 0,
+                    onlineDrivers: 0,
+                    todayOrders: 0,
+                    todayRevenue: 0,
+                    userGrowth: 0,
+                    orderGrowth: 0,
+                    revenueGrowth: 0
+                });
+                
+                // 数据列表
+                const users = ref([]);
+                const orders = ref([]);
+                
+                // 筛选条件
+                const userSearch = ref('');
+                const userTypeFilter = ref('');
+                const orderStatusFilter = ref('');
+                
+                // 加载状态
+                const loading = reactive({
+                    users: false,
+                    orders: false,
+                    stats: false
+                });
+                
+                // 图表引用
+                const orderChart = ref(null);
+                const userChart = ref(null);
+                
+                // 计算属性
+                const filteredUsers = computed(() => {
+                    let filtered = users.value;
+                    
+                    if (userSearch.value) {
+                        filtered = filtered.filter(user => 
+                            user.username.includes(userSearch.value) ||
+                            (user.realName && user.realName.includes(userSearch.value)) ||
+                            (user.phone && user.phone.includes(userSearch.value))
+                        );
+                    }
+                    
+                    if (userTypeFilter.value) {
+                        filtered = filtered.filter(user => user.userType === userTypeFilter.value);
+                    }
+                    
+                    return filtered;
+                });
+                
+                // 方法
+                const setView = (view) => {
+                    currentView.value = view;
+                    
+                    // 根据视图加载相应数据
+                    switch(view) {
+                        case 'dashboard':
+                            loadDashboardData();
+                            break;
+                        case 'users':
+                            loadUsers();
+                            break;
+                        case 'orders':
+                            loadOrders();
+                            break;
+                    }
+                };
+                
+                const getViewTitle = () => {
+                    const titles = {
+                        dashboard: '数据概览',
+                        users: '用户管理',
+                        orders: '订单管理',
+                        reviews: '评价管理',
+                        statistics: '数据统计',
+                        system: '系统监控',
+                        settings: '系统设置'
+                    };
+                    return titles[currentView.value] || '管理后台';
+                };
+                
+                const loadDashboardData = async () => {
+                    loading.stats = true;
+                    try {
+                        // 加载统计数据
+                        await Promise.all([
+                            loadStats(),
+                            loadCharts()
+                        ]);
+                    } catch (error) {
+                        console.error('加载仪表板数据失败:', error);
+                        ElMessage.error('加载数据失败');
+                    } finally {
+                        loading.stats = false;
+                    }
+                };
+                
+                const loadStats = async () => {
+                    try {
+                        // 加载用户统计
+                        const usersResponse = await fetch(`${API_BASE}/api/users`);
+                        if (usersResponse.ok) {
+                            const usersData = await usersResponse.json();
+                            if (usersData.success) {
+                                stats.totalUsers = usersData.data.length;
+                                stats.onlineDrivers = usersData.data.filter(u => u.userType === 'DRIVER' && u.status === 'ACTIVE').length;
+                            }
+                        }
+                        
+                        // 加载订单统计
+                        const ordersResponse = await fetch(`${API_BASE}/api/orders`);
+                        if (ordersResponse.ok) {
+                            const ordersData = await ordersResponse.json();
+                            if (ordersData.success) {
+                                const today = new Date().toISOString().split('T')[0];
+                                const todayOrders = ordersData.data.filter(o => o.createdAt && o.createdAt.startsWith(today));
+                                stats.todayOrders = todayOrders.length;
+                                stats.todayRevenue = todayOrders.reduce((sum, order) => sum + (order.totalFare || 0), 0);
+                            }
+                        }
+                        
+                        // 模拟增长数据
+                        stats.userGrowth = Math.floor(Math.random() * 20) + 5;
+                        stats.orderGrowth = Math.floor(Math.random() * 15) + 3;
+                        stats.revenueGrowth = Math.floor(Math.random() * 25) + 8;
+                        
+                    } catch (error) {
+                        console.error('加载统计数据失败:', error);
+                    }
+                };
+                
+                const loadCharts = async () => {
+                    await nextTick();
+                    
+                    // 订单趋势图
+                    if (orderChart.value) {
+                        const chart1 = echarts.init(orderChart.value);
+                        const option1 = {
+                            title: { text: '近7天订单趋势' },
+                            tooltip: { trigger: 'axis' },
+                            xAxis: {
+                                type: 'category',
+                                data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+                            },
+                            yAxis: { type: 'value' },
+                            series: [{
+                                data: [120, 132, 101, 134, 90, 230, 210],
+                                type: 'line',
+                                smooth: true,
+                                itemStyle: { color: '#409eff' }
+                            }]
+                        };
+                        chart1.setOption(option1);
+                    }
+                    
+                    // 用户分布图
+                    if (userChart.value) {
+                        const chart2 = echarts.init(userChart.value);
+                        const option2 = {
+                            title: { text: '用户类型分布' },
+                            tooltip: { trigger: 'item' },
+                            series: [{
+                                type: 'pie',
+                                radius: '50%',
+                                data: [
+                                    { value: stats.totalUsers * 0.7, name: '乘客' },
+                                    { value: stats.totalUsers * 0.25, name: '司机' },
+                                    { value: stats.totalUsers * 0.05, name: '管理员' }
+                                ]
+                            }]
+                        };
+                        chart2.setOption(option2);
+                    }
+                };
+                
+                const loadUsers = async () => {
+                    loading.users = true;
+                    try {
+                        const response = await fetch(`${API_BASE}/api/users`);
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            users.value = data.data.map(user => ({
+                                ...user,
+                                createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'
+                            }));
+                        } else {
+                            ElMessage.error('加载用户数据失败');
+                        }
+                    } catch (error) {
+                        console.error('加载用户失败:', error);
+                        ElMessage.error('网络错误');
+                    } finally {
+                        loading.users = false;
+                    }
+                };
+                
+                const loadOrders = async () => {
+                    loading.orders = true;
+                    try {
+                        const response = await fetch(`${API_BASE}/api/orders`);
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            orders.value = data.data.map(order => ({
+                                ...order,
+                                createdAt: order.createdAt ? new Date(order.createdAt).toLocaleString() : '-'
+                            }));
+                        } else {
+                            ElMessage.error('加载订单数据失败');
+                        }
+                    } catch (error) {
+                        console.error('加载订单失败:', error);
+                        ElMessage.error('网络错误');
+                    } finally {
+                        loading.orders = false;
+                    }
+                };
+                
+                const getUserTypeColor = (type) => {
+                    const colors = {
+                        'PASSENGER': '',
+                        'DRIVER': 'success',
+                        'ADMIN': 'warning'
+                    };
+                    return colors[type] || '';
+                };
+                
+                const getUserTypeText = (type) => {
+                    const texts = {
+                        'PASSENGER': '乘客',
+                        'DRIVER': '司机',
+                        'ADMIN': '管理员'
+                    };
+                    return texts[type] || type;
+                };
+                
+                const getOrderStatusColor = (status) => {
+                    const colors = {
+                        'PENDING': 'warning',
+                        'IN_PROGRESS': 'primary',
+                        'COMPLETED': 'success',
+                        'CANCELLED': 'danger'
+                    };
+                    return colors[status] || '';
+                };
+                
+                const getOrderStatusText = (status) => {
+                    const texts = {
+                        'PENDING': '待接单',
+                        'IN_PROGRESS': '进行中',
+                        'COMPLETED': '已完成',
+                        'CANCELLED': '已取消'
+                    };
+                    return texts[status] || status;
+                };
+                
+                const viewUser = (user) => {
+                    ElMessageBox.alert(
+                        `用户ID: ${user.id}\n用户名: ${user.username}\n真实姓名: ${user.realName || '-'}\n手机号: ${user.phone || '-'}\n邮箱: ${user.email || '-'}\n用户类型: ${getUserTypeText(user.userType)}\n状态: ${user.status === 'ACTIVE' ? '正常' : '禁用'}\n注册时间: ${user.createdAt}`,
+                        '用户详情',
+                        { confirmButtonText: '确定' }
+                    );
+                };
+                
+                const viewOrder = (order) => {
+                    ElMessageBox.alert(
+                        `订单号: ${order.id}\n乘客: ${order.passengerName || '-'}\n司机: ${order.driverName || '-'}\n起点: ${order.startAddress || '-'}\n终点: ${order.endAddress || '-'}\n状态: ${getOrderStatusText(order.status)}\n费用: ¥${order.totalFare || 0}\n创建时间: ${order.createdAt}`,
+                        '订单详情',
+                        { confirmButtonText: '确定' }
+                    );
+                };
+                
+                const toggleUserStatus = async (user) => {
+                    const newStatus = user.status === 'ACTIVE' ? 'BANNED' : 'ACTIVE';
+                    const action = newStatus === 'ACTIVE' ? '启用' : '禁用';
+                    
+                    try {
+                        await ElMessageBox.confirm(`确定要${action}用户 ${user.username} 吗？`, '确认操作');
+                        
+                        // 这里应该调用API更新用户状态
+                        // const response = await fetch(`${API_BASE}/api/users/${user.id}/status`, {
+                        //     method: 'PUT',
+                        //     headers: { 'Content-Type': 'application/json' },
+                        //     body: JSON.stringify({ status: newStatus })
+                        // });
+                        
+                        // 模拟更新成功
+                        user.status = newStatus;
+                        ElMessage.success(`用户${action}成功`);
+                        
+                    } catch (error) {
+                        if (error !== 'cancel') {
+                            ElMessage.error(`${action}用户失败`);
+                        }
+                    }
+                };
+                
+                const logout = () => {
+                    ElMessageBox.confirm('确定要退出登录吗？', '确认退出')
+                        .then(() => {
+                            // 清除登录状态
+                            localStorage.removeItem('adminToken');
+                            // 跳转到登录页
+                            window.location.href = 'admin-login.html';
+                        })
+                        .catch(() => {});
+                };
+                
+                // 初始化
+                onMounted(() => {
+                    // 检查登录状态
+                    const token = localStorage.getItem('adminToken');
+                    if (!token) {
+                        window.location.href = 'admin-login.html';
+                        return;
+                    }
+                    
+                    // 加载默认数据
+                    loadDashboardData();
+                });
+                
+                return {
+                    currentView,
+                    adminInfo,
+                    stats,
+                    users,
+                    orders,
+                    userSearch,
+                    userTypeFilter,
+                    orderStatusFilter,
+                    loading,
+                    orderChart,
+                    userChart,
+                    filteredUsers,
+                    setView,
+                    getViewTitle,
+                    getUserTypeColor,
+                    getUserTypeText,
+                    getOrderStatusColor,
+                    getOrderStatusText,
+                    viewUser,
+                    viewOrder,
+                    toggleUserStatus,
+                    logout
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

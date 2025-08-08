@@ -191,12 +191,33 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("用户不存在");
         }
 
-        user.setId(id);
-        user.setUpdatedAt(LocalDateTime.now());
-        userMapper.updateById(user);
+        // 使用新的updateProfile方法，只更新传递的字段
+        userMapper.updateProfile(id, 
+                                user.getRealName(),
+                                user.getPhone(),
+                                user.getEmail(),
+                                user.getAvatar(),
+                                user.getIdCard(),
+                                LocalDateTime.now());
 
+        // 重新获取更新后的用户信息
+        User updatedUser = userMapper.selectById(id);
         UserInfo userInfo = new UserInfo();
-        BeanUtils.copyProperties(user, userInfo);
+        BeanUtils.copyProperties(updatedUser, userInfo);
+        
+        // 根据用户类型设置对应的ID
+        if ("PASSENGER".equals(updatedUser.getUserType())) {
+            Passenger passenger = passengerMapper.selectByUserId(updatedUser.getId());
+            if (passenger != null) {
+                userInfo.setPassengerId(passenger.getId());
+            }
+        } else if ("DRIVER".equals(updatedUser.getUserType())) {
+            Driver driver = driverMapper.selectByUserId(updatedUser.getId());
+            if (driver != null) {
+                userInfo.setDriverId(driver.getId());
+            }
+        }
+        
         return userInfo;
     }
 

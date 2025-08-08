@@ -41,4 +41,7 @@ public interface DriverMapper {
 
     /** 查询所有在线且空闲的司机 */
     List<Driver> selectOnlineAndFreeDrivers();
+
+    /** 根据用户ID获取司机ID */
+    Long selectDriverIdByUserId(@Param("userId") Long userId);
 }

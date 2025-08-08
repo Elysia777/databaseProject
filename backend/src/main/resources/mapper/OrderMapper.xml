@@ -313,4 +313,22 @@
         WHERE o.id = #{orderId}
     </select>
 
+    <!-- 查询所有订单（包含乘客和司机姓名） -->
+    <select id="selectAllWithUserNames" resultType="map">
+        SELECT 
+            o.*,
+            pu.id as passengerUserId,
+            pu.real_name as passengerName,
+            pu.phone as passengerPhone,
+            du.id as driverUserId,
+            du.real_name as driverName,
+            du.phone as driverPhone
+        FROM orders o
+        LEFT JOIN passengers p ON o.passenger_id = p.id
+        LEFT JOIN users pu ON p.user_id = pu.id
+        LEFT JOIN drivers d ON o.driver_id = d.id
+        LEFT JOIN users du ON d.user_id = du.id
+        ORDER BY o.created_at DESC
+    </select>
+
 </mapper> 

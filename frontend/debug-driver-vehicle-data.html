@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机车辆数据调试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        .debug-banner {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .debug-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+        .debug-section.error {
+            border-color: #ef4444;
+            background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%);
+        }
+        .debug-section.success {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .code-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .websocket-data {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .problem-highlight {
+            background: #fef2f2;
+            border: 2px solid #fca5a5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .solution-highlight {
+            background: #ecfdf5;
+            border: 2px solid #6ee7b7;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="debug-banner">
+                <h1 style="margin: 0; font-size: 28px;">🔍 司机车辆数据调试</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px;">诊断为什么司机车辆信息显示为默认值</p>
+            </div>
+            
+            <div class="debug-section error">
+                <h3>
+                    <span style="font-size: 24px;">❌</span>
+                    问题分析
+                </h3>
+                <p>从WebSocket消息可以看出，后端返回的司机车辆信息都是默认值：</p>
+                <div class="websocket-data">{{ receivedData }}</div>
+                
+                <div class="problem-highlight">
+                    <h4 style="color: #dc2626; margin-top: 0;">🚨 发现的问题</h4>
+                    <ul style="color: #7f1d1d;">
+                        <li><strong>plateNumber:</strong> "暂无车牌" - 应该显示真实车牌号</li>
+                        <li><strong>vehicleBrand:</strong> "未知" - 应该显示车辆品牌</li>
+                        <li><strong>vehicleModel:</strong> "未知" - 应该显示车辆型号</li>
+                        <li><strong>vehicleColor:</strong> "未知" - 应该显示车辆颜色</li>
+                        <li><strong>vehicleInfo:</strong> "车辆信息暂无" - 应该显示完整信息</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <h3>
+                    <span style="font-size: 24px;">🔍</span>
+                    原因分析
+                </h3>
+                <p>这种情况通常由以下原因造成：</p>
+                <ol>
+                    <li><strong>司机没有添加车辆：</strong> 司机ID为1的司机可能没有在系统中添加任何车辆</li>
+                    <li><strong>没有激活车辆：</strong> 司机添加了车辆但没有设置为激活状态</li>
+                    <li><strong>数据库查询失败：</strong> VehicleMapper.selectActiveByDriverId(1) 返回null</li>
+                    <li><strong>司机ID不匹配：</strong> 数据库中的司机ID与传入的ID不一致</li>
+                </ol>
+            </div>
+
+            <div class="debug-section">
+                <h3>
+                    <span style="font-size: 24px;">🧪</span>
+                    数据检查
+                </h3>
+                <div style="margin-bottom: 15px;">
+                    <el-button @click="checkDriverVehicles" :loading="checkLoading" type="primary">
+                        检查司机车辆数据
+                    </el-button>
+                    <el-button @click="checkAllDrivers" :loading="allDriversLoading">
+                        检查所有司机
+                    </el-button>
+                </div>
+                
+                <div v-if="driverVehicleData">
+                    <h4>司机ID=1的车辆数据：</h4>
+                    <div class="code-block">{{ JSON.stringify(driverVehicleData, null, 2) }}</div>
+                </div>
+                
+                <div v-if="allDriversData">
+                    <h4>所有司机数据：</h4>
+                    <div class="code-block">{{ JSON.stringify(allDriversData, null, 2) }}</div>
+                </div>
+            </div>
+
+            <div class="debug-section success">
+                <h3>
+                    <span style="font-size: 24px;">✅</span>
+                    解决方案
+                </h3>
+                <div class="solution-highlight">
+                    <h4 style="color: #059669; margin-top: 0;">🔧 修复步骤</h4>
+                    <ol style="color: #065f46;">
+                        <li><strong>确保司机已登录：</strong> 使用driver1/123456登录司机端</li>
+                        <li><strong>添加车辆信息：</strong> 在司机端添加至少一辆车辆</li>
+                        <li><strong>设置激活车辆：</strong> 将添加的车辆设置为激活状态</li>
+                        <li><strong>重新测试：</strong> 创建新订单测试司机信息显示</li>
+                    </ol>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0;">
+                    <a href="http://localhost:3000/login" target="_blank" class="test-button">
+                        🔑 司机登录
+                    </a>
+                    <a href="http://localhost:3000/dashboard/vehicles" target="_blank" class="test-button primary">
+                        🚗 添加车辆
+                    </a>
+                    <a href="test-clean-vehicle-data.html" target="_blank" class="test-button">
+                        🧹 数据管理工具
+                    </a>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <h3>
+                    <span style="font-size: 24px;">📋</span>
+                    后端代码检查
+                </h3>
+                <p>WebSocketNotificationService.java中的逻辑：</p>
+                <div class="code-block">
+// 获取司机的激活车辆信息
+Vehicle activeVehicle = vehicleMapper.selectActiveByDriverId(driver.getId());
+if (activeVehicle != null) {
+    // 返回真实车辆信息
+    driverInfo.put("plateNumber", activeVehicle.getPlateNumber());
+    driverInfo.put("vehicleBrand", activeVehicle.getBrand());
+    // ...
+} else {
+    // 返回默认值 - 这就是当前的情况
+    driverInfo.put("plateNumber", "暂无车牌");
+    driverInfo.put("vehicleBrand", "未知");
+    // ...
+}
+                </div>
+                <p><strong>结论：</strong> activeVehicle 为 null，说明司机ID=1没有激活的车辆。</p>
+            </div>
+
+            <div class="debug-section">
+                <h3>
+                    <span style="font-size: 24px;">🎯</span>
+                    快速修复
+                </h3>
+                <p>最快的解决方法：</p>
+                <ol>
+                    <li>以司机身份登录（driver1/123456）</li>
+                    <li>进入"我的车辆"页面</li>
+                    <li>添加一辆车辆（填写车牌号、品牌、型号等）</li>
+                    <li>确保该车辆被设置为"当前使用"</li>
+                    <li>重新创建订单测试</li>
+                </ol>
+                
+                <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p style="color: #92400e; margin: 0;">
+                        <strong>💡 提示：</strong> 
+                        如果司机已经添加了车辆但仍显示默认值，可能是数据库中的is_active字段没有正确设置。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const checkLoading = ref(false);
+                const allDriversLoading = ref(false);
+                const driverVehicleData = ref(null);
+                const allDriversData = ref(null);
+                
+                // 接收到的WebSocket数据
+                const receivedData = `{
+  "driver": {
+    "vehicleColor": "未知",
+    "latitude": 39.04170548630136,
+    "rating": 5,
+    "vehicleInfo": "车辆信息暂无",
+    "avatar": null,
+    "plateNumber": "暂无车牌",
+    "vehicleBrand": "未知",
+    "phoneNumber": "13164586598",
+    "vehicleYear": null,
+    "driverId": 1,
+    "phone": "13164586598",
+    "vehicleSeats": 5,
+    "name": "qyj",
+    "vehicleModel": "未知",
+    "driverName": "qyj",
+    "id": 1,
+    "vehicleType": "ECONOMY",
+    "carModel": "车辆信息暂无",
+    "longitude": 121.79689317941666
+  },
+  "type": "ORDER_ASSIGNED",
+  "order": {
+    "orderNumber": "ORDER1754425579517b6ccab95",
+    "destinationAddress": "山东大学(地铁站)",
+    "pickupAddress": "位置 (39.041706, 121.796893)",
+    "pickupLongitude": 121.796893,
+    "estimatedFare": 3143,
+    "id": 360,
+    "destinationLatitude": 36.368994,
+    "destinationLongitude": 120.678584,
+    "pickupLatitude": 39.041706,
+    "status": "ASSIGNED"
+  },
+  "timestamp": 1754425581373
+}`;
+
+                // 检查司机车辆数据
+                const checkDriverVehicles = async () => {
+                    checkLoading.value = true;
+                    try {
+                        const token = localStorage.getItem('token');
+                        if (!token) {
+                            ElMessage.error('请先登录');
+                            return;
+                        }
+
+                        const response = await fetch('/api/vehicles/driver/1', {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        driverVehicleData.value = result;
+                        
+                        if (result.code === 200) {
+                            if (result.data && result.data.length > 0) {
+                                ElMessage.success(`找到${result.data.length}辆车辆`);
+                            } else {
+                                ElMessage.warning('司机没有添加任何车辆');
+                            }
+                        } else {
+                            ElMessage.error(result.message || '查询失败');
+                        }
+                    } catch (error) {
+                        ElMessage.error('网络错误: ' + error.message);
+                        driverVehicleData.value = { error: error.message };
+                    } finally {
+                        checkLoading.value = false;
+                    }
+                };
+
+                // 检查所有司机
+                const checkAllDrivers = async () => {
+                    allDriversLoading.value = true;
+                    try {
+                        const token = localStorage.getItem('token');
+                        if (!token) {
+                            ElMessage.error('请先登录');
+                            return;
+                        }
+
+                        const response = await fetch('/api/drivers', {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        allDriversData.value = result;
+                        
+                        if (result.code === 200) {
+                            ElMessage.success(`找到${result.data?.length || 0}个司机`);
+                        } else {
+                            ElMessage.error(result.message || '查询失败');
+                        }
+                    } catch (error) {
+                        ElMessage.error('网络错误: ' + error.message);
+                        allDriversData.value = { error: error.message };
+                    } finally {
+                        allDriversLoading.value = false;
+                    }
+                };
+
+                return {
+                    checkLoading,
+                    allDriversLoading,
+                    driverVehicleData,
+                    allDriversData,
+                    receivedData,
+                    checkDriverVehicles,
+                    checkAllDrivers
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+    
+    <style>
+        .test-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+        }
+        .test-button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+        .test-button.primary {
+            background: #10b981;
+        }
+        .test-button.primary:hover {
+            background: #059669;
+        }
+    </style>
+</body>
+</html>

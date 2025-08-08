@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评价系统用户ID修复最终测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 8px;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #f0f9ff;
+            border: 1px solid #67c23a;
+            color: #67c23a;
+        }
+        .error {
+            background: #fef0f0;
+            border: 1px solid #f56c6c;
+            color: #f56c6c;
+        }
+        .warning {
+            background: #fdf6ec;
+            border: 1px solid #e6a23c;
+            color: #e6a23c;
+        }
+        .data-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .button-group {
+            margin: 15px 0;
+        }
+        .button-group button {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .form-section {
+            background: #fafafa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>评价系统用户ID修复最终测试</h1>
+            <p>此测试验证ratings表中的rater_id和rated_id确实保存的是用户ID（user_id），而不是乘客ID或司机ID。</p>
+            
+            <!-- 1. 数据准备和验证 -->
+            <div class="test-section">
+                <div class="section-title">1. 数据准备和验证</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="loadTestData">加载测试数据</el-button>
+                    <el-button @click="verifyUserIds">验证用户ID映射</el-button>
+                </div>
+                <div v-if="dataResult" class="test-result" :class="dataResult.type">
+                    {{ dataResult.message }}
+                </div>
+                <div v-if="testData" class="data-display">{{ JSON.stringify(testData, null, 2) }}</div>
+            </div>
+
+            <!-- 2. 评价提交测试 -->
+            <div class="test-section">
+                <div class="section-title">2. 评价提交测试（确保使用用户ID）</div>
+                <div class="form-section">
+                    <h4>测试场景选择</h4>
+                    <el-radio-group v-model="testScenario">
+                        <el-radio label="correct">正确的用户ID</el-radio>
+                        <el-radio label="passenger_id">错误的乘客ID（应该被转换）</el-radio>
+                        <el-radio label="driver_id">错误的司机ID（应该被转换）</el-radio>
+                        <el-radio label="invalid">无效的ID（应该报错）</el-radio>
+                    </el-radio-group>
+                </div>
+                
+                <div class="form-section">
+                    <el-form :model="reviewForm" label-width="120px">
+                        <el-form-item label="订单ID">
+                            <el-input v-model="reviewForm.orderId" type="number"></el-input>
+                        </el-form-item>
+                        <el-form-item label="评价人ID">
+                            <el-input v-model="reviewForm.raterId" type="number">
+                                <template #append>{{ getRaterIdType() }}</template>
+                            </el-input>
+                        </el-form-item>
+                        <el-form-item label="被评价人ID">
+                            <el-input v-model="reviewForm.ratedId" type="number">
+                                <template #append>{{ getRatedIdType() }}</template>
+                            </el-input>
+                        </el-form-item>
+                        <el-form-item label="评分">
+                            <el-rate v-model="reviewForm.rating" :max="5"></el-rate>
+                        </el-form-item>
+                        <el-form-item label="评价内容">
+                            <el-input v-model="reviewForm.comment" type="textarea" rows="2"></el-input>
+                        </el-form-item>
+                    </el-form>
+                    
+                    <div class="button-group">
+                        <el-button type="primary" @click="submitReview" :loading="submitting">提交评价</el-button>
+                        <el-button @click="fillTestData">填充测试数据</el-button>
+                        <el-button @click="clearForm">清空表单</el-button>
+                    </div>
+                </div>
+                
+                <div v-if="submitResult" class="test-result" :class="submitResult.type">
+                    {{ submitResult.message }}
+                </div>
+                <div v-if="submitData" class="data-display">{{ JSON.stringify(submitData, null, 2) }}</div>
+            </div>
+
+            <!-- 3. 数据库验证 -->
+            <div class="test-section">
+                <div class="section-title">3. 数据库数据验证</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="verifyDatabaseData">验证数据库数据</el-button>
+                    <el-button @click="checkLatestReview">检查最新评价</el-button>
+                    <el-button @click="validateAllReviews">验证所有评价</el-button>
+                </div>
+                <div v-if="dbResult" class="test-result" :class="dbResult.type">
+                    {{ dbResult.message }}
+                </div>
+                <div v-if="dbData" class="data-display">{{ JSON.stringify(dbData, null, 2) }}</div>
+            </div>
+
+            <!-- 4. 用户ID一致性检查 -->
+            <div class="test-section">
+                <div class="section-title">4. 用户ID一致性检查</div>
+                <div class="button-group">
+                    <el-button type="primary" @click="checkIdConsistency">检查ID一致性</el-button>
+                    <el-button @click="crossValidateIds">交叉验证ID</el-button>
+                </div>
+                <div v-if="consistencyResult" class="test-result" :class="consistencyResult.type">
+                    {{ consistencyResult.message }}
+                </div>
+                <div v-if="consistencyData" class="data-display">{{ JSON.stringify(consistencyData, null, 2) }}</div>
+            </div>
+
+            <!-- 5. 完整性测试报告 -->
+            <div class="test-section">
+                <div class="section-title">5. 完整性测试报告</div>
+                <div class="button-group">
+                    <el-button type="success" @click="runFullTest" :loading="testing">运行完整测试</el-button>
+                    <el-button @click="generateReport">生成测试报告</el-button>
+                </div>
+                <div v-if="fullTestResult" class="test-result" :class="fullTestResult.type">
+                    {{ fullTestResult.message }}
+                </div>
+                <div v-if="fullTestData" class="data-display">{{ JSON.stringify(fullTestData, null, 2) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                // 响应式数据
+                const dataResult = ref(null);
+                const testData = ref(null);
+                const submitResult = ref(null);
+                const submitData = ref(null);
+                const dbResult = ref(null);
+                const dbData = ref(null);
+                const consistencyResult = ref(null);
+                const consistencyData = ref(null);
+                const fullTestResult = ref(null);
+                const fullTestData = ref(null);
+                const submitting = ref(false);
+                const testing = ref(false);
+                const testScenario = ref('correct');
+
+                // 评价表单
+                const reviewForm = reactive({
+                    orderId: '',
+                    raterId: '',
+                    ratedId: '',
+                    rating: 5,
+                    comment: '测试评价内容 - 验证用户ID正确性'
+                });
+
+                // 获取评价人ID类型说明
+                const getRaterIdType = () => {
+                    switch (testScenario.value) {
+                        case 'correct': return '用户ID';
+                        case 'passenger_id': return '乘客ID';
+                        case 'driver_id': return '司机ID';
+                        case 'invalid': return '无效ID';
+                        default: return '';
+                    }
+                };
+
+                // 获取被评价人ID类型说明
+                const getRatedIdType = () => {
+                    switch (testScenario.value) {
+                        case 'correct': return '用户ID';
+                        case 'passenger_id': return '乘客ID';
+                        case 'driver_id': return '司机ID';
+                        case 'invalid': return '无效ID';
+                        default: return '';
+                    }
+                };
+
+                // 加载测试数据
+                const loadTestData = async () => {
+                    try {
+                        dataResult.value = { type: 'warning', message: '正在加载测试数据...' };
+                        
+                        const [usersRes, passengersRes, driversRes, ordersRes] = await Promise.all([
+                            fetch('/api/users'),
+                            fetch('/api/passengers'),
+                            fetch('/api/drivers'),
+                            fetch('/api/orders/with-names')
+                        ]);
+
+                        const users = await usersRes.json();
+                        const passengers = await passengersRes.json();
+                        const drivers = await driversRes.json();
+                        const orders = await ordersRes.json();
+
+                        testData.value = {
+                            users: users.data?.slice(0, 5) || [],
+                            passengers: passengers.data?.slice(0, 3) || [],
+                            drivers: drivers.data?.slice(0, 3) || [],
+                            orders: orders.data?.slice(0, 3) || [],
+                            userIdMapping: {
+                                passengerToUser: {},
+                                driverToUser: {},
+                                userToPassenger: {},
+                                userToDriver: {}
+                            }
+                        };
+
+                        // 建立ID映射关系
+                        if (passengers.data) {
+                            passengers.data.forEach(p => {
+                                testData.value.userIdMapping.passengerToUser[p.id] = p.user_id;
+                                testData.value.userIdMapping.userToPassenger[p.user_id] = p.id;
+                            });
+                        }
+
+                        if (drivers.data) {
+                            drivers.data.forEach(d => {
+                                testData.value.userIdMapping.driverToUser[d.id] = d.user_id;
+                                testData.value.userIdMapping.userToDriver[d.user_id] = d.id;
+                            });
+                        }
+
+                        dataResult.value = { 
+                            type: 'success', 
+                            message: `测试数据加载完成！用户: ${testData.value.users.length}个，乘客: ${testData.value.passengers.length}个，司机: ${testData.value.drivers.length}个，订单: ${testData.value.orders.length}个` 
+                        };
+                    } catch (error) {
+                        dataResult.value = { type: 'error', message: '加载测试数据失败: ' + error.message };
+                        console.error('加载测试数据失败:', error);
+                    }
+                };
+
+                // 验证用户ID映射
+                const verifyUserIds = async () => {
+                    try {
+                        if (!testData.value) {
+                            ElMessage.warning('请先加载测试数据');
+                            return;
+                        }
+
+                        dataResult.value = { type: 'warning', message: '正在验证用户ID映射...' };
+
+                        const mapping = testData.value.userIdMapping;
+                        const verification = {
+                            passengerMappings: Object.keys(mapping.passengerToUser).length,
+                            driverMappings: Object.keys(mapping.driverToUser).length,
+                            validPassengerMappings: 0,
+                            validDriverMappings: 0,
+                            sampleMappings: {
+                                passengers: Object.entries(mapping.passengerToUser).slice(0, 3),
+                                drivers: Object.entries(mapping.driverToUser).slice(0, 3)
+                            }
+                        };
+
+                        // 验证映射的有效性
+                        for (const [passengerId, userId] of Object.entries(mapping.passengerToUser)) {
+                            if (testData.value.users.some(u => u.id == userId)) {
+                                verification.validPassengerMappings++;
+                            }
+                        }
+
+                        for (const [driverId, userId] of Object.entries(mapping.driverToUser)) {
+                            if (testData.value.users.some(u => u.id == userId)) {
+                                verification.validDriverMappings++;
+                            }
+                        }
+
+                        testData.value.verification = verification;
+
+                        if (verification.validPassengerMappings === verification.passengerMappings &&
+                            verification.validDriverMappings === verification.driverMappings) {
+                            dataResult.value = { 
+                                type: 'success', 
+                                message: '用户ID映射验证成功！所有映射都有效' 
+                            };
+                        } else {
+                            dataResult.value = { 
+                                type: 'warning', 
+                                message: '用户ID映射部分无效，需要检查数据一致性' 
+                            };
+                        }
+                    } catch (error) {
+                        dataResult.value = { type: 'error', message: '验证用户ID映射失败: ' + error.message };
+                    }
+                };
+
+                // 填充测试数据
+                const fillTestData = () => {
+                    if (!testData.value) {
+                        ElMessage.warning('请先加载测试数据');
+                        return;
+                    }
+
+                    const orders = testData.value.orders;
+                    const mapping = testData.value.userIdMapping;
+
+                    if (orders.length === 0) {
+                        ElMessage.warning('没有可用的订单数据');
+                        return;
+                    }
+
+                    const sampleOrder = orders[0];
+                    reviewForm.orderId = sampleOrder.id;
+
+                    switch (testScenario.value) {
+                        case 'correct':
+                            // 使用正确的用户ID
+                            reviewForm.raterId = sampleOrder.passengerUserId || sampleOrder.passengerId;
+                            reviewForm.ratedId = sampleOrder.driverUserId || sampleOrder.driverId;
+                            break;
+                        case 'passenger_id':
+                            // 故意使用乘客ID和司机ID（应该被后端转换）
+                            reviewForm.raterId = sampleOrder.passengerId || sampleOrder.passenger_id;
+                            reviewForm.ratedId = sampleOrder.driverId || sampleOrder.driver_id;
+                            break;
+                        case 'driver_id':
+                            // 使用司机相关的ID
+                            reviewForm.raterId = sampleOrder.driverId || sampleOrder.driver_id;
+                            reviewForm.ratedId = sampleOrder.passengerId || sampleOrder.passenger_id;
+                            break;
+                        case 'invalid':
+                            // 使用无效的ID
+                            reviewForm.raterId = 99999;
+                            reviewForm.ratedId = 88888;
+                            break;
+                    }
+
+                    ElMessage.success(`已填充${testScenario.value}测试数据`);
+                };
+
+                // 清空表单
+                const clearForm = () => {
+                    Object.assign(reviewForm, {
+                        orderId: '',
+                        raterId: '',
+                        ratedId: '',
+                        rating: 5,
+                        comment: '测试评价内容 - 验证用户ID正确性'
+                    });
+                    ElMessage.success('表单已清空');
+                };
+
+                // 提交评价
+                const submitReview = async () => {
+                    try {
+                        if (!reviewForm.orderId || !reviewForm.raterId || !reviewForm.ratedId) {
+                            ElMessage.warning('请填写完整的评价信息');
+                            return;
+                        }
+
+                        submitting.value = true;
+                        submitResult.value = { type: 'warning', message: '正在提交评价...' };
+
+                        const reviewData = {
+                            orderId: parseInt(reviewForm.orderId),
+                            raterId: parseInt(reviewForm.raterId),
+                            ratedId: parseInt(reviewForm.ratedId),
+                            rating: reviewForm.rating,
+                            comment: reviewForm.comment,
+                            tags: JSON.stringify(['测试标签', testScenario.value])
+                        };
+
+                        console.log('提交的评价数据:', reviewData);
+
+                        const response = await fetch('/api/reviews', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(reviewData)
+                        });
+
+                        const result = await response.json();
+                        
+                        submitData.value = {
+                            request: reviewData,
+                            response: result,
+                            scenario: testScenario.value,
+                            timestamp: new Date().toISOString()
+                        };
+
+                        if (result.code === 200) {
+                            submitResult.value = { 
+                                type: 'success', 
+                                message: `评价提交成功！场景: ${testScenario.value}, ID: ${result.data.id}` 
+                            };
+                        } else {
+                            submitResult.value = { 
+                                type: testScenario.value === 'invalid' ? 'warning' : 'error', 
+                                message: `评价提交失败: ${result.message}` 
+                            };
+                        }
+                    } catch (error) {
+                        submitResult.value = { type: 'error', message: '提交评价失败: ' + error.message };
+                        console.error('提交评价失败:', error);
+                    } finally {
+                        submitting.value = false;
+                    }
+                };
+
+                // 验证数据库数据
+                const verifyDatabaseData = async () => {
+                    try {
+                        dbResult.value = { type: 'warning', message: '正在验证数据库数据...' };
+
+                        const response = await fetch('/api/reviews/all');
+                        const result = await response.json();
+
+                        if (result.success) {
+                            const reviews = result.data;
+                            const analysis = {
+                                totalReviews: reviews.length,
+                                reviewsWithValidUserIds: 0,
+                                reviewsWithUserNames: 0,
+                                invalidReviews: [],
+                                sampleReviews: reviews.slice(0, 5),
+                                userIdAnalysis: {
+                                    uniqueRaterIds: [...new Set(reviews.map(r => r.reviewerId))],
+                                    uniqueRatedIds: [...new Set(reviews.map(r => r.revieweeId))]
+                                }
+                            };
+
+                            // 分析每个评价的有效性
+                            reviews.forEach(review => {
+                                const hasValidIds = review.reviewerId && review.revieweeId;
+                                const hasNames = review.reviewerName && review.revieweeName;
+                                
+                                if (hasValidIds) analysis.reviewsWithValidUserIds++;
+                                if (hasNames) analysis.reviewsWithUserNames++;
+                                
+                                if (!hasValidIds || !hasNames) {
+                                    analysis.invalidReviews.push({
+                                        id: review.id,
+                                        reviewerId: review.reviewerId,
+                                        revieweeId: review.revieweeId,
+                                        hasNames: hasNames,
+                                        issue: !hasValidIds ? 'missing_user_ids' : 'missing_names'
+                                    });
+                                }
+                            });
+
+                            dbData.value = analysis;
+
+                            if (analysis.reviewsWithValidUserIds === analysis.totalReviews && 
+                                analysis.reviewsWithUserNames === analysis.totalReviews) {
+                                dbResult.value = { 
+                                    type: 'success', 
+                                    message: `数据库验证成功！所有${analysis.totalReviews}条评价都包含有效的用户ID和姓名` 
+                                };
+                            } else {
+                                dbResult.value = { 
+                                    type: 'warning', 
+                                    message: `数据库验证发现问题：${analysis.invalidReviews.length}条评价存在问题` 
+                                };
+                            }
+                        } else {
+                            dbResult.value = { type: 'error', message: '获取评价数据失败' };
+                        }
+                    } catch (error) {
+                        dbResult.value = { type: 'error', message: '验证数据库数据失败: ' + error.message };
+                    }
+                };
+
+                // 检查最新评价
+                const checkLatestReview = async () => {
+                    try {
+                        dbResult.value = { type: 'warning', message: '正在检查最新评价...' };
+
+                        const response = await fetch('/api/reviews/all');
+                        const result = await response.json();
+
+                        if (result.success && result.data.length > 0) {
+                            const latestReview = result.data[0]; // 假设按时间倒序排列
+                            
+                            // 验证最新评价的用户ID
+                            const userCheckPromises = [];
+                            if (latestReview.reviewerId) {
+                                userCheckPromises.push(
+                                    fetch(`/api/users/${latestReview.reviewerId}`)
+                                        .then(res => res.json())
+                                        .then(data => ({ type: 'reviewer', valid: data.success, data: data.data }))
+                                );
+                            }
+                            if (latestReview.revieweeId) {
+                                userCheckPromises.push(
+                                    fetch(`/api/users/${latestReview.revieweeId}`)
+                                        .then(res => res.json())
+                                        .then(data => ({ type: 'reviewee', valid: data.success, data: data.data }))
+                                );
+                            }
+
+                            const userChecks = await Promise.all(userCheckPromises);
+                            
+                            dbData.value = {
+                                latestReview,
+                                userValidation: userChecks,
+                                isValid: userChecks.every(check => check.valid)
+                            };
+
+                            if (dbData.value.isValid) {
+                                dbResult.value = { 
+                                    type: 'success', 
+                                    message: '最新评价验证成功！用户ID都是有效的' 
+                                };
+                            } else {
+                                dbResult.value = { 
+                                    type: 'error', 
+                                    message: '最新评价验证失败！存在无效的用户ID' 
+                                };
+                            }
+                        } else {
+                            dbResult.value = { type: 'warning', message: '没有找到评价数据' };
+                        }
+                    } catch (error) {
+                        dbResult.value = { type: 'error', message: '检查最新评价失败: ' + error.message };
+                    }
+                };
+
+                // 验证所有评价
+                const validateAllReviews = async () => {
+                    try {
+                        dbResult.value = { type: 'warning', message: '正在验证所有评价...' };
+
+                        const response = await fetch('/api/reviews/all');
+                        const result = await response.json();
+
+                        if (result.success) {
+                            const reviews = result.data;
+                            const validation = {
+                                total: reviews.length,
+                                validUserIds: 0,
+                                validNames: 0,
+                                errors: []
+                            };
+
+                            reviews.forEach((review, index) => {
+                                let hasValidIds = true;
+                                let hasValidNames = true;
+
+                                if (!review.reviewerId || !review.revieweeId) {
+                                    hasValidIds = false;
+                                    validation.errors.push({
+                                        index,
+                                        id: review.id,
+                                        error: 'missing_user_ids',
+                                        reviewerId: review.reviewerId,
+                                        revieweeId: review.revieweeId
+                                    });
+                                }
+
+                                if (!review.reviewerName || !review.revieweeName) {
+                                    hasValidNames = false;
+                                    validation.errors.push({
+                                        index,
+                                        id: review.id,
+                                        error: 'missing_names',
+                                        reviewerName: review.reviewerName,
+                                        revieweeName: review.revieweeName
+                                    });
+                                }
+
+                                if (hasValidIds) validation.validUserIds++;
+                                if (hasValidNames) validation.validNames++;
+                            });
+
+                            dbData.value = validation;
+
+                            if (validation.errors.length === 0) {
+                                dbResult.value = { 
+                                    type: 'success', 
+                                    message: `所有评价验证成功！${validation.total}条评价都包含有效的用户ID和姓名` 
+                                };
+                            } else {
+                                dbResult.value = { 
+                                    type: 'warning', 
+                                    message: `发现${validation.errors.length}个问题，需要修复` 
+                                };
+                            }
+                        } else {
+                            dbResult.value = { type: 'error', message: '获取评价数据失败' };
+                        }
+                    } catch (error) {
+                        dbResult.value = { type: 'error', message: '验证所有评价失败: ' + error.message };
+                    }
+                };
+
+                // 检查ID一致性
+                const checkIdConsistency = async () => {
+                    try {
+                        consistencyResult.value = { type: 'warning', message: '正在检查ID一致性...' };
+
+                        const [reviewsRes, ordersRes] = await Promise.all([
+                            fetch('/api/reviews/all'),
+                            fetch('/api/orders/with-names')
+                        ]);
+
+                        const reviews = await reviewsRes.json();
+                        const orders = await ordersRes.json();
+
+                        if (reviews.success && orders.success) {
+                            const consistency = {
+                                reviewUserIds: {
+                                    raterIds: [...new Set(reviews.data.map(r => r.reviewerId).filter(Boolean))],
+                                    ratedIds: [...new Set(reviews.data.map(r => r.revieweeId).filter(Boolean))]
+                                },
+                                orderUserIds: {
+                                    passengerIds: [...new Set(orders.data.map(o => o.passengerUserId).filter(Boolean))],
+                                    driverIds: [...new Set(orders.data.map(o => o.driverUserId).filter(Boolean))]
+                                },
+                                crossValidation: {
+                                    raterInOrders: 0,
+                                    ratedInOrders: 0,
+                                    totalRaters: 0,
+                                    totalRated: 0
+                                }
+                            };
+
+                            // 交叉验证
+                            const allOrderUserIds = [...consistency.orderUserIds.passengerIds, ...consistency.orderUserIds.driverIds];
+                            
+                            consistency.crossValidation.totalRaters = consistency.reviewUserIds.raterIds.length;
+                            consistency.crossValidation.totalRated = consistency.reviewUserIds.ratedIds.length;
+                            
+                            consistency.reviewUserIds.raterIds.forEach(id => {
+                                if (allOrderUserIds.includes(id)) {
+                                    consistency.crossValidation.raterInOrders++;
+                                }
+                            });
+
+                            consistency.reviewUserIds.ratedIds.forEach(id => {
+                                if (allOrderUserIds.includes(id)) {
+                                    consistency.crossValidation.ratedInOrders++;
+                                }
+                            });
+
+                            consistencyData.value = consistency;
+
+                            const raterConsistency = consistency.crossValidation.raterInOrders / consistency.crossValidation.totalRaters;
+                            const ratedConsistency = consistency.crossValidation.ratedInOrders / consistency.crossValidation.totalRated;
+
+                            if (raterConsistency > 0.8 && ratedConsistency > 0.8) {
+                                consistencyResult.value = { 
+                                    type: 'success', 
+                                    message: `ID一致性检查通过！评价者一致性: ${Math.round(raterConsistency * 100)}%, 被评价者一致性: ${Math.round(ratedConsistency * 100)}%` 
+                                };
+                            } else {
+                                consistencyResult.value = { 
+                                    type: 'warning', 
+                                    message: `ID一致性较低，可能存在数据问题` 
+                                };
+                            }
+                        } else {
+                            consistencyResult.value = { type: 'error', message: '获取数据失败' };
+                        }
+                    } catch (error) {
+                        consistencyResult.value = { type: 'error', message: '检查ID一致性失败: ' + error.message };
+                    }
+                };
+
+                // 交叉验证ID
+                const crossValidateIds = async () => {
+                    try {
+                        consistencyResult.value = { type: 'warning', message: '正在进行交叉验证...' };
+
+                        // 获取所有相关数据
+                        const [usersRes, reviewsRes] = await Promise.all([
+                            fetch('/api/users'),
+                            fetch('/api/reviews/all')
+                        ]);
+
+                        const users = await usersRes.json();
+                        const reviews = await reviewsRes.json();
+
+                        if (users.success && reviews.success) {
+                            const userIds = new Set(users.data.map(u => u.id));
+                            const validation = {
+                                totalUsers: users.data.length,
+                                totalReviews: reviews.data.length,
+                                validRaterIds: 0,
+                                validRatedIds: 0,
+                                invalidRaters: [],
+                                invalidRated: []
+                            };
+
+                            reviews.data.forEach(review => {
+                                if (userIds.has(review.reviewerId)) {
+                                    validation.validRaterIds++;
+                                } else {
+                                    validation.invalidRaters.push({
+                                        reviewId: review.id,
+                                        raterId: review.reviewerId
+                                    });
+                                }
+
+                                if (userIds.has(review.revieweeId)) {
+                                    validation.validRatedIds++;
+                                } else {
+                                    validation.invalidRated.push({
+                                        reviewId: review.id,
+                                        ratedId: review.revieweeId
+                                    });
+                                }
+                            });
+
+                            consistencyData.value = validation;
+
+                            if (validation.invalidRaters.length === 0 && validation.invalidRated.length === 0) {
+                                consistencyResult.value = { 
+                                    type: 'success', 
+                                    message: '交叉验证成功！所有评价中的用户ID都是有效的' 
+                                };
+                            } else {
+                                consistencyResult.value = { 
+                                    type: 'error', 
+                                    message: `交叉验证失败！发现${validation.invalidRaters.length}个无效评价者ID，${validation.invalidRated.length}个无效被评价者ID` 
+                                };
+                            }
+                        } else {
+                            consistencyResult.value = { type: 'error', message: '获取数据失败' };
+                        }
+                    } catch (error) {
+                        consistencyResult.value = { type: 'error', message: '交叉验证失败: ' + error.message };
+                    }
+                };
+
+                // 运行完整测试
+                const runFullTest = async () => {
+                    testing.value = true;
+                    fullTestResult.value = { type: 'warning', message: '正在运行完整测试...' };
+
+                    try {
+                        const testResults = [];
+
+                        // 1. 加载测试数据
+                        await loadTestData();
+                        testResults.push({ 
+                            step: '加载测试数据', 
+                            success: dataResult.value?.type === 'success',
+                            message: dataResult.value?.message 
+                        });
+
+                        // 2. 验证用户ID映射
+                        await verifyUserIds();
+                        testResults.push({ 
+                            step: '验证用户ID映射', 
+                            success: dataResult.value?.type === 'success',
+                            message: dataResult.value?.message 
+                        });
+
+                        // 3. 验证数据库数据
+                        await verifyDatabaseData();
+                        testResults.push({ 
+                            step: '验证数据库数据', 
+                            success: dbResult.value?.type === 'success',
+                            message: dbResult.value?.message 
+                        });
+
+                        // 4. 检查ID一致性
+                        await checkIdConsistency();
+                        testResults.push({ 
+                            step: '检查ID一致性', 
+                            success: consistencyResult.value?.type === 'success',
+                            message: consistencyResult.value?.message 
+                        });
+
+                        // 5. 交叉验证ID
+                        await crossValidateIds();
+                        testResults.push({ 
+                            step: '交叉验证ID', 
+                            success: consistencyResult.value?.type === 'success',
+                            message: consistencyResult.value?.message 
+                        });
+
+                        const successCount = testResults.filter(r => r.success).length;
+                        const totalCount = testResults.length;
+
+                        fullTestData.value = {
+                            testResults,
+                            summary: {
+                                total: totalCount,
+                                success: successCount,
+                                failed: totalCount - successCount,
+                                successRate: Math.round((successCount / totalCount) * 100)
+                            },
+                            timestamp: new Date().toISOString()
+                        };
+
+                        if (successCount === totalCount) {
+                            fullTestResult.value = { 
+                                type: 'success', 
+                                message: `完整测试通过！所有${totalCount}项测试都成功，用户ID修复完成！` 
+                            };
+                        } else {
+                            fullTestResult.value = { 
+                                type: 'warning', 
+                                message: `完整测试部分通过：${successCount}/${totalCount}项成功，需要进一步修复` 
+                            };
+                        }
+                    } catch (error) {
+                        fullTestResult.value = { type: 'error', message: '完整测试失败: ' + error.message };
+                    } finally {
+                        testing.value = false;
+                    }
+                };
+
+                // 生成测试报告
+                const generateReport = () => {
+                    const report = {
+                        title: '评价系统用户ID修复测试报告',
+                        timestamp: new Date().toISOString(),
+                        summary: {
+                            objective: '确保ratings表中的rater_id和rated_id保存的是用户ID（user_id），而不是乘客ID或司机ID',
+                            testScenarios: ['正确用户ID', '错误乘客ID转换', '错误司机ID转换', '无效ID处理'],
+                            dataValidation: '验证数据库中所有评价记录的用户ID有效性',
+                            crossValidation: '交叉验证评价数据与用户数据的一致性'
+                        },
+                        results: {
+                            dataLoading: dataResult.value,
+                            submission: submitResult.value,
+                            database: dbResult.value,
+                            consistency: consistencyResult.value,
+                            fullTest: fullTestResult.value
+                        },
+                        recommendations: [
+                            '如果测试失败，检查ReviewServiceImpl中的用户ID转换逻辑',
+                            '确保ReviewMapper.xml中的SQL查询正确关联用户表',
+                            '验证前端ReviewDialog组件传递的是正确的用户ID',
+                            '运行数据库修复脚本清理历史数据中的错误ID'
+                        ]
+                    };
+
+                    fullTestData.value = report;
+                    fullTestResult.value = { 
+                        type: 'success', 
+                        message: '测试报告生成完成！' 
+                    };
+                };
+
+                return {
+                    dataResult,
+                    testData,
+                    submitResult,
+                    submitData,
+                    dbResult,
+                    dbData,
+                    consistencyResult,
+                    consistencyData,
+                    fullTestResult,
+                    fullTestData,
+                    submitting,
+                    testing,
+                    testScenario,
+                    reviewForm,
+                    getRaterIdType,
+                    getRatedIdType,
+                    loadTestData,
+                    verifyUserIds,
+                    fillTestData,
+                    clearForm,
+                    submitReview,
+                    verifyDatabaseData,
+                    checkLatestReview,
+                    validateAllReviews,
+                    checkIdConsistency,
+                    crossValidateIds,
+                    runFullTest,
+                    generateReport
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

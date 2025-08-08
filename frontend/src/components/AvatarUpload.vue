@@ -201,7 +201,7 @@ export default {
         })
         
         const result = await response.json()
-        
+        console.log(result)
         if (result.code === 200) {
           avatarUrl.value = ''
           

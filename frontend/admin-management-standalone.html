@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员账号管理 (独立版)</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .cors-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .cors-warning h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        
+        .cors-warning p {
+            margin: 8px 0;
+            color: #856404;
+        }
+        
+        .server-commands {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 15px 0;
+        }
+        
+        .command-line {
+            background: #343a40;
+            color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .quick-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .quick-btn.primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .quick-btn.success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .quick-btn.warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .quick-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .sql-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .sql-code {
+            background: #343a40;
+            color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .copy-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #5a6268;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .quick-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>🛡️ 管理员账号管理 (独立版)</h1>
+                <p>由于CORS限制，此页面提供SQL脚本方式创建管理员</p>
+            </div>
+            
+            <div class="content">
+                <!-- CORS警告 -->
+                <div class="cors-warning">
+                    <h3>⚠️ CORS跨域问题说明</h3>
+                    <p>直接打开HTML文件会遇到CORS跨域问题，无法直接调用后端API。</p>
+                    <p><strong>解决方案：</strong></p>
+                    <p>1. 启动HTTP服务器访问页面</p>
+                    <p>2. 使用下面提供的SQL脚本直接操作数据库</p>
+                </div>
+
+                <!-- 启动服务器说明 -->
+                <div class="section">
+                    <div class="section-title">🚀 启动HTTP服务器</div>
+                    <p>在frontend目录下运行以下命令之一：</p>
+                    
+                    <div class="server-commands">
+                        <strong>方案1 - 使用项目自带服务器：</strong>
+                        <div class="command-line">cd frontend</div>
+                        <div class="command-line">node start-test-server.js</div>
+                        <div class="command-line"># 然后访问: http://localhost:3000/admin-management.html</div>
+                        
+                        <br><strong>方案2 - 使用Python：</strong>
+                        <div class="command-line">cd frontend</div>
+                        <div class="command-line">python -m http.server 3000</div>
+                        
+                        <br><strong>方案3 - 使用Node.js：</strong>
+                        <div class="command-line">cd frontend</div>
+                        <div class="command-line">npx http-server -p 3000</div>
+                    </div>
+                </div>
+
+                <!-- SQL脚本方式 -->
+                <div class="section">
+                    <div class="section-title">💾 SQL脚本方式创建管理员</div>
+                    
+                    <div class="sql-section">
+                        <h4>创建admin管理员 (用户名: admin, 密码: 123456)</h4>
+                        <div class="sql-code" id="adminSql">-- 创建admin管理员
+INSERT INTO users (username, password, phone, email, real_name, user_type, status, created_at, updated_at) 
+VALUES ('admin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', '13800000000', 'admin@taxi.com', '系统管理员', 'ADMIN', 'ACTIVE', NOW(), NOW());
+
+-- 获取刚创建的用户ID并创建管理员详细信息
+SET @admin_user_id = LAST_INSERT_ID();
+
+INSERT INTO admin_users (user_id, role, permissions, department, position, is_active, created_at, updated_at)
+VALUES (@admin_user_id, 'ADMIN', '["USER_MANAGEMENT", "ORDER_MANAGEMENT", "REVIEW_MANAGEMENT", "STATISTICS"]', '运营部', '系统管理员', TRUE, NOW(), NOW());</div>
+                        <button class="copy-btn" onclick="copyToClipboard('adminSql')">复制SQL</button>
+                    </div>
+
+                    <div class="sql-section">
+                        <h4>创建superadmin超级管理员 (用户名: superadmin, 密码: 123456)</h4>
+                        <div class="sql-code" id="superadminSql">-- 创建superadmin超级管理员
+INSERT INTO users (username, password, phone, email, real_name, user_type, status, created_at, updated_at) 
+VALUES ('superadmin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', '13800000001', 'superadmin@taxi.com', '超级管理员', 'ADMIN', 'ACTIVE', NOW(), NOW());
+
+-- 获取刚创建的用户ID并创建管理员详细信息
+SET @superadmin_user_id = LAST_INSERT_ID();
+
+INSERT INTO admin_users (user_id, role, permissions, department, position, is_active, created_at, updated_at)
+VALUES (@superadmin_user_id, 'SUPER_ADMIN', '["ALL"]', '技术部', '超级管理员', TRUE, NOW(), NOW());</div>
+                        <button class="copy-btn" onclick="copyToClipboard('superadminSql')">复制SQL</button>
+                    </div>
+
+                    <div class="sql-section">
+                        <h4>重置现有管理员密码为123456</h4>
+                        <div class="sql-code" id="resetPasswordSql">-- 重置admin用户密码为123456
+UPDATE users SET password = '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', updated_at = NOW() 
+WHERE username = 'admin';
+
+-- 重置superadmin用户密码为123456
+UPDATE users SET password = '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', updated_at = NOW() 
+WHERE username = 'superadmin';</div>
+                        <button class="copy-btn" onclick="copyToClipboard('resetPasswordSql')">复制SQL</button>
+                    </div>
+
+                    <div class="sql-section">
+                        <h4>查看现有管理员</h4>
+                        <div class="sql-code" id="viewAdminsSql">-- 查看所有管理员用户
+SELECT u.id, u.username, u.real_name, u.phone, u.email, u.user_type, u.status, 
+       a.role, a.department, a.position, a.is_active
+FROM users u 
+LEFT JOIN admin_users a ON u.id = a.user_id 
+WHERE u.user_type = 'ADMIN';</div>
+                        <button class="copy-btn" onclick="copyToClipboard('viewAdminsSql')">复制SQL</button>
+                    </div>
+                </div>
+
+                <!-- 操作步骤 -->
+                <div class="section">
+                    <div class="section-title">📋 操作步骤</div>
+                    <ol>
+                        <li><strong>连接数据库：</strong>
+                            <div class="command-line">mysql -u root -p taxi_operation_system</div>
+                        </li>
+                        <li><strong>执行SQL脚本：</strong> 复制上面的SQL脚本并在MySQL中执行</li>
+                        <li><strong>验证创建结果：</strong> 执行查看管理员的SQL确认创建成功</li>
+                        <li><strong>测试登录：</strong> 使用 admin/123456 或 superadmin/123456 登录</li>
+                    </ol>
+                </div>
+
+                <!-- 登录测试 -->
+                <div class="section">
+                    <div class="section-title">🔐 登录测试</div>
+                    <p>创建管理员后，可以通过以下方式测试登录：</p>
+                    <div class="quick-actions">
+                        <a href="admin-login.html" class="quick-btn primary" target="_blank">
+                            打开管理员登录页面
+                        </a>
+                        <button class="quick-btn success" onclick="testConnection()">
+                            测试后端连接
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 消息显示 -->
+                <div v-if="message" :class="messageClass">
+                    {{ message }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+
+        createApp({
+            setup() {
+                const message = ref('');
+                const messageClass = ref('');
+
+                const showMessage = (msg, type = 'success') => {
+                    message.value = msg;
+                    messageClass.value = type === 'success' ? 'success-message' : 'error-message';
+                    
+                    setTimeout(() => {
+                        message.value = '';
+                        messageClass.value = '';
+                    }, 3000);
+                };
+
+                // 复制到剪贴板
+                window.copyToClipboard = (elementId) => {
+                    const element = document.getElementById(elementId);
+                    const text = element.textContent;
+                    
+                    navigator.clipboard.writeText(text).then(() => {
+                        showMessage('SQL脚本已复制到剪贴板！');
+                    }).catch(() => {
+                        // 降级方案
+                        const textArea = document.createElement('textarea');
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        showMessage('SQL脚本已复制到剪贴板！');
+                    });
+                };
+
+                // 测试后端连接
+                window.testConnection = async () => {
+                    try {
+                        const response = await fetch('http://localhost:8080/api/users');
+                        if (response.ok) {
+                            showMessage('✅ 后端连接正常！可以使用完整版管理页面。');
+                        } else {
+                            showMessage('⚠️ 后端连接异常，请使用SQL脚本方式。', 'error');
+                        }
+                    } catch (error) {
+                        showMessage('❌ 无法连接后端服务，请确保后端已启动或使用SQL脚本方式。', 'error');
+                    }
+                };
+
+                return {
+                    message,
+                    messageClass
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ratings表测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>Ratings表评价系统测试</h1>
+            <p>测试使用现有的ratings表获取评价数据</p>
+            
+            <el-card style="margin-bottom: 20px;">
+                <h3>测试评价API</h3>
+                <el-button type="primary" @click="testAPI" :loading="loading">
+                    测试 /api/reviews/all
+                </el-button>
+                
+                <div v-if="result" class="result-box" :class="success ? 'success' : 'error'">
+                    {{ result }}
+                </div>
+            </el-card>
+
+            <el-card v-if="reviews.length > 0" style="margin-bottom: 20px;">
+                <h3>评价数据 ({{ reviews.length }} 条)</h3>
+                <el-table :data="reviews" style="width: 100%">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    <el-table-column label="评分" width="100">
+                        <template #default="scope">
+                            <el-rate v-model="scope.row.rating" disabled show-score />
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="reviewerName" label="评价者" width="120" />
+                    <el-table-column prop="revieweeName" label="被评价者" width="120" />
+                    <el-table-column label="评价类型" width="120">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.reviewType === 'PASSENGER_TO_DRIVER' ? 'primary' : 'success'">
+                                {{ scope.row.reviewType === 'PASSENGER_TO_DRIVER' ? '乘客→司机' : '司机→乘客' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="comment" label="评价内容" min-width="200" />
+                    <el-table-column prop="orderId" label="订单ID" width="80" />
+                    <el-table-column label="评价时间" width="160">
+                        <template #default="scope">
+                            {{ formatTime(scope.row.createdAt) }}
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </el-card>
+
+            <el-card v-if="reviews.length === 0 && result && success">
+                <h3>创建测试评价</h3>
+                <p>数据库中没有评价数据，创建一个测试评价</p>
+                <el-form :model="newReview" inline>
+                    <el-form-item label="订单ID">
+                        <el-input v-model="newReview.orderId" type="number" style="width: 100px;" />
+                    </el-form-item>
+                    <el-form-item label="评价人ID">
+                        <el-input v-model="newReview.raterId" type="number" style="width: 100px;" />
+                    </el-form-item>
+                    <el-form-item label="被评价人ID">
+                        <el-input v-model="newReview.ratedId" type="number" style="width: 100px;" />
+                    </el-form-item>
+                    <el-form-item label="评分">
+                        <el-rate v-model="newReview.rating" />
+                    </el-form-item>
+                </el-form>
+                <el-form :model="newReview">
+                    <el-form-item label="评价内容">
+                        <el-input v-model="newReview.comment" type="textarea" />
+                    </el-form-item>
+                </el-form>
+                <el-button type="success" @click="createReview" :loading="creating">
+                    创建测试评价
+                </el-button>
+            </el-card>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = ref(false);
+                const creating = ref(false);
+                const result = ref('');
+                const success = ref(false);
+                const reviews = ref([]);
+
+                const newReview = reactive({
+                    orderId: 1,
+                    raterId: 1,
+                    ratedId: 1,
+                    rating: 5,
+                    comment: '测试评价内容 - 使用ratings表'
+                });
+
+                const testAPI = async () => {
+                    loading.value = true;
+                    try {
+                        console.log('测试评价API...');
+                        
+                        const response = await fetch('/api/reviews/all');
+                        const data = await response.json();
+                        
+                        console.log('API响应:', data);
+                        
+                        if (response.ok && (data.success === true || data.code === 200)) {
+                            if (data.data && Array.isArray(data.data)) {
+                                reviews.value = data.data;
+                                result.value = `✅ 成功获取评价数据\n获取到 ${data.data.length} 条评价\n\n${data.data.length > 0 ? '示例数据:\n' + JSON.stringify(data.data[0], null, 2) : '暂无评价数据'}`;
+                                success.value = true;
+                                ElMessage.success(`获取到 ${data.data.length} 条评价数据`);
+                            } else {
+                                result.value = `⚠️ API调用成功但数据格式异常\ndata字段: ${JSON.stringify(data.data)}\n完整响应: ${JSON.stringify(data, null, 2)}`;
+                                success.value = false;
+                                ElMessage.warning('数据格式异常');
+                            }
+                        } else {
+                            result.value = `❌ API调用失败\n状态: ${response.status}\n错误: ${data.message || '未知错误'}\n完整响应: ${JSON.stringify(data, null, 2)}`;
+                            success.value = false;
+                            ElMessage.error('API调用失败');
+                        }
+                    } catch (error) {
+                        console.error('API测试失败:', error);
+                        result.value = `❌ 请求失败: ${error.message}\n\n可能原因:\n1. 后端服务未运行\n2. ratings表不存在或无数据\n3. 数据库连接问题`;
+                        success.value = false;
+                        ElMessage.error('请求失败');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const createReview = async () => {
+                    creating.value = true;
+                    try {
+                        const reviewData = {
+                            orderId: parseInt(newReview.orderId),
+                            raterId: parseInt(newReview.raterId),
+                            ratedId: parseInt(newReview.ratedId),
+                            rating: newReview.rating,
+                            comment: newReview.comment,
+                            tags: '["测试"]'
+                        };
+
+                        console.log('创建评价:', reviewData);
+
+                        const response = await fetch('/api/reviews', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(reviewData)
+                        });
+
+                        const data = await response.json();
+                        console.log('创建评价响应:', data);
+
+                        if (response.ok && (data.success === true || data.code === 200)) {
+                            ElMessage.success('评价创建成功');
+                            // 重新获取评价列表
+                            testAPI();
+                        } else {
+                            ElMessage.error(`创建失败: ${data.message || '未知错误'}`);
+                        }
+                    } catch (error) {
+                        console.error('创建评价失败:', error);
+                        ElMessage.error(`创建失败: ${error.message}`);
+                    } finally {
+                        creating.value = false;
+                    }
+                };
+
+                const formatTime = (time) => {
+                    if (!time) return '-';
+                    return new Date(time).toLocaleString();
+                };
+
+                onMounted(() => {
+                    console.log('Ratings表测试页面已加载');
+                    // 自动测试API
+                    testAPI();
+                });
+
+                return {
+                    loading,
+                    creating,
+                    result,
+                    success,
+                    reviews,
+                    newReview,
+                    testAPI,
+                    createReview,
+                    formatTime
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

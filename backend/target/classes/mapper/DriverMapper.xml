@@ -151,4 +151,8 @@
         ORDER BY d.rating DESC
     </select>
 
+    <select id="selectDriverIdByUserId" parameterType="java.lang.Long" resultType="java.lang.Long">
+        SELECT id FROM drivers WHERE user_id = #{userId}
+    </select>
+
 </mapper> 

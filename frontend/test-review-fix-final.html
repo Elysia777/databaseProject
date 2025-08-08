@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评价系统修复验证</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .container {
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .warning { color: #e6a23c; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>评价系统修复验证</h1>
+            
+            <!-- 步骤1: 测试数据库连接 -->
+            <div class="test-section">
+                <h3>步骤1: 测试数据库连接</h3>
+                <p>首先验证是否能连接到数据库并获取基础数据</p>
+                <el-button type="primary" @click="testDatabaseConnection" :loading="loading.db">
+                    测试数据库连接
+                </el-button>
+                <div v-if="results.db" class="result-box" :class="results.db.success ? 'success' : 'error'">
+                    {{ results.db.message }}
+                </div>
+            </div>
+
+            <!-- 步骤2: 测试评价API -->
+            <div class="test-section">
+                <h3>步骤2: 测试评价API</h3>
+                <p>测试修复后的评价获取API</p>
+                <el-button type="primary" @click="testReviewAPI" :loading="loading.review">
+                    测试评价API
+                </el-button>
+                <div v-if="results.review" class="result-box" :class="results.review.success ? 'success' : 'error'">
+                    {{ results.review.message }}
+                </div>
+            </div>
+
+            <!-- 步骤3: 显示评价数据 -->
+            <div class="test-section" v-if="reviews.length > 0">
+                <h3>步骤3: 评价数据展示</h3>
+                <p>成功获取到 {{ reviews.length }} 条评价数据</p>
+                
+                <el-table :data="reviews" style="width: 100%">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    <el-table-column prop="rating" label="评分" width="80">
+                        <template #default="scope">
+                            <el-rate v-model="scope.row.rating" disabled show-score />
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="reviewerName" label="评价者" width="120" />
+                    <el-table-column prop="revieweeName" label="被评价者" width="120" />
+                    <el-table-column prop="comment" label="评价内容" min-width="200">
+                        <template #default="scope">
+                            {{ scope.row.comment || '无评价内容' }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="orderId" label="订单ID" width="80" />
+                    <el-table-column label="评价时间" width="160">
+                        <template #default="scope">
+                            {{ formatTime(scope.row.createdAt) }}
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <!-- 步骤4: 测试管理员仪表板 -->
+            <div class="test-section">
+                <h3>步骤4: 测试管理员仪表板数据</h3>
+                <p>验证管理员仪表板是否能正常获取统计数据</p>
+                <el-button type="primary" @click="testDashboardData" :loading="loading.dashboard">
+                    测试仪表板数据
+                </el-button>
+                <div v-if="results.dashboard" class="result-box" :class="results.dashboard.success ? 'success' : 'error'">
+                    {{ results.dashboard.message }}
+                </div>
+            </div>
+
+            <!-- 总结 -->
+            <div class="test-section" v-if="testCompleted">
+                <h3>测试总结</h3>
+                <div class="result-box">
+                    <div :class="summary.database ? 'success' : 'error'">
+                        ✓ 数据库连接: {{ summary.database ? '正常' : '异常' }}
+                    </div>
+                    <div :class="summary.reviewAPI ? 'success' : 'error'">
+                        ✓ 评价API: {{ summary.reviewAPI ? '正常' : '异常' }}
+                    </div>
+                    <div :class="summary.dashboard ? 'success' : 'error'">
+                        ✓ 仪表板数据: {{ summary.dashboard ? '正常' : '异常' }}
+                    </div>
+                    <div style="margin-top: 10px; font-weight: bold;">
+                        总体状态: {{ allTestsPassed ? '✅ 所有测试通过' : '❌ 存在问题需要修复' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = reactive({
+                    db: false,
+                    review: false,
+                    dashboard: false
+                });
+
+                const results = reactive({
+                    db: null,
+                    review: null,
+                    dashboard: null
+                });
+
+                const reviews = ref([]);
+                const testCompleted = ref(false);
+
+                const summary = reactive({
+                    database: false,
+                    reviewAPI: false,
+                    dashboard: false
+                });
+
+                const allTestsPassed = computed(() => {
+                    return summary.database && summary.reviewAPI && summary.dashboard;
+                });
+
+                const testDatabaseConnection = async () => {
+                    loading.db = true;
+                    try {
+                        const response = await fetch('/api/auth/users');
+                        const data = await response.json();
+                        
+                        if (response.ok && (data.success || data.code === 200)) {
+                            results.db = {
+                                success: true,
+                                message: `数据库连接正常\n获取到 ${data.data?.length || 0} 个用户\n响应状态: ${response.status}`
+                            };
+                            summary.database = true;
+                            ElMessage.success('数据库连接测试通过');
+                        } else {
+                            results.db = {
+                                success: false,
+                                message: `数据库连接异常\n响应状态: ${response.status}\n错误信息: ${data.message || '未知错误'}`
+                            };
+                            summary.database = false;
+                            ElMessage.error('数据库连接测试失败');
+                        }
+                    } catch (error) {
+                        results.db = {
+                            success: false,
+                            message: `数据库连接失败\n错误: ${error.message}`
+                        };
+                        summary.database = false;
+                        ElMessage.error('数据库连接测试失败');
+                    } finally {
+                        loading.db = false;
+                    }
+                };
+
+                const testReviewAPI = async () => {
+                    loading.review = true;
+                    try {
+                        const response = await fetch('/api/reviews/all');
+                        const data = await response.json();
+                        
+                        if (response.ok && (data.success || data.code === 200)) {
+                            reviews.value = data.data || [];
+                            results.review = {
+                                success: true,
+                                message: `评价API正常\n获取到 ${reviews.value.length} 条评价\n响应状态: ${response.status}\n\n示例数据:\n${JSON.stringify(reviews.value.slice(0, 2), null, 2)}`
+                            };
+                            summary.reviewAPI = true;
+                            ElMessage.success('评价API测试通过');
+                        } else {
+                            results.review = {
+                                success: false,
+                                message: `评价API异常\n响应状态: ${response.status}\n错误信息: ${data.message || '未知错误'}\n\n完整响应:\n${JSON.stringify(data, null, 2)}`
+                            };
+                            summary.reviewAPI = false;
+                            ElMessage.error('评价API测试失败');
+                        }
+                    } catch (error) {
+                        results.review = {
+                            success: false,
+                            message: `评价API请求失败\n错误: ${error.message}`
+                        };
+                        summary.reviewAPI = false;
+                        ElMessage.error('评价API测试失败');
+                    } finally {
+                        loading.review = false;
+                    }
+                };
+
+                const testDashboardData = async () => {
+                    loading.dashboard = true;
+                    try {
+                        // 测试获取订单数据
+                        const ordersResponse = await fetch('/api/orders/with-names');
+                        const ordersData = await ordersResponse.json();
+                        
+                        let message = '';
+                        let success = true;
+                        
+                        if (ordersResponse.ok && (ordersData.success || ordersData.code === 200)) {
+                            message += `订单数据: ✓ 正常 (${ordersData.data?.length || 0} 条)\n`;
+                        } else {
+                            message += `订单数据: ✗ 异常\n`;
+                            success = false;
+                        }
+                        
+                        // 测试获取用户数据
+                        const usersResponse = await fetch('/api/auth/users');
+                        const usersData = await usersResponse.json();
+                        
+                        if (usersResponse.ok && (usersData.success || usersData.code === 200)) {
+                            message += `用户数据: ✓ 正常 (${usersData.data?.length || 0} 条)\n`;
+                        } else {
+                            message += `用户数据: ✗ 异常\n`;
+                            success = false;
+                        }
+                        
+                        results.dashboard = {
+                            success: success,
+                            message: message + `\n仪表板数据获取${success ? '成功' : '失败'}`
+                        };
+                        summary.dashboard = success;
+                        
+                        if (success) {
+                            ElMessage.success('仪表板数据测试通过');
+                        } else {
+                            ElMessage.error('仪表板数据测试失败');
+                        }
+                        
+                        testCompleted.value = true;
+                    } catch (error) {
+                        results.dashboard = {
+                            success: false,
+                            message: `仪表板数据测试失败\n错误: ${error.message}`
+                        };
+                        summary.dashboard = false;
+                        testCompleted.value = true;
+                        ElMessage.error('仪表板数据测试失败');
+                    } finally {
+                        loading.dashboard = false;
+                    }
+                };
+
+                const formatTime = (time) => {
+                    if (!time) return '-';
+                    return new Date(time).toLocaleString();
+                };
+
+                onMounted(() => {
+                    console.log('评价系统修复验证页面已加载');
+                });
+
+                return {
+                    loading,
+                    results,
+                    reviews,
+                    testCompleted,
+                    summary,
+                    allTestsPassed,
+                    testDatabaseConnection,
+                    testReviewAPI,
+                    testDashboardData,
+                    formatTime
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

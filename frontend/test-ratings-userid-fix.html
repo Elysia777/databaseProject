@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ratings用户ID修复测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+        }
+        .result-box {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .warning { color: #e6a23c; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>Ratings用户ID修复测试</h1>
+            <p>测试修复后的评价数据是否能正确显示用户名称</p>
+            
+            <!-- 步骤1: 测试修复前的状态 -->
+            <div class="test-section">
+                <h3>步骤1: 测试当前评价数据</h3>
+                <el-button type="primary" @click="testCurrentData" :loading="loading.current">
+                    获取当前评价数据
+                </el-button>
+                <div v-if="results.current" class="result-box" :class="currentDataStatus">
+                    {{ results.current }}
+                </div>
+            </div>
+
+            <!-- 步骤2: 显示评价数据详情 -->
+            <div class="test-section" v-if="reviews.length > 0">
+                <h3>步骤2: 评价数据详情</h3>
+                <el-table :data="reviews" style="width: 100%">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    
+                    <el-table-column label="评价者ID" width="100">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.reviewerName ? 'success' : 'danger'">
+                                {{ scope.row.reviewerId }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="评价者" width="150">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <img 
+                                    :src="getAvatarUrl(scope.row.reviewerAvatar)" 
+                                    :alt="scope.row.reviewerName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span :class="scope.row.reviewerName ? 'success' : 'error'">
+                                    {{ scope.row.reviewerName || '❌ 未找到' }}
+                                </span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="被评价者ID" width="100">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.revieweeName ? 'success' : 'danger'">
+                                {{ scope.row.revieweeId }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="被评价者" width="150">
+                        <template #default="scope">
+                            <div class="user-info">
+                                <img 
+                                    :src="getAvatarUrl(scope.row.revieweeAvatar)" 
+                                    :alt="scope.row.revieweeName"
+                                    class="user-avatar"
+                                    @error="handleImageError"
+                                />
+                                <span :class="scope.row.revieweeName ? 'success' : 'error'">
+                                    {{ scope.row.revieweeName || '❌ 未找到' }}
+                                </span>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column label="评分" width="100">
+                        <template #default="scope">
+                            <el-rate v-model="scope.row.rating" disabled show-score />
+                        </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="comment" label="评价内容" min-width="200" />
+                    
+                    <el-table-column label="状态" width="100">
+                        <template #default="scope">
+                            <el-tag :type="getStatusType(scope.row)">
+                                {{ getStatusText(scope.row) }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <!-- 步骤3: 数据质量分析 -->
+            <div class="test-section" v-if="analysis.total > 0">
+                <h3>步骤3: 数据质量分析</h3>
+                <el-row :gutter="20">
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #409eff;">{{ analysis.total }}</div>
+                                <div style="color: #666;">总评价数</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #67c23a;">{{ analysis.withBothNames }}</div>
+                                <div style="color: #666;">完整用户名</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #e6a23c;">{{ analysis.missingRater }}</div>
+                                <div style="color: #666;">缺失评价者</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-card>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #f56c6c;">{{ analysis.missingRated }}</div>
+                                <div style="color: #666;">缺失被评价者</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                </el-row>
+                
+                <div style="margin-top: 20px;">
+                    <el-progress 
+                        :percentage="analysis.completenessPercentage" 
+                        :color="analysis.completenessPercentage >= 80 ? '#67c23a' : analysis.completenessPercentage >= 50 ? '#e6a23c' : '#f56c6c'"
+                    >
+                        <template #default="{ percentage }">
+                            <span style="color: #606266;">数据完整性: {{ percentage }}%</span>
+                        </template>
+                    </el-progress>
+                </div>
+            </div>
+
+            <!-- 步骤4: 修复建议 -->
+            <div class="test-section" v-if="suggestions.length > 0">
+                <h3>步骤4: 修复建议</h3>
+                <el-alert
+                    v-for="(suggestion, index) in suggestions"
+                    :key="index"
+                    :title="suggestion.title"
+                    :description="suggestion.description"
+                    :type="suggestion.type"
+                    style="margin-bottom: 10px;"
+                    show-icon
+                />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, onMounted } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            setup() {
+                const loading = reactive({
+                    current: false
+                });
+
+                const results = reactive({
+                    current: ''
+                });
+
+                const reviews = ref([]);
+                const suggestions = ref([]);
+
+                const analysis = reactive({
+                    total: 0,
+                    withBothNames: 0,
+                    missingRater: 0,
+                    missingRated: 0,
+                    completenessPercentage: 0
+                });
+
+                const currentDataStatus = computed(() => {
+                    if (analysis.completenessPercentage >= 80) return 'success';
+                    if (analysis.completenessPercentage >= 50) return 'warning';
+                    return 'error';
+                });
+
+                const testCurrentData = async () => {
+                    loading.current = true;
+                    try {
+                        const response = await fetch('/api/reviews/all');
+                        const data = await response.json();
+                        
+                        console.log('API响应:', data);
+                        
+                        if (response.ok && (data.success === true || data.code === 200)) {
+                            if (data.data && Array.isArray(data.data)) {
+                                reviews.value = data.data;
+                                analyzeData(data.data);
+                                
+                                const summary = `✅ 成功获取 ${data.data.length} 条评价数据\n\n数据质量分析:\n- 总评价数: ${analysis.total}\n- 有完整用户名的: ${analysis.withBothNames}\n- 缺失评价者姓名: ${analysis.missingRater}\n- 缺失被评价者姓名: ${analysis.missingRated}\n- 数据完整性: ${analysis.completenessPercentage}%\n\n${data.data.length > 0 ? '示例数据:\n' + JSON.stringify(data.data[0], null, 2) : ''}`;
+                                
+                                results.current = summary;
+                                
+                                generateSuggestions();
+                                
+                                ElMessage.success(`获取到 ${data.data.length} 条评价数据`);
+                            } else {
+                                results.current = `⚠️ 数据格式异常\ndata字段: ${JSON.stringify(data.data)}`;
+                                ElMessage.warning('数据格式异常');
+                            }
+                        } else {
+                            results.current = `❌ API调用失败\n状态: ${response.status}\n错误: ${data.message || '未知错误'}`;
+                            ElMessage.error('API调用失败');
+                        }
+                    } catch (error) {
+                        results.current = `❌ 请求失败: ${error.message}`;
+                        ElMessage.error('请求失败');
+                    } finally {
+                        loading.current = false;
+                    }
+                };
+
+                const analyzeData = (data) => {
+                    analysis.total = data.length;
+                    analysis.withBothNames = data.filter(r => r.reviewerName && r.revieweeName && 
+                        r.reviewerName !== 'null' && r.revieweeName !== 'null').length;
+                    analysis.missingRater = data.filter(r => !r.reviewerName || r.reviewerName === 'null').length;
+                    analysis.missingRated = data.filter(r => !r.revieweeName || r.revieweeName === 'null').length;
+                    
+                    if (analysis.total > 0) {
+                        analysis.completenessPercentage = Math.round((analysis.withBothNames / analysis.total) * 100);
+                    } else {
+                        analysis.completenessPercentage = 0;
+                    }
+                };
+
+                const generateSuggestions = () => {
+                    suggestions.value = [];
+                    
+                    if (analysis.completenessPercentage < 50) {
+                        suggestions.value.push({
+                            title: '数据完整性严重不足',
+                            description: `只有 ${analysis.completenessPercentage}% 的评价有完整的用户名信息。建议执行 fix_ratings_user_ids.sql 脚本修复用户ID关联问题。`,
+                            type: 'error'
+                        });
+                    } else if (analysis.completenessPercentage < 80) {
+                        suggestions.value.push({
+                            title: '数据完整性需要改善',
+                            description: `${analysis.completenessPercentage}% 的评价有完整的用户名信息。建议检查并修复缺失的用户记录。`,
+                            type: 'warning'
+                        });
+                    } else {
+                        suggestions.value.push({
+                            title: '数据质量良好',
+                            description: `${analysis.completenessPercentage}% 的评价有完整的用户名信息。系统运行正常。`,
+                            type: 'success'
+                        });
+                    }
+                    
+                    if (analysis.missingRater > 0) {
+                        suggestions.value.push({
+                            title: '缺失评价者信息',
+                            description: `${analysis.missingRater} 条评价缺失评价者姓名。这可能是因为 rater_id 在 users 表中不存在。`,
+                            type: 'warning'
+                        });
+                    }
+                    
+                    if (analysis.missingRated > 0) {
+                        suggestions.value.push({
+                            title: '缺失被评价者信息',
+                            description: `${analysis.missingRated} 条评价缺失被评价者姓名。这可能是因为 rated_id 在 users 表中不存在。`,
+                            type: 'warning'
+                        });
+                    }
+                };
+
+                const getStatusType = (review) => {
+                    if (review.reviewerName && review.revieweeName && 
+                        review.reviewerName !== 'null' && review.revieweeName !== 'null') {
+                        return 'success';
+                    }
+                    if (!review.reviewerName || !review.revieweeName || 
+                        review.reviewerName === 'null' || review.revieweeName === 'null') {
+                        return 'danger';
+                    }
+                    return 'warning';
+                };
+
+                const getStatusText = (review) => {
+                    if (review.reviewerName && review.revieweeName && 
+                        review.reviewerName !== 'null' && review.revieweeName !== 'null') {
+                        return '正常';
+                    }
+                    if (!review.reviewerName || review.reviewerName === 'null') {
+                        return '缺失评价者';
+                    }
+                    if (!review.revieweeName || review.revieweeName === 'null') {
+                        return '缺失被评价者';
+                    }
+                    return '异常';
+                };
+
+                const getAvatarUrl = (avatar) => {
+                    if (!avatar || avatar === 'null' || avatar === 'undefined') {
+                        return 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                    }
+                    if (avatar.startsWith('http')) return avatar;
+                    return `/api/files/avatar/${avatar}`;
+                };
+
+                const handleImageError = (event) => {
+                    event.target.src = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+                };
+
+                onMounted(() => {
+                    console.log('Ratings用户ID修复测试页面已加载');
+                    // 自动测试当前数据
+                    testCurrentData();
+                });
+
+                return {
+                    loading,
+                    results,
+                    reviews,
+                    suggestions,
+                    analysis,
+                    currentDataStatus,
+                    testCurrentData,
+                    getStatusType,
+                    getStatusText,
+                    getAvatarUrl,
+                    handleImageError
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

@@ -77,6 +77,9 @@ public interface OrderMapper {
     /** 查询订单详情（包含司机车辆信息） */
     java.util.Map<String, Object> selectOrderWithDriverVehicle(@Param("orderId") Long orderId);
     
+    /** 查询所有订单（包含乘客和司机姓名） */
+    List<java.util.Map<String, Object>> selectAllWithUserNames();
+    
     /** 获取司机月度收入汇总 */
     java.util.Map<String, Object> selectDriverMonthlySummary(@Param("driverId") Long driverId, 
                                                              @Param("month") String month);

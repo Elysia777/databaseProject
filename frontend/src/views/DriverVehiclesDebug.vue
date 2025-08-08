@@ -107,10 +107,10 @@
           <el-input v-model="vehicleForm.plateNumber" placeholder="如：京A12345" />
         </el-form-item>
         <el-form-item label="品牌">
-          <el-input v-model="vehicleForm.brand" placeholder="如：丰田" />
+          <el-input v-model="vehicleForm.brand"  />
         </el-form-item>
         <el-form-item label="型号">
-          <el-input v-model="vehicleForm.model" placeholder="如：凯美瑞" />
+          <el-input v-model="vehicleForm.model"  />
         </el-form-item>
         <el-form-item label="颜色">
           <el-select v-model="vehicleForm.color" placeholder="选择颜色" style="width: 100%">
