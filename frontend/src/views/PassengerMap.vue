@@ -837,8 +837,8 @@ function initMap() {
             updatePickupMarkerDraggable();
           }, 1000);
 
-          // 添加拖拽事件监听器
-          pickupMarker.on("dragend", (e) => {
+          // 添加拖拽事件监听器（智能吸附版本）
+          pickupMarker.on("dragend", async (e) => {
             // 如果已有订单，不允许拖拽
             if (currentOrder.value) {
               console.log("⚠️ 订单已发起，不允许修改上车点");
@@ -850,32 +850,22 @@ function initMap() {
               return;
             }
 
-            const newPosition = e.lnglat;
+            const dragPosition = e.lnglat;
             console.log(
-              "🚩 上车点被拖拽到新位置:",
-              newPosition.lng,
-              newPosition.lat
+              "🚩 上车点被拖拽到位置:",
+              dragPosition.lng,
+              dragPosition.lat
             );
 
-            // 更新当前位置
-            currentPosition.value = {
-              lng: newPosition.lng,
-              lat: newPosition.lat,
-            };
-
-            // 获取新位置的地址
-            getAddressFromLocation(newPosition.lng, newPosition.lat);
-
-            // 如果已有目的地，重新规划路线
-            if (destination.value) {
-              showRoute();
-            }
+            // 智能吸附到最近的POI
+            await snapToNearestPOI(dragPosition.lng, dragPosition.lat);
           });
 
           map.setCenter([lng, lat]);
           console.log("定位成功，当前位置:", lng, lat);
 
-          getAddressFromLocation(lng, lat);
+          // 初始定位时也使用智能吸附功能
+          snapToNearestPOI(lng, lat);
           initAutocomplete();
           
           // 🔑 关键：恢复订单相关的地图元素
@@ -957,26 +947,197 @@ const getAddressFromLocation = async (lng, lat) => {
   try {
     console.log("开始获取地址:", lng, lat);
 
-    const response = await fetch(
-      getRestApiUrl("geocode/regeo", {
-        location: `${lng},${lat}`,
-        extensions: "all",
-      })
-    );
-    const data = await response.json();
-
-    console.log("地址解析结果:", data);
-
-    if (data.status === "1" && data.regeocode) {
-      pickupAddress.value = data.regeocode.formatted_address;
-      console.log("获取到地址:", data.regeocode.formatted_address);
-    } else {
-      console.log("地址获取失败，使用备用方案");
+    // 使用Web端JS API的逆地理编码功能
+    if (!window.AMap) {
+      console.error("❌ 高德地图API未加载");
       pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+      return;
     }
+
+    // 创建逆地理编码实例
+    const geocoder = new window.AMap.Geocoder({
+      radius: 100, // 搜索半径100米
+      extensions: "base" // 返回基础信息即可
+    });
+
+    // 执行逆地理编码
+    geocoder.getAddress([lng, lat], (status, result) => {
+      console.log("地址解析结果:", status, result);
+
+      if (status === 'complete' && result.info === 'OK' && result.regeocode) {
+        const address = result.regeocode.formattedAddress;
+        pickupAddress.value = address;
+        console.log("获取到地址:", address);
+        
+        // 更新标记标题
+        if (pickupMarker) {
+          pickupMarker.setTitle(`上车点: ${address}`);
+        }
+      } else {
+        console.log("地址获取失败，使用备用方案");
+        pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+      }
+    });
+
   } catch (error) {
     console.error("地址获取异常:", error);
     pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+  }
+};
+
+// 智能吸附到最近的POI（使用Web端JS API）
+const snapToNearestPOI = async (lng, lat) => {
+  try {
+    console.log("🧲 开始智能吸附，查找最近的POI...");
+    ElMessage.info("正在智能匹配最近地点...");
+
+    // 使用Web端JS API的逆地理编码功能
+    if (!window.AMap) {
+      console.error("❌ 高德地图API未加载");
+      fallbackToOriginalPosition(lng, lat);
+      return;
+    }
+
+    // 创建逆地理编码实例
+    const geocoder = new window.AMap.Geocoder({
+      radius: 200, // 搜索半径200米
+      extensions: "all" // 返回详细信息
+    });
+
+    // 执行逆地理编码
+    geocoder.getAddress([lng, lat], (status, result) => {
+      console.log("🔍 POI搜索结果:", status, result);
+
+      if (status === 'complete' && result.info === 'OK' && result.regeocode) {
+        const regeocode = result.regeocode;
+        
+        // 检查是否有POI信息
+        if (regeocode.pois && regeocode.pois.length > 0) {
+          // 找到最近的POI
+          const nearestPoi = regeocode.pois[0];
+          const poiDistance = parseFloat(nearestPoi.distance);
+          
+          console.log("📍 找到最近POI:", nearestPoi.name, "距离:", poiDistance + "米");
+          
+          // 如果POI距离小于100米，则吸附到该POI
+          if (poiDistance < 100) {
+            const poiLocation = nearestPoi.location;
+            const poiLng = poiLocation.lng;
+            const poiLat = poiLocation.lat;
+            
+            console.log("🎯 吸附到POI:", nearestPoi.name, "坐标:", poiLng, poiLat);
+            
+            // 更新位置到POI的精确坐标
+            currentPosition.value = { lng: poiLng, lat: poiLat };
+            
+            // 移动地图中心到POI位置
+            if (map) {
+              map.setCenter([poiLng, poiLat]);
+              console.log("📍 地图中心已移动到POI位置");
+            }
+            
+            // 移动标记到POI位置
+            if (pickupMarker) {
+              pickupMarker.setPosition([poiLng, poiLat]);
+              pickupMarker.setTitle(`上车点: ${nearestPoi.name}`);
+            }
+            
+            // 更新地址显示为POI名称
+            pickupAddress.value = nearestPoi.name;
+            
+            // 显示吸附成功消息
+            ElMessage.success(`已自动匹配到: ${nearestPoi.name}`);
+            
+            // 如果有目的地，重新规划路线
+            if (destination.value) {
+              showRoute();
+            }
+            
+            return; // 成功吸附，直接返回
+          }
+        }
+        
+        // 如果没有找到合适的POI，使用格式化地址
+        console.log("📍 未找到合适的POI，使用格式化地址");
+        currentPosition.value = { lng, lat };
+        
+        if (pickupMarker) {
+          pickupMarker.setPosition([lng, lat]);
+        }
+        
+        // 使用逆地理编码的格式化地址
+        pickupAddress.value = regeocode.formattedAddress || `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+        
+        // 如果有目的地，重新规划路线
+        if (destination.value) {
+          showRoute();
+        }
+        
+        ElMessage.info("已更新到拖拽位置");
+        
+      } else {
+        console.error("❌ 逆地理编码失败:", status, result);
+        fallbackToOriginalPosition(lng, lat);
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ 智能吸附失败:", error);
+    fallbackToOriginalPosition(lng, lat);
+  }
+};
+
+// 回退到原始位置的处理函数
+const fallbackToOriginalPosition = (lng, lat) => {
+  console.log("📍 回退到原始位置处理");
+  
+  currentPosition.value = { lng, lat };
+  
+  if (pickupMarker) {
+    pickupMarker.setPosition([lng, lat]);
+  }
+  
+  // 使用简单的地址格式
+  pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+  
+  if (destination.value) {
+    showRoute();
+  }
+  
+  ElMessage.warning("智能匹配失败，已使用拖拽位置");
+};
+
+// 处理起点点击事件
+const handlePickupClick = () => {
+  if (currentOrder.value) {
+    console.log("⚠️ 订单已发起，不允许修改上车点");
+    return;
+  }
+  
+  console.log("📍 重新定位上车点");
+  ElMessage.info("正在重新定位...");
+  
+  // 重新获取当前位置
+  if (map && window.AMap) {
+    const geolocation = new window.AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 10000,
+    });
+    
+    geolocation.getCurrentPosition(async (status, result) => {
+      if (status === "complete") {
+        const { lng, lat } = result.position;
+        console.log("🎯 重新定位成功:", lng, lat);
+        
+        // 使用智能吸附功能
+        await snapToNearestPOI(lng, lat);
+        
+        ElMessage.success("定位更新成功");
+      } else {
+        console.error("❌ 重新定位失败:", status);
+        ElMessage.error("定位失败，请检查位置权限");
+      }
+    });
   }
 };
 
@@ -1295,19 +1456,6 @@ const handleCallCar = async () => {
 
     console.log('🆔 使用乘客ID:', passengerId)
     console.log('👤 用户信息:', userStore.user)
-    
-    // 调试：验证passengerId是否有效
-    try {
-      const debugResponse = await fetch(`/api/auth/debug/user/${userStore.user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${userStore.token}`
-        }
-      })
-      const debugResult = await debugResponse.json()
-      console.log('🔍 用户调试信息:', debugResult)
-    } catch (error) {
-      console.warn('⚠️ 无法获取调试信息:', error)
-    }
 
     const orderData = {
       passengerId: passengerId,
