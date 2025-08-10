@@ -207,16 +207,23 @@ public class OrderController {
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
             
-            // 如果订单已分配给司机，需要释放司机
+            // 如果订单已分配给司机，需要释放司机并通知
             if (order.getDriverId() != null) {
-                driverRedisService.markDriverFree(order.getDriverId());
+                System.out.println("✅ 订单已分配给司机 " + order.getDriverId() + "，开始释放司机并发送通知");
                 
-                // 通知司机订单已被乘客取消
+                // 释放司机状态
+                driverRedisService.markDriverFree(order.getDriverId());
+                System.out.println("✅ 司机 " + order.getDriverId() + " 状态已释放");
+                
+                // 通知司机订单已被乘客取消（增强版通知）
                 webSocketNotificationService.notifyDriverOrderCancelled(
                     order.getDriverId(), 
                     orderId, 
-                    "乘客已取消订单"
+                    "乘客已取消订单，请清理路线规划"
                 );
+                System.out.println("✅ 已通知司机 " + order.getDriverId() + " 订单取消");
+            } else {
+                System.out.println("📋 订单未分配给司机，无需释放司机状态");
             }
             
             // 推送取消状态给乘客

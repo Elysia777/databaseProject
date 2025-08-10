@@ -152,15 +152,21 @@
       </div>
     </div>
 
-    <!-- 导航信息 -->
-    <div v-if="navigationInfo" class="navigation-panel">
-      <div class="nav-header">
-        <span>{{ navigationInfo.instruction }}</span>
-        <el-button @click="stopNavigation" size="small">停止导航</el-button>
+    <!-- 导航指示面板 -->
+    <div v-if="currentOrder && navigationInfo" class="navigation-guidance-panel">
+      <div class="current-instruction">
+        <div class="instruction-icon">{{ navigationInfo.icon || '🧭' }}</div>
+        <div class="instruction-content">
+          <div class="instruction-text">{{ navigationInfo.instruction }}</div>
+          <div class="instruction-distance">{{ navigationInfo.nextDistance || navigationInfo.distance }}</div>
+        </div>
       </div>
-      <div class="nav-details">
-        <span>距离: {{ navigationInfo.distance }}</span>
-        <span>预计: {{ navigationInfo.duration }}</span>
+      <div class="route-summary">
+        <div class="route-stats">
+          <span class="total-distance">总距离: {{ navigationInfo.distance }}</span>
+          <span class="total-time">预计: {{ navigationInfo.duration }}</span>
+        </div>
+        <el-button @click="stopNavigation" size="small" type="info" plain>停止导航</el-button>
       </div>
     </div>
   </div>
@@ -344,12 +350,79 @@ const initMap = () => {
 
 const createMap = () => {
   try {
+    console.log('🗺️ 初始化司机端地图，启用所有交互功能...')
+    
     map = new window.AMap.Map('driverMapContainer', {
-      resizeEnable: true,
+      resizeEnable: true,        // 启用地图自适应
+      dragEnable: true,          // 启用拖拽 ⭐
+      zoomEnable: true,          // 启用缩放 ⭐
+      doubleClickZoom: true,     // 启用双击缩放 ⭐
+      keyboardEnable: true,      // 启用键盘操作
+      scrollWheel: true,         // 启用滚轮缩放 ⭐
+      touchZoom: true,           // 启用触摸缩放 ⭐
+      rotateEnable: false,       // 禁用旋转（避免误操作）
+      pitchEnable: false,        // 禁用倾斜（保持2D视图）
       zoom: 16,
       center: [116.397428, 39.90923],
-      mapStyle: 'amap://styles/normal'
+      mapStyle: 'amap://styles/normal',
+      viewMode: '2D'             // 确保2D视图
     })
+    
+    console.log('✅ 司机端地图创建成功，交互功能已启用')
+    
+    // 地图加载完成事件
+    map.on('complete', function() {
+      console.log('✅ 司机端地图加载完成')
+    })
+    
+    map.on('error', function(error) {
+      console.error('❌ 地图错误:', error)
+      ElMessage.error('地图加载失败')
+    })
+    
+    // 测试地图交互（调试用）
+    map.on('dragstart', function() {
+      console.log('🖱️ 开始拖拽地图')
+    })
+    
+    map.on('dragend', function() {
+      console.log('🖱️ 结束拖拽地图')
+    })
+    
+    map.on('zoomchange', function() {
+      console.log('🔍 地图缩放级别:', map.getZoom())
+    })
+    
+    map.on('click', function(e) {
+      console.log('🖱️ 点击地图:', e.lnglat.lng, e.lnglat.lat)
+    })
+    
+    // 将地图对象暴露到全局，便于调试
+    if (typeof window !== 'undefined') {
+      window.driverMap = map
+      console.log('🔧 地图对象已暴露到 window.driverMap')
+      
+      // 添加调试函数
+      window.testMapInteraction = () => {
+        console.log('🧪 测试地图交互功能:')
+        console.log('- 拖拽启用:', map.getStatus().dragEnable)
+        console.log('- 缩放启用:', map.getStatus().zoomEnable)
+        console.log('- 滚轮缩放启用:', map.getStatus().scrollWheel)
+        console.log('- 双击缩放启用:', map.getStatus().doubleClickZoom)
+        console.log('- 当前缩放级别:', map.getZoom())
+        console.log('- 当前中心点:', map.getCenter())
+        return {
+          dragEnable: map.getStatus().dragEnable,
+          zoomEnable: map.getStatus().zoomEnable,
+          scrollWheel: map.getStatus().scrollWheel,
+          doubleClickZoom: map.getStatus().doubleClickZoom,
+          zoom: map.getZoom(),
+          center: map.getCenter()
+        }
+      }
+      
+      console.log('🔧 调试函数已添加: window.testMapInteraction()')
+    }
 
     // 初始化定位
     window.AMap.plugin(['AMap.Geolocation'], () => {
@@ -399,9 +472,9 @@ const getCurrentLocation = () => {
     } else {
       console.error('❌ 位置获取失败:', status, result)
       
-      // 如果定位失败，使用默认位置（大连理工大学）
-      const defaultLng = 121.749849
-      const defaultLat = 39.044237
+      // 如果定位失败，使用默认位置
+      const defaultLng = (Math.random() * (125.78 - 118.85) + 118.85).toFixed(6)
+      const defaultLat = (Math.random() * (43.26 - 38.43) + 38.43).toFixed(6)
       
       console.log('🔄 使用默认位置:', defaultLng, defaultLat)
       driverStore.updateCurrentPosition({ lng: defaultLng, lat: defaultLat })
@@ -432,10 +505,13 @@ const updateDriverMarker = (lng, lat) => {
       position: [lng, lat],
       map,
       icon: new window.AMap.Icon({
-        size: new window.AMap.Size(32, 32),
-        image: '🚗'
+        size: new window.AMap.Size(26, 13),
+        image: 'https://webapi.amap.com/images/car.png',
+        imageSize: new window.AMap.Size(26, 13)
       }),
-      title: '我的位置'
+      offset: new AMap.Pixel(0, 0), // 相对于基点的偏移位置
+      title: '司机位置',
+      zIndex: 100
     })
     map.setCenter([lng, lat])
   }
@@ -480,7 +556,7 @@ const handleDriverOrderUpdate = (data) => {
         // 移除待处理订单
         stopOrderCountdown(data.orderId);
         
-        // 如果是当前订单被取消，重置状态
+        // 如果是当前订单被取消，重置状态并清理地图
         if (currentOrder.value) {
           const currentOrderId = currentOrder.value.orderId || currentOrder.value.id
           const cancelledOrderId = data.orderId
@@ -488,12 +564,45 @@ const handleDriverOrderUpdate = (data) => {
           console.log('比较订单ID:', currentOrderId, 'vs', cancelledOrderId)
           
           if (currentOrderId == cancelledOrderId) { // 使用 == 处理类型转换
-            console.log('✅ 当前订单被取消，重置状态')
+            console.log('✅ 当前订单被取消，重置状态并清理地图')
+            
+            // 清理地图上的订单相关元素
+            clearOrderMapElements();
+            
+            // 重置订单状态
             resetOrderState();
-            ElMessage.warning('当前订单已被取消');
+            
+            // 停止导航
+            stopNavigation();
+            
+            ElMessage({
+              message: `订单已被乘客取消：${data.reason || '乘客取消'}`,
+              type: 'warning',
+              duration: 5000,
+              showClose: true
+            });
           }
         }
       }
+      break;
+    case "CLEAR_ROUTE":
+      console.log("🧹 处理清理路线请求");
+      console.log("📋 清理原因:", data.reason);
+      
+      // 强制清理所有地图元素
+      clearOrderMapElements();
+      
+      // 停止导航
+      stopNavigation();
+      
+      // 重置订单状态
+      resetOrderState();
+      
+      ElMessage({
+        message: '路线已清理，订单已取消',
+        type: 'info',
+        duration: 3000
+      });
       break;
     case "ORDER_STATUS_CHANGE":
       console.log("📊 处理订单状态变化");
@@ -648,9 +757,8 @@ const connectWebSocket = () => {
           // 处理不同类型的通知
           if (data.type === 'ORDER_CANCELLED') {
             console.log('❌ 收到订单取消通知:', data)
-            ElMessage.warning(data.reason || '订单已被取消')
             
-            // 如果是当前订单被取消，重置状态
+            // 如果是当前订单被取消，重置状态并清理地图
             if (currentOrder.value) {
               const currentOrderId = currentOrder.value.orderId || currentOrder.value.id
               const cancelledOrderId = data.orderId
@@ -658,9 +766,32 @@ const connectWebSocket = () => {
               console.log('比较订单ID:', currentOrderId, 'vs', cancelledOrderId)
               
               if (currentOrderId == cancelledOrderId) { // 使用 == 而不是 === 来处理类型转换
-                console.log('✅ 当前订单被取消，重置状态')
-                resetOrderState()
+                console.log('✅ 当前订单被取消，开始清理状态和地图')
+                
+                // 清理地图上的订单相关元素
+                clearOrderMapElements();
+                
+                // 重置订单状态
+                resetOrderState();
+                
+                // 停止导航
+                stopNavigation();
+                
+                // 显示明确的取消通知
+                ElMessage({
+                  message: `订单已被乘客取消：${data.reason || '乘客取消订单'}`,
+                  type: 'warning',
+                  duration: 6000,
+                  showClose: true
+                });
               }
+            } else {
+              // 如果没有当前订单，只显示通知
+              ElMessage({
+                message: data.reason || '订单已被取消',
+                type: 'warning',
+                duration: 4000
+              });
             }
           } else {
             ElMessage.info(data.message || data.reason)
@@ -1029,6 +1160,73 @@ const startNavigationToPickup = () => {
   ElMessage.success('导航已开始，正在前往上车点')
 }
 
+// 清理订单相关的地图元素
+const clearOrderMapElements = () => {
+  console.log('🧹 清理订单相关的地图元素')
+  
+  try {
+    // 清理上车点标记
+    if (pickupMarker) {
+      map.remove(pickupMarker)
+      pickupMarker = null
+      console.log('✅ 已清理上车点标记')
+    }
+    
+    // 清理目的地标记
+    if (destinationMarker) {
+      map.remove(destinationMarker)
+      destinationMarker = null
+      console.log('✅ 已清理目的地标记')
+    }
+    
+    // 清理路线
+    if (routeLine) {
+      map.remove(routeLine)
+      routeLine = null
+      console.log('✅ 已清理路线')
+    }
+    
+    // 清理导航信息
+    driverStore.clearNavigationInfo()
+    
+    console.log('✅ 订单地图元素清理完成')
+  } catch (error) {
+    console.error('❌ 清理地图元素失败:', error)
+  }
+}
+
+// 重置订单状态
+const resetOrderState = () => {
+  console.log('🔄 重置司机订单状态')
+  
+  // 清理地图元素
+  clearOrderMapElements()
+  
+  // 清理store中的订单状态
+  driverStore.clearCurrentOrder()
+  
+  // 停止导航
+  stopNavigation()
+  
+  console.log('✅ 司机订单状态重置完成')
+}
+
+// 停止导航
+const stopNavigation = () => {
+  console.log('🛑 停止导航')
+  
+  // 清理导航定时器
+  if (navigationTimer) {
+    clearInterval(navigationTimer)
+    navigationTimer = null
+  }
+  
+  // 清理导航信息
+  driverStore.clearNavigationInfo()
+  
+  console.log('✅ 导航已停止')
+}
+
 // 开始导航到目的地（确认接到乘客后调用）
 const startNavigationToDestination = () => {
   if (!currentOrder.value) {
@@ -1095,24 +1293,33 @@ const startRealTimeNavigation = () => {
     // 更新当前位置
     getCurrentLocation()
     
-    // 如果有当前订单，重新规划路线
+    // 更新导航指示（基于当前位置）
+    updateNavigationGuidance()
+    
+    // 如果有当前订单，检查是否需要重新规划路线
     if (currentOrder.value) {
-      if (currentOrder.value.status === 'ASSIGNED' || currentOrder.value.status === 'PICKUP') {
-        // 前往上车点（包括已到达但还未开始行程的状态）
-        const pickupPos = [currentOrder.value.pickupLongitude, currentOrder.value.pickupLatitude]
-        planRoute(
-          [currentPosition.value.lng, currentPosition.value.lat],
-          pickupPos,
-          '🚗 前往上车点接乘客'
-        )
-      } else if (currentOrder.value.status === 'IN_PROGRESS') {
-        // 前往目的地
-        const destPos = [currentOrder.value.destinationLongitude, currentOrder.value.destinationLatitude]
-        planRoute(
-          [currentPosition.value.lng, currentPosition.value.lat],
-          destPos,
-          '🎯 前往目的地'
-        )
+      // 每30秒重新规划一次路线，确保路线是最新的
+      const now = Date.now()
+      if (!window.lastRouteUpdate || now - window.lastRouteUpdate > 30000) {
+        window.lastRouteUpdate = now
+        
+        if (currentOrder.value.status === 'ASSIGNED' || currentOrder.value.status === 'PICKUP') {
+          // 前往上车点
+          const pickupPos = [currentOrder.value.pickupLongitude, currentOrder.value.pickupLatitude]
+          planRoute(
+            [currentPosition.value.lng, currentPosition.value.lat],
+            pickupPos,
+            '🚗 前往上车点接乘客'
+          )
+        } else if (currentOrder.value.status === 'IN_PROGRESS') {
+          // 前往目的地
+          const destPos = [currentOrder.value.destinationLongitude, currentOrder.value.destinationLatitude]
+          planRoute(
+            [currentPosition.value.lng, currentPosition.value.lat],
+            destPos,
+            '🎯 前往目的地'
+          )
+        }
       }
     }
   }, 5000) // 每5秒更新一次
@@ -1125,6 +1332,104 @@ const stopRealTimeNavigation = () => {
     navigationTimer = null
   }
   console.log('⏹️ 已停止实时导航')
+}
+
+// 更新实时导航指示（基于司机当前位置）
+const updateNavigationGuidance = () => {
+  if (!currentOrder.value || !navigationInfo.value || !navigationInfo.value.steps) {
+    return
+  }
+  
+  const driverPos = [currentPosition.value.lng, currentPosition.value.lat]
+  const steps = navigationInfo.value.steps
+  const isWebAPIData = navigationInfo.value.webAPIData
+  
+  try {
+    // 找到司机当前最接近的路段
+    let closestStepIndex = 0
+    let minDistance = Infinity
+    
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      
+      // 根据数据来源使用不同的距离计算方法
+      let stepPosition
+      if (isWebAPIData) {
+        // Web API数据：使用步骤的起始坐标
+        if (step.start_location) {
+          stepPosition = [step.start_location.lng, step.start_location.lat]
+        }
+      } else {
+        // JS API数据：使用路径点
+        if (step.path && step.path.length > 0) {
+          stepPosition = [step.path[0].lng, step.path[0].lat]
+        }
+      }
+      
+      if (stepPosition && window.AMap && window.AMap.GeometryUtil) {
+        const distance = window.AMap.GeometryUtil.distance(driverPos, stepPosition)
+        if (distance < minDistance) {
+          minDistance = distance
+          closestStepIndex = i
+        }
+      }
+    }
+    
+    // 获取下一个导航指示
+    const nextSteps = steps.slice(closestStepIndex, closestStepIndex + 2)
+    let nextInstruction = '继续直行'
+    let nextDistance = '计算中...'
+    let instructionIcon = '⬆️'
+    
+    for (const step of nextSteps) {
+      if (step.instruction) {
+        const instruction = step.instruction.toLowerCase()
+        const distance = isWebAPIData ? parseInt(step.distance) : step.distance
+        
+        if (distance > 30) {
+          if (instruction.includes('左转') || instruction.includes('左拐')) {
+            nextInstruction = `${Math.round(distance)}米后左转`
+            instructionIcon = '↖️'
+            nextDistance = `${Math.round(distance)}米`
+            break
+          } else if (instruction.includes('右转') || instruction.includes('右拐')) {
+            nextInstruction = `${Math.round(distance)}米后右转`
+            instructionIcon = '↗️'
+            nextDistance = `${Math.round(distance)}米`
+            break
+          } else if (instruction.includes('掉头') || instruction.includes('调头')) {
+            nextInstruction = `${Math.round(distance)}米后掉头`
+            instructionIcon = '🔄'
+            nextDistance = `${Math.round(distance)}米`
+            break
+          } else if (instruction.includes('进入') || instruction.includes('上')) {
+            nextInstruction = `${Math.round(distance)}米后${instruction}`
+            instructionIcon = '🛣️'
+            nextDistance = `${Math.round(distance)}米`
+            break
+          } else if (instruction.includes('出口') || instruction.includes('下')) {
+            nextInstruction = `${Math.round(distance)}米后${instruction}`
+            instructionIcon = '🚪'
+            nextDistance = `${Math.round(distance)}米`
+            break
+          }
+        }
+      }
+    }
+    
+    // 更新导航信息
+    const updatedNavigation = {
+      ...navigationInfo.value,
+      instruction: nextInstruction,
+      icon: instructionIcon,
+      nextDistance: nextDistance
+    }
+    
+    driverStore.setNavigationInfo(updatedNavigation)
+    console.log('🧭 导航指示已更新:', nextInstruction)
+  } catch (error) {
+    console.error('❌ 更新导航指示失败:', error)
+  }
 }
 
 // 显示到上车点的路线
@@ -1202,6 +1507,14 @@ const planRoute = async (origin, destination, instruction) => {
       return
     }
     
+    // 先尝试使用高德Web服务API获取详细导航信息
+    try {
+      await planRouteWithWebAPI(origin, destination, instruction)
+      return
+    } catch (error) {
+      console.log('🔄 Web API失败，使用JS API备用方案:', error.message)
+    }
+    
     // 检查AMap.Driving是否可用
     if (!window.AMap || !window.AMap.Driving) {
       console.error('❌ AMap.Driving不可用')
@@ -1223,14 +1536,11 @@ const planRoute = async (origin, destination, instruction) => {
         if (status === 'complete' && result.routes && result.routes.length > 0) {
           const route = result.routes[0]
           
-          // 显示导航信息
-          navigationInfo.value = {
-            instruction,
-            distance: (route.distance / 1000).toFixed(1) + 'km',
-            duration: Math.ceil(route.time / 60) + '分钟'
-          }
+          // 解析导航指示
+          const navigationData = parseNavigationInstructions(route, instruction)
+          driverStore.setNavigationInfo(navigationData)
           
-          console.log('✅ 导航信息已更新:', navigationInfo.value)
+          console.log('✅ 导航信息已更新:', navigationData)
           
           // 在地图上绘制路线
           if (routeLine) {
@@ -1350,6 +1660,322 @@ const useFallbackRoute = (origin, destination, instruction) => {
       instruction: instruction + ' (无法计算)',
       distance: '未知',
       duration: '未知'
+    }
+  }
+}
+
+// 使用高德Web服务API进行路线规划
+const planRouteWithWebAPI = async (origin, destination, instruction) => {
+  try {
+    console.log('🌐 使用高德Web服务API进行路线规划')
+    
+    const apiKey = 'de2d5b3782511b03e23a18685faccead' // 高德地图API Key
+    const originStr = `${origin[0]},${origin[1]}`
+    const destinationStr = `${destination[0]},${destination[1]}`
+    
+    // 构建API请求URL
+    const apiUrl = `https://restapi.amap.com/v3/direction/driving?` +
+      `origin=${originStr}&` +
+      `destination=${destinationStr}&` +
+      `key=${apiKey}&` +
+      `strategy=0&` + // 速度优先
+      `extensions=all&` + // 返回详细信息
+      `steps_info=1&` + // 返回步骤信息
+      `ferry=0&` + // 不走轮渡
+      `output=json`
+    
+    console.log('📞 调用高德Web API:', apiUrl)
+    
+    const response = await fetch(apiUrl)
+    const data = await response.json()
+    
+    console.log('📋 高德Web API响应:', data)
+    
+    if (data.status === '1' && data.route && data.route.paths && data.route.paths.length > 0) {
+      const path = data.route.paths[0]
+      
+      // 解析详细的导航指示
+      const navigationData = parseWebAPINavigationInstructions(path, instruction)
+      driverStore.setNavigationInfo(navigationData)
+      
+      console.log('✅ Web API导航信息已更新:', navigationData)
+      
+      // 在地图上绘制路线
+      drawRouteFromWebAPI(path)
+      
+      return true
+    } else {
+      throw new Error(`Web API返回错误: ${data.info || '未知错误'}`)
+    }
+  } catch (error) {
+    console.error('❌ 高德Web API调用失败:', error)
+    throw error
+  }
+}
+
+// 解析高德Web API返回的导航指示
+const parseWebAPINavigationInstructions = (path, baseInstruction) => {
+  try {
+    const totalDistance = (path.distance / 1000).toFixed(1) + 'km'
+    const totalDuration = Math.ceil(path.duration / 60) + '分钟'
+    
+    if (!path.steps || path.steps.length === 0) {
+      return {
+        instruction: baseInstruction,
+        distance: totalDistance,
+        duration: totalDuration,
+        icon: '🧭',
+        nextDistance: totalDistance
+      }
+    }
+    
+    // 获取第一个有意义的导航指示
+    let nextInstruction = '直行'
+    let nextDistance = '0米'
+    let instructionIcon = '⬆️'
+    
+    // 查找第一个转向指示
+    for (let i = 0; i < Math.min(path.steps.length, 3); i++) {
+      const step = path.steps[i]
+      if (step.instruction && step.distance > 50) {
+        const instruction = step.instruction
+        const distance = parseInt(step.distance)
+        
+        console.log('🔍 分析导航指示:', instruction, '距离:', distance)
+        
+        // 解析转向指示 - 高德API返回的指示格式
+        if (instruction.includes('左转') || instruction.includes('左拐')) {
+          nextInstruction = `${distance}米后左转`
+          instructionIcon = '↖️'
+          nextDistance = `${distance}米`
+          break
+        } else if (instruction.includes('右转') || instruction.includes('右拐')) {
+          nextInstruction = `${distance}米后右转`
+          instructionIcon = '↗️'
+          nextDistance = `${distance}米`
+          break
+        } else if (instruction.includes('掉头') || instruction.includes('调头')) {
+          nextInstruction = `${distance}米后掉头`
+          instructionIcon = '🔄'
+          nextDistance = `${distance}米`
+          break
+        } else if (instruction.includes('直行') && distance > 200) {
+          nextInstruction = `直行${distance}米`
+          instructionIcon = '⬆️'
+          nextDistance = `${distance}米`
+          break
+        } else if (instruction.includes('进入') || instruction.includes('上')) {
+          // 进入高速或主路
+          nextInstruction = `${distance}米后${instruction}`
+          instructionIcon = '🛣️'
+          nextDistance = `${distance}米`
+          break
+        } else if (instruction.includes('出口') || instruction.includes('下')) {
+          // 高速出口
+          nextInstruction = `${distance}米后${instruction}`
+          instructionIcon = '🚪'
+          nextDistance = `${distance}米`
+          break
+        }
+      }
+    }
+    
+    // 如果没有找到具体指示，使用第一个步骤
+    if (nextInstruction === '直行' && path.steps.length > 0) {
+      const firstStep = path.steps[0]
+      if (firstStep && firstStep.distance > 100) {
+        const distance = parseInt(firstStep.distance)
+        nextInstruction = `直行${distance}米`
+        nextDistance = `${distance}米`
+      }
+    }
+    
+    return {
+      instruction: nextInstruction,
+      distance: totalDistance,
+      duration: totalDuration,
+      icon: instructionIcon,
+      nextDistance: nextDistance,
+      steps: path.steps, // 保存所有步骤用于后续导航更新
+      webAPIData: true // 标记为Web API数据
+    }
+  } catch (error) {
+    console.error('❌ 解析Web API导航指示失败:', error)
+    return {
+      instruction: baseInstruction,
+      distance: (path.distance / 1000).toFixed(1) + 'km',
+      duration: Math.ceil(path.duration / 60) + '分钟',
+      icon: '🧭'
+    }
+  }
+}
+
+// 根据Web API数据绘制路线
+const drawRouteFromWebAPI = (path) => {
+  try {
+    // 清除旧路线
+    if (routeLine) {
+      map.remove(routeLine)
+      routeLine = null
+    }
+    
+    // 解析路径点
+    const pathPoints = []
+    
+    if (path.steps && path.steps.length > 0) {
+      path.steps.forEach(step => {
+        if (step.polyline) {
+          // 解析polyline编码的路径
+          const points = decodePolyline(step.polyline)
+          pathPoints.push(...points)
+        }
+      })
+    }
+    
+    console.log('🛣️ Web API解析到路径点数量:', pathPoints.length)
+    
+    if (pathPoints.length > 0) {
+      routeLine = new window.AMap.Polyline({
+        path: pathPoints,
+        strokeColor: '#409EFF',
+        strokeWeight: 6,
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round'
+      })
+      
+      map.add(routeLine)
+      console.log('✅ Web API路线已绘制到地图上')
+      
+      // 调整地图视野
+      adjustMapView()
+    } else {
+      console.warn('⚠️ Web API没有返回有效路径点')
+    }
+  } catch (error) {
+    console.error('❌ 绘制Web API路线失败:', error)
+  }
+}
+
+// 解码polyline编码的路径
+const decodePolyline = (encoded) => {
+  try {
+    const points = []
+    let index = 0
+    let lat = 0
+    let lng = 0
+    
+    while (index < encoded.length) {
+      let b, shift = 0, result = 0
+      do {
+        b = encoded.charCodeAt(index++) - 63
+        result |= (b & 0x1f) << shift
+        shift += 5
+      } while (b >= 0x20)
+      
+      const deltaLat = ((result & 1) ? ~(result >> 1) : (result >> 1))
+      lat += deltaLat
+      
+      shift = 0
+      result = 0
+      do {
+        b = encoded.charCodeAt(index++) - 63
+        result |= (b & 0x1f) << shift
+        shift += 5
+      } while (b >= 0x20)
+      
+      const deltaLng = ((result & 1) ? ~(result >> 1) : (result >> 1))
+      lng += deltaLng
+      
+      points.push([lng / 1e6, lat / 1e6])
+    }
+    
+    return points
+  } catch (error) {
+    console.error('❌ 解码polyline失败:', error)
+    return []
+  }
+}
+
+// 解析导航指示（JS API版本）
+const parseNavigationInstructions = (route, baseInstruction) => {
+  try {
+    const steps = route.steps || []
+    const totalDistance = (route.distance / 1000).toFixed(1) + 'km'
+    const totalDuration = Math.ceil(route.time / 60) + '分钟'
+    
+    if (steps.length === 0) {
+      return {
+        instruction: baseInstruction,
+        distance: totalDistance,
+        duration: totalDuration,
+        icon: '🧭',
+        nextDistance: totalDistance
+      }
+    }
+    
+    // 获取第一个有意义的导航指示
+    let nextInstruction = '直行'
+    let nextDistance = '0米'
+    let instructionIcon = '⬆️'
+    
+    // 查找第一个转向指示
+    for (let i = 0; i < Math.min(steps.length, 3); i++) {
+      const step = steps[i]
+      if (step.instruction && step.distance > 50) { // 距离大于50米的指示才有意义
+        const instruction = step.instruction.toLowerCase()
+        const distance = step.distance
+        
+        // 解析转向指示
+        if (instruction.includes('左转') || instruction.includes('左拐')) {
+          nextInstruction = `${Math.round(distance)}米后左转`
+          instructionIcon = '↖️'
+          nextDistance = `${Math.round(distance)}米`
+          break
+        } else if (instruction.includes('右转') || instruction.includes('右拐')) {
+          nextInstruction = `${Math.round(distance)}米后右转`
+          instructionIcon = '↗️'
+          nextDistance = `${Math.round(distance)}米`
+          break
+        } else if (instruction.includes('掉头') || instruction.includes('调头')) {
+          nextInstruction = `${Math.round(distance)}米后掉头`
+          instructionIcon = '🔄'
+          nextDistance = `${Math.round(distance)}米`
+          break
+        } else if (instruction.includes('直行') && distance > 200) {
+          nextInstruction = `直行${Math.round(distance)}米`
+          instructionIcon = '⬆️'
+          nextDistance = `${Math.round(distance)}米`
+          break
+        }
+      }
+    }
+    
+    // 如果没有找到具体指示，使用基础指示
+    if (nextInstruction === '直行' && steps.length > 0) {
+      const firstMeaningfulStep = steps.find(step => step.distance > 100)
+      if (firstMeaningfulStep) {
+        nextInstruction = `直行${Math.round(firstMeaningfulStep.distance)}米`
+        nextDistance = `${Math.round(firstMeaningfulStep.distance)}米`
+      }
+    }
+    
+    return {
+      instruction: nextInstruction,
+      distance: totalDistance,
+      duration: totalDuration,
+      icon: instructionIcon,
+      nextDistance: nextDistance,
+      steps: steps // 保存所有步骤用于后续导航更新
+    }
+  } catch (error) {
+    console.error('❌ 解析导航指示失败:', error)
+    return {
+      instruction: baseInstruction,
+      distance: (route.distance / 1000).toFixed(1) + 'km',
+      duration: Math.ceil(route.time / 60) + '分钟',
+      icon: '🧭'
     }
   }
 }
@@ -1474,7 +2100,8 @@ const completeOrder = async () => {
     }
   } catch (error) {
     if (error !== 'cancel') {
-    
+      console.error('❌ 完成订单网络错误:', error)
+      ElMessage.error('网络错误')
     }
   }
 }
@@ -1619,48 +2246,9 @@ const restoreOrderNavigation = () => {
   }, 2000) // 等待2秒确保地图完全初始化
 }
 
-// 重置订单状态
-const resetOrderState = () => {
-  console.log('🔄 重置订单状态...')
-  
-  // 使用store清除订单状态
-  driverStore.setCurrentOrder(null)
-  driverStore.clearOrderState() // 使用store的清理方法
-  
-  // 停止实时导航
-  stopRealTimeNavigation()
-  
-  // 清理地图标记
-  if (pickupMarker) {
-    console.log('🗑️ 清理上车点标记')
-    map.remove(pickupMarker)
-    pickupMarker = null
-  }
-  if (destinationMarker) {
-    console.log('🗑️ 清理目的地标记')
-    map.remove(destinationMarker)
-    destinationMarker = null
-  }
-  if (routeLine) {
-    console.log('🗑️ 清理路线')
-    map.remove(routeLine)
-    routeLine = null
-  }
-  
-  // 重置路线初始化标记
-  window.routeInitialized = false
-  
-  console.log('✅ 订单状态重置完成')
-}
 
-// 停止导航
-const stopNavigation = () => {
-  navigationInfo.value = null
-  if (routeLine) {
-    map.remove(routeLine)
-    routeLine = null
-  }
-}
+
+
 
 // 加载今日统计
 const loadTodayStats = async () => {
@@ -1836,6 +2424,17 @@ const playNotificationSound = () => {
   background: #f0f0f0;
   position: relative;
   z-index: 1;
+  /* 确保地图可以接收鼠标事件 */
+  pointer-events: auto;
+}
+
+/* 地图元素样式 */
+#driverMapContainer {
+  width: 100%;
+  height: 100%;
+  /* 确保地图容器可以接收所有交互事件 */
+  pointer-events: auto;
+  touch-action: none; /* 防止移动端浏览器的默认手势干扰 */
 }
 
 .order-notification {
@@ -2041,31 +2640,69 @@ const playNotificationSound = () => {
   flex: 1;
 }
 
-.navigation-panel {
+.navigation-guidance-panel {
   position: absolute;
   top: 80px;
   left: 20px;
   right: 20px;
-  background: rgba(0, 0, 0, 0.8);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 10px;
-  padding: 15px;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
   z-index: 100;
 }
 
-.nav-header {
+.current-instruction {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.instruction-icon {
+  font-size: 32px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.instruction-content {
+  flex: 1;
+}
+
+.instruction-text {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 5px;
+  line-height: 1.2;
+}
+
+.instruction-distance {
+  font-size: 16px;
+  opacity: 0.9;
+  color: #e8f4fd;
+}
+
+.route-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  font-weight: 500;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 14px;
 }
 
-.nav-details {
+.route-stats {
   display: flex;
   gap: 20px;
-  font-size: 14px;
-  opacity: 0.9;
+  opacity: 0.8;
+}
+
+.total-distance,
+.total-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 @media (max-width: 768px) {
@@ -2081,9 +2718,29 @@ const playNotificationSound = () => {
     right: 10px;
   }
   
-  .navigation-panel {
+  .navigation-guidance-panel {
     left: 10px;
     right: 10px;
+    padding: 15px;
+  }
+  
+  .instruction-icon {
+    font-size: 28px;
+    min-width: 35px;
+  }
+  
+  .instruction-text {
+    font-size: 16px;
+  }
+  
+  .instruction-distance {
+    font-size: 14px;
+  }
+  
+  .route-stats {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
   
   .earnings-info {

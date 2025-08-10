@@ -275,6 +275,27 @@ export const useDriverStore = defineStore("driver", () => {
     console.log("🔄 订单状态已清除");
   };
 
+  // 清除当前订单
+  const clearCurrentOrder = () => {
+    currentOrder.value = null;
+    saveDriverState();
+    console.log("🔄 当前订单已清除");
+  };
+
+  // 设置导航信息
+  const setNavigationInfo = (navInfo) => {
+    navigationInfo.value = navInfo;
+    saveDriverState();
+    console.log("🧭 导航信息已设置:", navInfo);
+  };
+
+  // 清除导航信息
+  const clearNavigationInfo = () => {
+    navigationInfo.value = null;
+    saveDriverState();
+    console.log("🔄 导航信息已清除");
+  };
+
   // 只清理待处理订单，保留当前订单
   const clearPendingOrders = () => {
     pendingOrders.value = [];
@@ -751,6 +772,9 @@ export const useDriverStore = defineStore("driver", () => {
     restoreDriverState,
     clearDriverState,
     clearOrderState,
+    clearCurrentOrder,
+    setNavigationInfo,
+    clearNavigationInfo,
     clearPendingOrders,
     initDriverState,
     getCurrentOrder,

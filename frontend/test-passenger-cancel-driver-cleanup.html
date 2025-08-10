@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乘客取消订单 - 司机端清理测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        .expected {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            color: #856404;
+        }
+        .error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .success {
+            background: #d1ecf1;
+            border-left-color: #17a2b8;
+            color: #0c5460;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            margin: 10px 0;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .debug-info {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .debug-info h4 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-pending { background-color: #ffc107; }
+        .status-success { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        .status-info { background-color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚫 乘客取消订单 - 司机端清理测试</h1>
+        <p>测试乘客取消订单后，司机端是否正确接收通知并清理路径规划和地图标记。</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>📋 测试场景</h3>
+            <div class="step">
+                <strong>场景描述：</strong>乘客发起订单，司机接单并开始导航，然后乘客取消订单
+            </div>
+            <div class="step">
+                <strong>测试目标：</strong>验证司机端能正确接收取消通知并清理所有相关状态
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🔧 修复内容</h3>
+            
+            <div class="debug-info">
+                <h4>1. 乘客端取消订单增强</h4>
+                <div class="code">
+// 乘客取消订单时的处理逻辑
+const handleCancelOrder = async () => {
+  // ... 确认对话框 ...
+  
+  console.log("🚫 准备取消订单:", currentOrder.value);
+  console.log("👨‍✈️ 司机ID:", currentOrder.value.driverId);
+  
+  const response = await fetch(cancelUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${userStore.token}` }
+  });
+
+  if (response.ok && result.code === 200) {
+    console.log("✅ 订单取消成功，后端已通知司机");
+    
+    // 立即清理乘客端的订单状态和地图元素
+    resetOrderState();
+    clearAllDriverRoutes();
+    
+    // 恢复乘客路径为蓝色
+    if (routeLine && routeLine.setOptions) {
+      routeLine.setOptions({
+        strokeColor: '#1890ff',
+        strokeWeight: 6,
+        strokeOpacity: 0.8
+      });
+    }
+    
+    ElMessage.success("订单已取消，司机已收到通知");
+  }
+};
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <h4>2. 后端通知司机增强</h4>
+                <div class="code">
+// 后端OrderController.java - 取消订单接口
+if (order.getDriverId() != null) {
+  System.out.println("✅ 订单已分配给司机，开始释放司机并发送通知");
+  
+  // 释放司机状态
+  driverRedisService.markDriverFree(order.getDriverId());
+  
+  // 通知司机订单已被乘客取消（增强版通知）
+  webSocketNotificationService.notifyDriverOrderCancelled(
+    order.getDriverId(), 
+    orderId, 
+    "乘客已取消订单，请清理路线规划"
+  );
+}
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <h4>3. 司机端地图清理逻辑</h4>
+                <div class="code">
+// 司机端DriverMap.vue - 订单取消处理
+case "ORDER_CANCELLED":
+  console.log("❌ 处理订单取消");
+  if (data.orderId && currentOrder.value) {
+    const currentOrderId = currentOrder.value.orderId || currentOrder.value.id
+    const cancelledOrderId = data.orderId
+    
+    if (currentOrderId == cancelledOrderId) {
+      console.log('✅ 当前订单被取消，重置状态并清理地图')
+      
+      // 清理地图上的订单相关元素
+      clearOrderMapElements();
+      
+      // 重置订单状态
+      resetOrderState();
+      
+      // 停止导航
+      stopNavigation();
+      
+      ElMessage({
+        message: `订单已被乘客取消：${data.reason || '乘客取消'}`,
+        type: 'warning',
+        duration: 5000,
+        showClose: true
+      });
+    }
+  }
+  break;
+
+case "CLEAR_ROUTE":
+  console.log("🧹 处理清理路线请求");
+  clearOrderMapElements();
+  stopNavigation();
+  resetOrderState();
+  ElMessage({
+    message: '路线已清理，订单已取消',
+    type: 'info',
+    duration: 3000
+  });
+  break;
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <h4>4. 司机端清理函数</h4>
+                <div class="code">
+// 清理订单相关的地图元素
+const clearOrderMapElements = () => {
+  console.log('🧹 清理订单相关的地图元素')
+  
+  // 清理上车点标记
+  if (pickupMarker) {
+    map.remove(pickupMarker)
+    pickupMarker = null
+  }
+  
+  // 清理目的地标记
+  if (destinationMarker) {
+    map.remove(destinationMarker)
+    destinationMarker = null
+  }
+  
+  // 清理路线
+  if (routeLine) {
+    map.remove(routeLine)
+    routeLine = null
+  }
+  
+  // 清理导航信息
+  driverStore.clearNavigationInfo()
+}
+
+// 停止导航
+const stopNavigation = () => {
+  // 清理导航定时器
+  if (navigationTimer) {
+    clearInterval(navigationTimer)
+    navigationTimer = null
+  }
+  
+  // 清理导航信息
+  driverStore.clearNavigationInfo()
+}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🧪 测试步骤</h3>
+            
+            <div class="step">
+                <span class="status-indicator status-info"></span>
+                <strong>步骤 1：</strong>乘客端创建订单
+                <div class="code">
+1. 打开乘客端地图页面
+2. 设置起点和终点
+3. 点击"立即叫车"创建订单
+4. 确认订单状态为 PENDING
+                </div>
+            </div>
+
+            <div class="step">
+                <span class="status-indicator status-info"></span>
+                <strong>步骤 2：</strong>司机接单并开始导航
+                <div class="code">
+1. 打开司机端地图页面
+2. 确保司机在线状态
+3. 接收并接受订单
+4. 确认地图上显示：
+   - 上车点标记（绿色）
+   - 目的地标记（红色）
+   - 导航路线（蓝色或红色）
+5. 确认订单状态为 ASSIGNED
+                </div>
+            </div>
+
+            <div class="step warning">
+                <span class="status-indicator status-pending"></span>
+                <strong>步骤 3：</strong>乘客取消订单
+                <div class="code">
+1. 在乘客端点击"取消订单"按钮
+2. 确认取消对话框
+3. 观察乘客端反应：
+   - 显示"订单已取消，司机已收到通知"
+   - 订单状态重置
+   - 地图清理完成
+                </div>
+            </div>
+
+            <div class="step expected">
+                <span class="status-indicator status-success"></span>
+                <strong>步骤 4：</strong>验证司机端反应
+                <div class="code">
+<strong>期望结果：</strong>
+✅ 司机收到明确的取消通知消息
+✅ 地图上的上车点标记被清除
+✅ 地图上的目的地标记被清除  
+✅ 导航路线被完全清除
+✅ 导航定时器被停止
+✅ 订单状态被重置为空
+✅ 司机可以接收新订单
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🔍 调试信息</h3>
+            
+            <div class="debug-info">
+                <h4>浏览器控制台日志关键词</h4>
+                <div class="code">
+<strong>乘客端：</strong>
+- "🚫 准备取消订单"
+- "✅ 订单取消成功，后端已通知司机"
+- "🧹 清理司机路径"
+
+<strong>司机端：</strong>
+- "❌ 收到订单取消通知"
+- "✅ 当前订单被取消，开始清理状态和地图"
+- "🧹 清理订单相关的地图元素"
+- "🛑 停止导航"
+- "🔄 重置司机订单状态"
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <h4>WebSocket消息格式</h4>
+                <div class="code">
+<strong>司机接收的取消通知：</strong>
+{
+  "type": "ORDER_CANCELLED",
+  "orderId": "订单ID",
+  "reason": "乘客已取消订单，请清理路线规划",
+  "priority": "HIGH",
+  "timestamp": 时间戳
+}
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <h4>故障排除</h4>
+                <div class="step error">
+                    <strong>如果司机没有收到通知：</strong>
+                    <ul>
+                        <li>检查WebSocket连接状态</li>
+                        <li>确认司机ID匹配</li>
+                        <li>查看后端日志确认通知发送</li>
+                    </ul>
+                </div>
+                <div class="step error">
+                    <strong>如果地图没有清理：</strong>
+                    <ul>
+                        <li>检查clearOrderMapElements函数调用</li>
+                        <li>确认地图对象存在</li>
+                        <li>查看控制台错误信息</li>
+                    </ul>
+                </div>
+                <div class="step error">
+                    <strong>如果订单状态没有重置：</strong>
+                    <ul>
+                        <li>检查resetOrderState函数调用</li>
+                        <li>确认store状态更新</li>
+                        <li>验证localStorage清理</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section success">
+            <h3>✅ 测试完成标准</h3>
+            <div class="step expected">
+                <strong>测试通过条件：</strong>
+                <ul>
+                    <li>✅ 乘客取消订单后，司机立即收到明确的通知消息</li>
+                    <li>✅ 司机端地图上的所有订单相关标记和路线被完全清除</li>
+                    <li>✅ 司机端订单状态被正确重置，可以接收新订单</li>
+                    <li>✅ 导航功能被正确停止，不再更新位置</li>
+                    <li>✅ 整个过程用户体验流畅，没有残留状态</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🎯 关键改进点</h3>
+            <div class="step success">
+                <strong>1. 双重通知机制：</strong>司机端同时监听订单队列和通知队列，确保消息送达
+            </div>
+            <div class="step success">
+                <strong>2. 完整地图清理：</strong>清理上车点、目的地标记和所有路线
+            </div>
+            <div class="step success">
+                <strong>3. 明确用户反馈：</strong>显示详细的取消原因和清理状态
+            </div>
+            <div class="step success">
+                <strong>4. 状态同步：</strong>前端store和localStorage状态完全同步
+            </div>
+            <div class="step success">
+                <strong>5. 错误处理：</strong>增加多种消息类型处理，提高容错性
+            </div>
+        </div>
+    </div>
+</body>
+</html>
