@@ -221,6 +221,95 @@ const statusLoading = ref(false)
 const cancelLoading = ref(false)
 const orderTimers = new Map() // 每个订单的倒计时定时器
 let navigationTimer = null
+let locationTimer = null // 位置上报定时器
+let frequentPushTimer = null // 频繁位置推送定时器
+
+// 定时器管理器
+const TimerManager = {
+  // 清理所有定时器
+  clearAll() {
+    console.log('🧹 清理所有定时器...')
+    
+    // 清理导航定时器
+    if (navigationTimer) {
+      clearInterval(navigationTimer)
+      navigationTimer = null
+      console.log('✅ 已清理导航定时器')
+    }
+    
+    // 清理位置定时器
+    if (locationTimer) {
+      clearInterval(locationTimer)
+      locationTimer = null
+      console.log('✅ 已清理位置定时器')
+    }
+    
+    // 清理频繁推送定时器
+    if (frequentPushTimer) {
+      clearInterval(frequentPushTimer)
+      frequentPushTimer = null
+      console.log('✅ 已清理频繁推送定时器')
+    }
+    
+    // 清理订单倒计时定时器
+    orderTimers.forEach((timer, orderId) => {
+      clearInterval(timer)
+      console.log('✅ 已清理订单定时器:', orderId)
+    })
+    orderTimers.clear()
+    
+    console.log('✅ 所有定时器清理完成')
+  },
+  
+  // 设置位置上报定时器
+  setLocationTimer(callback, interval = 30000) {
+    // 先清理旧的定时器
+    if (locationTimer) {
+      clearInterval(locationTimer)
+      locationTimer = null
+    }
+    
+    locationTimer = setInterval(callback, interval)
+    console.log(`🕐 位置上报定时器已设置: ${interval}ms`)
+    return locationTimer
+  },
+  
+  // 设置导航定时器
+  setNavigationTimer(callback, interval = 5000) {
+    // 先清理旧的定时器
+    if (navigationTimer) {
+      clearInterval(navigationTimer)
+      navigationTimer = null
+    }
+    
+    navigationTimer = setInterval(callback, interval)
+    console.log(`🧭 导航定时器已设置: ${interval}ms`)
+    return navigationTimer
+  },
+  
+  // 设置频繁推送定时器
+  setFrequentPushTimer(callback, interval = 10000) {
+    // 先清理旧的定时器
+    if (frequentPushTimer) {
+      clearInterval(frequentPushTimer)
+      frequentPushTimer = null
+    }
+    
+    frequentPushTimer = setInterval(callback, interval)
+    console.log(`📡 频繁推送定时器已设置: ${interval}ms`)
+    return frequentPushTimer
+  },
+  
+  // 获取当前定时器状态
+  getStatus() {
+    return {
+      navigationTimer: !!navigationTimer,
+      locationTimer: !!locationTimer,
+      frequentPushTimer: !!frequentPushTimer,
+      orderTimers: orderTimers.size
+    }
+  }
+}
 
 // WebSocket连接
 let stompClient = null
@@ -255,6 +344,10 @@ const initializeDriverMap = async (isReactivation = false) => {
     if (currentOrder.value) {
       console.log('🔄 检测到进行中的订单，确保导航正常...')
       restoreOrderNavigation()
+      
+      // 🔑 关键修复：恢复频繁位置推送
+      console.log('🔄 恢复频繁位置推送定时器...')
+      startFrequentLocationPush()
     }
     
     // 重新连接WebSocket（如果需要）
@@ -289,6 +382,10 @@ const initializeDriverMap = async (isReactivation = false) => {
       console.log('🔄 检测到进行中的订单，恢复路径规划...')
       console.log('📋 订单信息:', currentOrder.value)
       restoreOrderNavigation()
+      
+      // 🔑 关键修复：恢复频繁位置推送
+      console.log('🔄 恢复频繁位置推送定时器...')
+      startFrequentLocationPush()
     } else {
       console.log('📱 没有进行中的订单，无需恢复导航')
     }
@@ -323,15 +420,8 @@ onUnmounted(() => {
     console.log('✅ 已清理司机地图消息处理函数')
   }
   
-  // 清理所有订单倒计时定时器
-  orderTimers.forEach((timer) => {
-    clearInterval(timer)
-  })
-  orderTimers.clear()
-  
-  if (navigationTimer) {
-    clearInterval(navigationTimer)
-  }
+  // 使用定时器管理器清理所有定时器
+  TimerManager.clearAll()
 })
 
 // 初始化地图
@@ -400,7 +490,9 @@ const createMap = () => {
     // 将地图对象暴露到全局，便于调试
     if (typeof window !== 'undefined') {
       window.driverMap = map
+      window.TimerManager = TimerManager
       console.log('🔧 地图对象已暴露到 window.driverMap')
+      console.log('🔧 定时器管理器已暴露到 window.TimerManager')
       
       // 添加调试函数
       window.testMapInteraction = () => {
@@ -434,8 +526,7 @@ const createMap = () => {
       map.addControl(geolocation)
       getCurrentLocation()
       
-      // 定期更新位置
-      setInterval(getCurrentLocation, 30000)
+      // 注意：不在这里创建定时器，位置更新由startLocationTracking统一管理
     })
 
   } catch (error) {
@@ -461,7 +552,8 @@ const getCurrentLocation = () => {
       driverStore.updateCurrentPosition({ lng, lat })
       
       console.log('✅ 位置获取成功:', lng, lat)
-      
+      // const defaultLng = (Math.random() * (125.78 - 118.85) + 118.85).toFixed(6)
+      //  const defaultLat = (Math.random() * (43.26 - 38.43) + 38.43).toFixed(6)
       // 更新司机位置标记
       updateDriverMarker(lng, lat)
       
@@ -473,21 +565,21 @@ const getCurrentLocation = () => {
       console.error('❌ 位置获取失败:', status, result)
       
       // 如果定位失败，使用默认位置
-      const defaultLng = (Math.random() * (125.78 - 118.85) + 118.85).toFixed(6)
-      const defaultLat = (Math.random() * (43.26 - 38.43) + 38.43).toFixed(6)
+      // const defaultLng = (Math.random() * (125.78 - 118.85) + 118.85).toFixed(6)
+      // const defaultLat = (Math.random() * (43.26 - 38.43) + 38.43).toFixed(6)
       
-      console.log('🔄 使用默认位置:', defaultLng, defaultLat)
-      driverStore.updateCurrentPosition({ lng: defaultLng, lat: defaultLat })
+      // console.log('🔄 使用默认位置:', defaultLng, defaultLat)
+      // driverStore.updateCurrentPosition({ lng: defaultLng, lat: defaultLat })
       
-      // 更新司机位置标记
-      updateDriverMarker(defaultLng, defaultLat)
+      // // 更新司机位置标记
+      // updateDriverMarker(defaultLng, defaultLat)
       
-      // 如果在线，上报默认位置
-      if (isOnline.value) {
-        reportLocation(defaultLng, defaultLat)
-      }
+      // // 如果在线，上报默认位置
+      // if (isOnline.value) {
+      //   reportLocation(defaultLng, defaultLat)
+      // }
       
-      ElMessage.warning('定位失败，使用默认位置')
+      // ElMessage.warning('定位失败，使用默认位置')
     }
   })
 }
@@ -696,16 +788,85 @@ const handleStatusChange = async (online) => {
 
 // 开始位置追踪
 const startLocationTracking = () => {
-  // 每30秒更新一次位置
-  if (navigationTimer) clearInterval(navigationTimer)
-  navigationTimer = setInterval(getCurrentLocation, 30000)
+  console.log('🚀 开始位置追踪...')
+  
+  // 使用定时器管理器设置位置上报定时器
+  TimerManager.setLocationTimer(getCurrentLocation, 30000)
+  
+  // 如果有当前订单，启动更频繁的WebSocket位置推送
+  if (currentOrder.value) {
+    startFrequentLocationPush()
+  }
 }
 
 // 停止位置追踪
 const stopLocationTracking = () => {
-  if (navigationTimer) {
-    clearInterval(navigationTimer)
-    navigationTimer = null
+  console.log('⏹️ 停止位置追踪...')
+  
+  // 使用TimerManager清理位置定时器
+  if (locationTimer) {
+    clearInterval(locationTimer)
+    locationTimer = null
+    console.log('✅ 已清理位置定时器')
+  }
+  
+  // 停止频繁位置推送
+  stopFrequentLocationPush()
+}
+
+// 启动频繁的位置推送（仅在有订单时）
+const startFrequentLocationPush = () => {
+  console.log('🚀 启动频繁位置推送（每10秒）')
+  
+  TimerManager.setFrequentPushTimer(() => {
+    if (currentOrder.value && currentPosition.value) {
+      pushLocationToPassenger(currentPosition.value.lng, currentPosition.value.lat)
+    } else {
+      // 如果没有订单了，停止频繁推送
+      stopFrequentLocationPush()
+    }
+  }, 10000) // 每10秒推送一次
+}
+
+// 停止频繁的位置推送
+const stopFrequentLocationPush = () => {
+  if (frequentPushTimer) {
+    clearInterval(frequentPushTimer)
+    frequentPushTimer = null
+    console.log('⏹️ 停止频繁位置推送')
+  }
+}
+
+// 向乘客推送司机位置
+const pushLocationToPassenger = (lng, lat) => {
+  if (!currentOrder.value) {
+    console.log('⚠️ 没有当前订单，跳过位置推送')
+    return
+  }
+  
+  try {
+    // 通过WebSocket向乘客推送司机位置
+    if (driverStore.isWebSocketConnected && window.driverStompClient) {
+      const locationData = {
+        orderId: currentOrder.value.id || currentOrder.value.orderId,
+        driverId: userStore.user.driverId,
+        longitude: lng,
+        latitude: lat,
+        timestamp: Date.now(),
+        type: 'DRIVER_LOCATION_UPDATE'
+      }
+      
+      window.driverStompClient.publish({
+        destination: '/app/driver/location',
+        body: JSON.stringify(locationData)
+      })
+      
+      console.log('📡 已推送司机位置给乘客:', { lng, lat, orderId: locationData.orderId })
+    } else {
+      console.log('⚠️ WebSocket未连接，无法推送位置')
+    }
+  } catch (error) {
+    console.error('❌ 推送司机位置失败:', error)
   }
 }
 
@@ -1202,6 +1363,10 @@ const resetOrderState = () => {
   // 清理地图元素
   clearOrderMapElements()
   
+  // 停止频繁位置推送
+  console.log('📡 订单重置，停止频繁位置推送')
+  stopFrequentLocationPush()
+  
   // 清理store中的订单状态
   driverStore.clearCurrentOrder()
   
@@ -1286,10 +1451,8 @@ const startNavigationToDestination = () => {
 const startRealTimeNavigation = () => {
   console.log('🧭 开始实时导航')
   
-  // 每5秒更新一次位置和导航信息
-  if (navigationTimer) clearInterval(navigationTimer)
-  
-  navigationTimer = setInterval(() => {
+  // 使用定时器管理器设置导航定时器
+  TimerManager.setNavigationTimer(() => {
     // 更新当前位置
     getCurrentLocation()
     
@@ -1327,11 +1490,13 @@ const startRealTimeNavigation = () => {
 
 // 停止实时导航
 const stopRealTimeNavigation = () => {
+  console.log('⏹️ 停止实时导航...')
+  
+  // 清理导航定时器
   if (navigationTimer) {
     clearInterval(navigationTimer)
     navigationTimer = null
   }
-  console.log('⏹️ 已停止实时导航')
 }
 
 // 更新实时导航指示（基于司机当前位置）

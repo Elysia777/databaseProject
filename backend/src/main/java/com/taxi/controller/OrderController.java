@@ -46,7 +46,7 @@ public class OrderController {
     public Result<Long> createOrder(@RequestBody CreateOrderRequest request) {
         System.out.println("=== 订单创建请求到达控制器 ===");
         System.out.println("请求参数: " + request);
-        
+
         try {
             System.out.println("=== 创建实时订单请求 ===");
             System.out.println("接收到的请求数据:");
@@ -56,28 +56,28 @@ public class OrderController {
             System.out.println("  预估距离: " + request.getEstimatedDistance());
             System.out.println("  预估时长: " + request.getEstimatedDuration());
             System.out.println("  预估费用: " + request.getEstimatedFare());
-            
+
             Order order = new Order();
             order.setOrderNumber(generateOrderNumber());
             order.setPassengerId(request.getPassengerId());
             order.setPickupAddress(request.getPickupAddress());
             order.setPickupLatitude(request.getPickupLatitude());
             order.setPickupLongitude(request.getPickupLongitude());
-            
+
             order.setDestinationAddress(request.getDestinationAddress());
             order.setDestinationLatitude(request.getDestinationLatitude());
             order.setDestinationLongitude(request.getDestinationLongitude());
-            
+
             // 设置距离、时长和费用信息
             order.setEstimatedDistance(request.getEstimatedDistance());
             order.setEstimatedDuration(request.getEstimatedDuration());
             order.setEstimatedFare(request.getEstimatedFare());
-            
+
             System.out.println("设置到Order对象的数据:");
             System.out.println("  预估距离: " + order.getEstimatedDistance());
             System.out.println("  预估时长: " + order.getEstimatedDuration());
             System.out.println("  预估费用: " + order.getEstimatedFare());
-            
+
             order.setOrderType("REAL_TIME");
             order.setCreatedAt(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
@@ -85,7 +85,7 @@ public class OrderController {
             System.out.println("准备调用 orderService.createOrder");
             orderService.createOrder(order);
             System.out.println("orderService.createOrder 调用成功");
-            
+
             // 返回订单ID而不是订单号，前端需要用ID来进行后续操作
             return Result.success(order.getId());
         } catch (Exception e) {
@@ -104,35 +104,35 @@ public class OrderController {
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             if (!"PENDING".equals(order.getStatus())) {
                 return Result.error("订单状态不允许接单，当前状态: " + order.getStatus());
             }
-            
+
             // 查询司机
             Driver driver = driverMapper.selectById(driverId);
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            
+
             if (!driver.getIsOnline()) {
                 return Result.error("司机不在线");
             }
-            
+
             // 检查司机是否已有进行中的订单
             List<Order> driverOrders = orderMapper.selectByDriverId(driverId);
             boolean hasActiveOrder = driverOrders.stream()
-                .anyMatch(o -> "ASSIGNED".equals(o.getStatus()) || "PICKUP".equals(o.getStatus()) || "IN_PROGRESS".equals(o.getStatus()));
-            
+                    .anyMatch(o -> "ASSIGNED".equals(o.getStatus()) || "PICKUP".equals(o.getStatus()) || "IN_PROGRESS".equals(o.getStatus()));
+
             if (hasActiveOrder) {
                 return Result.error("司机正在处理其他订单");
             }
-            
+
             // 分配订单给司机
             order.setDriverId(driverId);
             order.setStatus("ASSIGNED");
             orderMapper.updateById(order);
-            
+
             return Result.success("接单成功");
         } catch (Exception e) {
             return Result.error("接单失败: " + e.getMessage());
@@ -187,55 +187,55 @@ public class OrderController {
         try {
             System.out.println("=== 乘客取消订单请求 ===");
             System.out.println("订单ID: " + orderId);
-            
+
             Order order = orderMapper.selectById(orderId);
             if (order == null) {
                 System.out.println("❌ 订单不存在: " + orderId);
                 return Result.error("订单不存在");
             }
-            
+
             System.out.println("✅ 找到订单: " + order.getOrderNumber() + ", 状态: " + order.getStatus());
-            
+
             // 乘客只能在行程开始前取消订单
             if ("IN_PROGRESS".equals(order.getStatus()) || "COMPLETED".equals(order.getStatus()) || "CANCELLED".equals(order.getStatus())) {
                 return Result.error("订单已开始行程或已完成，无法取消");
             }
-            
+
             // 更新订单状态
             order.setStatus("CANCELLED");
             order.setCancelReason("乘客取消");
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
-            
+
             // 如果订单已分配给司机，需要释放司机并通知
             if (order.getDriverId() != null) {
                 System.out.println("✅ 订单已分配给司机 " + order.getDriverId() + "，开始释放司机并发送通知");
-                
+
                 // 释放司机状态
                 driverRedisService.markDriverFree(order.getDriverId());
                 System.out.println("✅ 司机 " + order.getDriverId() + " 状态已释放");
-                
+
                 // 通知司机订单已被乘客取消（增强版通知）
                 webSocketNotificationService.notifyDriverOrderCancelled(
-                    order.getDriverId(), 
-                    orderId, 
-                    "乘客已取消订单，请清理路线规划"
+                        order.getDriverId(),
+                        orderId,
+                        "乘客已取消订单，请清理路线规划"
                 );
                 System.out.println("✅ 已通知司机 " + order.getDriverId() + " 订单取消");
             } else {
                 System.out.println("📋 订单未分配给司机，无需释放司机状态");
             }
-            
+
             // 推送取消状态给乘客
             if (order.getPassengerId() != null) {
                 webSocketNotificationService.notifyPassengerOrderStatusChange(
-                    order.getPassengerId(), 
-                    orderId, 
-                    "CANCELLED", 
-                    "订单已取消"
+                        order.getPassengerId(),
+                        orderId,
+                        "CANCELLED",
+                        "订单已取消"
                 );
             }
-            
+
             return Result.success("订单取消成功");
         } catch (Exception e) {
             return Result.error("取消订单失败: " + e.getMessage());
@@ -250,43 +250,43 @@ public class OrderController {
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             // 验证司机权限
             if (!driverId.equals(order.getDriverId())) {
                 return Result.error("无权取消此订单");
             }
-            
+
             // 司机只能在行程开始前取消订单
             if ("IN_PROGRESS".equals(order.getStatus()) || "COMPLETED".equals(order.getStatus()) || "CANCELLED".equals(order.getStatus())) {
                 return Result.error("订单已开始行程或已完成，无法取消");
             }
-            
+
             // 更新订单状态为待重新分配
             order.setDriverId(null); // 清除司机分配
             order.setStatus("PENDING"); // 重新设为待分配状态
             order.setCancelReason("司机取消，重新分配中");
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
-            
+
             // 释放司机状态
             driverRedisService.markDriverFree(driverId);
-            
+
             // 将该司机加入此订单的黑名单，避免重复分配
             driverRedisService.addDriverToOrderBlacklist(orderId, driverId);
-            
+
             // 通知乘客订单正在重新分配
             if (order.getPassengerId() != null) {
                 webSocketNotificationService.notifyPassengerOrderStatusChange(
-                    order.getPassengerId(), 
-                    orderId, 
-                    "PENDING", 
-                    "司机已取消，正在为您重新寻找司机..."
+                        order.getPassengerId(),
+                        orderId,
+                        "PENDING",
+                        "司机已取消，正在为您重新寻找司机..."
                 );
             }
-            
+
             // 重新进入订单分派队列
             orderDispatchService.dispatchOrder(orderId);
-            
+
             return Result.success("订单已取消并重新分配");
         } catch (Exception e) {
             return Result.error("取消订单失败: " + e.getMessage());
@@ -299,28 +299,28 @@ public class OrderController {
         try {
             System.out.println("=== 乘客支付订单请求 ===");
             System.out.println("订单ID: " + orderId + ", 支付方式: " + paymentMethod);
-            
+
             Order order = orderMapper.selectById(orderId);
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             if (!"COMPLETED".equals(order.getStatus())) {
                 return Result.error("订单未完成，无法支付");
             }
-            
+
             if ("PAID".equals(order.getPaymentStatus())) {
                 return Result.error("订单已支付，请勿重复支付");
             }
-            
+
             // 更新支付状态
             order.setPaymentStatus("PAID");
             order.setPaymentMethod(paymentMethod);
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
-            
+
             System.out.println("✅ 订单支付成功: " + order.getOrderNumber());
-            
+
             return Result.success("支付成功");
         } catch (Exception e) {
             System.err.println("❌ 订单支付失败: " + e.getMessage());
@@ -334,14 +334,14 @@ public class OrderController {
         try {
             System.out.println("=== 获取乘客历史订单 ===");
             System.out.println("乘客ID: " + passengerId);
-            
+
             List<Order> orders = orderMapper.selectByPassengerId(passengerId);
-            
+
             // 按创建时间倒序排列
             orders.sort((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()));
-            
+
             System.out.println("✅ 找到 " + orders.size() + " 个历史订单");
-            
+
             return Result.success(orders);
         } catch (Exception e) {
             System.err.println("❌ 获取历史订单失败: " + e.getMessage());
@@ -354,11 +354,11 @@ public class OrderController {
     public Result<Boolean> checkUnpaidOrders(@PathVariable Long passengerId) {
         try {
             List<Order> orders = orderMapper.selectByPassengerId(passengerId);
-            
+
             boolean hasUnpaid = orders.stream()
-                .anyMatch(order -> "COMPLETED".equals(order.getStatus()) && 
-                                 !"PAID".equals(order.getPaymentStatus()));
-            
+                    .anyMatch(order -> "COMPLETED".equals(order.getStatus()) &&
+                            !"PAID".equals(order.getPaymentStatus()));
+
             return Result.success(hasUnpaid);
         } catch (Exception e) {
             return Result.error("检查未支付订单失败: " + e.getMessage());
@@ -374,11 +374,11 @@ public class OrderController {
             if (token != null && token.startsWith("Bearer ")) {
                 token = token.substring(7);
             }
-            
+
             // 这里应该从token中解析用户ID，简化处理
             // 实际项目中需要实现JWT解析
             System.out.println("=== 获取未支付订单列表 ===");
-            
+
             // 临时方案：从请求参数或header中获取passengerId
             String passengerIdStr = request.getParameter("passengerId");
             if (passengerIdStr == null) {
@@ -386,15 +386,15 @@ public class OrderController {
                 // 这里需要根据实际的用户认证机制来获取当前用户ID
                 return Result.error("无法获取用户信息");
             }
-            
+
             Long passengerId = Long.parseLong(passengerIdStr);
             List<Order> allOrders = orderMapper.selectByPassengerId(passengerId);
-            
+
             List<Order> unpaidOrders = allOrders.stream()
-                .filter(order -> "COMPLETED".equals(order.getStatus()) && 
-                               !"PAID".equals(order.getPaymentStatus()))
-                .collect(Collectors.toList());
-            
+                    .filter(order -> "COMPLETED".equals(order.getStatus()) &&
+                            !"PAID".equals(order.getPaymentStatus()))
+                    .collect(Collectors.toList());
+
             System.out.println("找到 " + unpaidOrders.size() + " 个未支付订单");
             return Result.success(unpaidOrders);
         } catch (Exception e) {
@@ -410,25 +410,25 @@ public class OrderController {
         try {
             System.out.println("=== 获取乘客当前进行中的订单 ===");
             System.out.println("乘客ID: " + passengerId);
-            
+
             List<Order> orders = orderMapper.selectByPassengerId(passengerId);
-            
+
             // 查找进行中的订单（状态为SCHEDULED, PENDING, ASSIGNED, PICKUP, IN_PROGRESS）
             Order currentOrder = orders.stream()
-                .filter(order -> "SCHEDULED".equals(order.getStatus()) ||
-                               "PENDING".equals(order.getStatus()) || 
-                               "ASSIGNED".equals(order.getStatus()) ||
-                               "PICKUP".equals(order.getStatus()) ||
-                               "IN_PROGRESS".equals(order.getStatus()))
-                .findFirst()
-                .orElse(null);
-            
+                    .filter(order -> "SCHEDULED".equals(order.getStatus()) ||
+                            "PENDING".equals(order.getStatus()) ||
+                            "ASSIGNED".equals(order.getStatus()) ||
+                            "PICKUP".equals(order.getStatus()) ||
+                            "IN_PROGRESS".equals(order.getStatus()))
+                    .findFirst()
+                    .orElse(null);
+
             if (currentOrder != null) {
                 System.out.println("找到进行中的订单: " + currentOrder.getId() + ", 状态: " + currentOrder.getStatus());
             } else {
                 System.out.println("没有找到进行中的订单");
             }
-            
+
             return Result.success(currentOrder);
         } catch (Exception e) {
             System.err.println("获取当前订单失败: " + e.getMessage());
@@ -445,26 +445,26 @@ public class OrderController {
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             if (!"ASSIGNED".equals(order.getStatus())) {
                 return Result.error("订单状态不正确，当前状态: " + order.getStatus());
             }
-            
+
             order.setStatus("PICKUP");
             order.setPickupTime(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
-            
+
             // 推送确认到达状态给乘客
             if (order.getPassengerId() != null) {
                 webSocketNotificationService.notifyPassengerOrderStatusChange(
-                    order.getPassengerId(), 
-                    orderId, 
-                    "PICKUP", 
-                    "司机已到达上车点，请准备上车"
+                        order.getPassengerId(),
+                        orderId,
+                        "PICKUP",
+                        "司机已到达上车点，请准备上车"
                 );
             }
-            
+
             return Result.success("确认到达成功");
         } catch (Exception e) {
             return Result.error("确认到达失败: " + e.getMessage());
@@ -479,25 +479,25 @@ public class OrderController {
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             if (!"PICKUP".equals(order.getStatus())) {
                 return Result.error("订单状态不正确，当前状态: " + order.getStatus());
             }
-            
+
             order.setStatus("IN_PROGRESS");
             order.setUpdatedAt(LocalDateTime.now());
             orderMapper.updateById(order);
-            
+
             // 推送行程开始状态给乘客
             if (order.getPassengerId() != null) {
                 webSocketNotificationService.notifyPassengerOrderStatusChange(
-                    order.getPassengerId(), 
-                    orderId, 
-                    "IN_PROGRESS", 
-                    "行程已开始，请系好安全带"
+                        order.getPassengerId(),
+                        orderId,
+                        "IN_PROGRESS",
+                        "行程已开始，请系好安全带"
                 );
             }
-            
+
             return Result.success("行程开始成功");
         } catch (Exception e) {
             return Result.error("开始行程失败: " + e.getMessage());
@@ -512,37 +512,37 @@ public class OrderController {
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            
+
             if (!"IN_PROGRESS".equals(order.getStatus())) {
                 return Result.error("订单状态不正确，当前状态: " + order.getStatus());
             }
-            
+
             order.setStatus("COMPLETED");
             order.setCompletionTime(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
-            
+
             // 计算实际费用（这里简化处理，使用预估费用）
             if (order.getActualFare() == null) {
                 order.setActualFare(order.getEstimatedFare());
             }
-            
+
             orderMapper.updateById(order);
-            
+
             // 标记司机为空闲状态
             if (order.getDriverId() != null) {
                 driverRedisService.markDriverFree(order.getDriverId());
             }
-            
+
             // 推送订单完成状态给乘客，提示需要支付
             if (order.getPassengerId() != null) {
                 webSocketNotificationService.notifyPassengerOrderStatusChange(
-                    order.getPassengerId(), 
-                    orderId, 
-                    "COMPLETED", 
-                    "行程已完成，请完成支付"
+                        order.getPassengerId(),
+                        orderId,
+                        "COMPLETED",
+                        "行程已完成，请完成支付"
                 );
             }
-            
+
             return Result.success("订单完成成功");
         } catch (Exception e) {
             return Result.error("完成订单失败: " + e.getMessage());
