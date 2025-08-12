@@ -439,6 +439,7 @@ const handleCancelOrder = async () => {
     console.log("🚫 准备取消订单:", currentOrder.value);
     console.log("🆔 订单ID:", currentOrder.value.id);
     console.log("📋 订单类型:", currentOrder.value.orderType);
+    console.log("👨‍✈️ 司机ID:", currentOrder.value.driverId);
     
     // 根据订单类型选择不同的取消接口
     const cancelUrl = currentOrder.value.orderType === "RESERVATION" 
@@ -459,8 +460,24 @@ const handleCancelOrder = async () => {
     console.log("📋 取消订单响应:", response.status, result);
 
     if (response.ok && result.code === 200) {
-      ElMessage.success("订单已取消");
+      console.log("✅ 订单取消成功，后端已通知司机");
+      
+      // 立即清理乘客端的订单状态和地图元素
       resetOrderState();
+      
+      // 清理地图上的司机相关元素
+      clearAllDriverRoutes();
+      
+      // 恢复乘客路径为蓝色
+      if (routeLine && routeLine.setOptions) {
+        routeLine.setOptions({
+          strokeColor: '#1890ff',
+          strokeWeight: 6,
+          strokeOpacity: 0.8
+        });
+      }
+      
+      ElMessage.success("订单已取消，司机已收到通知");
       
       // 刷新活跃订单状态，确保UI正确更新
       await checkActiveOrder();
@@ -703,6 +720,11 @@ const initializePassengerMap = async (isReactivation = false) => {
     
     // 重新检查活跃订单
     await checkActiveOrder()
+    
+    // 恢复地图标记（修复页面切换后标记消失的问题）
+    setTimeout(() => {
+      restoreMapMarkers()
+    }, 500)
     
     // 重新连接WebSocket（如果需要）
     if (!orderStore.isWebSocketConnected) {
@@ -1343,14 +1365,14 @@ const showRoute = async () => {
             map.add(routeLine);
 
             // 安全地调整地图视野
-            const elements = [];
-            if (pickupMarker) elements.push(pickupMarker);
-            if (destMarker) elements.push(destMarker);
-            if (routeLine) elements.push(routeLine);
+            // const elements = [];
+            // if (pickupMarker) elements.push(pickupMarker);
+            // if (destMarker) elements.push(destMarker);
+            // if (routeLine) elements.push(routeLine);
             
-            if (elements.length > 0) {
-              map.setFitView(elements, false, [50, 50, 50, 50]);
-            }
+            // if (elements.length > 0) {
+            //   map.setFitView(elements, false, [50, 50, 50, 50]);
+            // }
           }
         } else {
           console.log("路径规划失败，使用备用方案");
@@ -1840,6 +1862,9 @@ const updateDriverLocation = (data) => {
   console.log("📍 更新司机位置:", data);
 
   if (data.driverId === driverInfo.value?.id) {
+    // 先清理所有旧的司机路径（修复司机位置更新后旧路径没有清除的问题）
+    clearAllDriverRoutes();
+    
     // 通过store更新司机位置信息，不要直接修改computed属性
     if (driverInfo.value) {
       const updatedDriver = {
@@ -1872,7 +1897,7 @@ const updateDriverLocation = (data) => {
         // 重新规划从当前位置到目的地的路线
         showRoute();
       } else {
-        // 更新司机到上车点的路线
+        // 重新规划司机到上车点的路线
         updateDriverRoute(data.latitude, data.longitude);
       }
 
@@ -1946,37 +1971,175 @@ const handleStatusChange = (data) => {
   }
 };
 
-// 重置订单状态
+// 恢复地图标记（修复页面切换后标记消失的问题）
+const restoreMapMarkers = () => {
+  console.log('🔄 恢复地图标记...');
+  
+  if (!map) {
+    console.log('⚠️ 地图未初始化，跳过标记恢复');
+    return;
+  }
+  
+  // 恢复上车点标记
+  if (currentPosition.value && !pickupMarker) {
+    console.log('📍 恢复上车点标记');
+    pickupMarker = new window.AMap.Marker({
+      position: [currentPosition.value.lng, currentPosition.value.lat],
+      map,
+      icon: new window.AMap.Icon({
+        image: 'https://webapi.amap.com/theme/v1.3/markers/n/start.png',
+        size: new window.AMap.Size(25, 34),
+        imageSize: new window.AMap.Size(25, 34)
+      }),
+      title: '上车点',
+      draggable: !currentOrder.value
+    });
+    
+    // 重新绑定拖拽事件
+    pickupMarker.on("dragend", async (e) => {
+      if (currentOrder.value) {
+        console.log("⚠️ 订单已发起，不允许修改上车点");
+        pickupMarker.setPosition([currentPosition.value.lng, currentPosition.value.lat]);
+        return;
+      }
+      
+      const newPos = e.lnglat;
+      console.log("📍 上车点被拖拽到新位置:", newPos.lng, newPos.lat);
+      
+      currentPosition.value = { lng: newPos.lng, lat: newPos.lat };
+      
+      try {
+        const address = await reverseGeocode(newPos.lng, newPos.lat);
+        pickupAddress.value = address;
+        pickupMarker.setTitle(`上车点: ${address}`);
+        
+        if (destination.value) {
+          showRoute();
+        }
+      } catch (error) {
+        console.error("逆地理编码失败:", error);
+      }
+    });
+  }
+  
+  // 恢复目的地标记
+  if (destination.value && destination.value.location && !destMarker) {
+    console.log('🎯 恢复目的地标记');
+    
+    let destLng, destLat;
+    if (typeof destination.value.location === "string") {
+      [destLng, destLat] = destination.value.location.split(",").map(Number);
+    } else if (destination.value.location.lng && destination.value.location.lat) {
+      destLng = destination.value.location.lng;
+      destLat = destination.value.location.lat;
+    }
+    
+    if (destLng && destLat) {
+      destMarker = new window.AMap.Marker({
+        position: [destLng, destLat],
+        map,
+        icon: new window.AMap.Icon({
+          image: 'https://webapi.amap.com/theme/v1.3/markers/n/end.png',
+          size: new window.AMap.Size(25, 34),
+          imageSize: new window.AMap.Size(25, 34)
+        }),
+        title: destination.value.name || '目的地'
+      });
+    }
+  } else if (currentOrder.value && currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude && !destMarker) {
+    // 如果destination.value不存在，但是currentOrder中有目的地信息，使用订单中的目的地
+    console.log('🎯 从订单信息恢复目的地标记');
+    destMarker = new window.AMap.Marker({
+      position: [currentOrder.value.destinationLongitude, currentOrder.value.destinationLatitude],
+      map,
+      icon: new window.AMap.Icon({
+        image: 'https://webapi.amap.com/theme/v1.3/markers/n/end.png',
+        size: new window.AMap.Size(25, 34),
+        imageSize: new window.AMap.Size(25, 34)
+      }),
+      title: currentOrder.value.destinationAddress || '目的地'
+    });
+  }
+  
+  // 恢复司机标记（如果有当前订单）
+  if (currentOrder.value && driverInfo.value && !driverMarker) {
+    console.log('🚗 恢复司机标记');
+    driverMarker = new window.AMap.Marker({
+      position: [driverInfo.value.longitude, driverInfo.value.latitude],
+      map,
+      icon: new window.AMap.Icon({
+        image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+        size: new window.AMap.Size(25, 34),
+        imageSize: new window.AMap.Size(25, 34)
+      }),
+      title: '司机位置'
+    });
+  }
+  
+  console.log('✅ 地图标记恢复完成');
+};
+
+// 清理所有司机路径（修复司机位置更新后旧路径没有清除的问题）
+const clearAllDriverRoutes = () => {
+  console.log('🧹 清理所有司机路径...');
+  
+  // 清理全局司机路径变量
+  if (window.driverRouteLine) {
+    map.remove(window.driverRouteLine);
+    window.driverRouteLine = null;
+    console.log('🗑️ 清理了全局司机路径变量');
+  }
+  
+  // 清理所有红色路径（司机路径）
+  const allOverlays = map.getAllOverlays();
+  let cleanedCount = 0;
+  
+  allOverlays.forEach(overlay => {
+    if (overlay.CLASS_NAME === 'AMap.Polyline') {
+      try {
+        const options = overlay.getOptions();
+        if (options && options.strokeColor === '#FF6B6B') {
+          map.remove(overlay);
+          cleanedCount++;
+        }
+      } catch (error) {
+        // 忽略错误
+      }
+    }
+  });
+  
+  console.log(`🗑️ 清理了 ${cleanedCount} 条红色司机路径`);
+};
+
+// 重置订单状态（增强版 - 修复取消订单后旧路径没有清除的问题）
 const resetOrderState = () => {
   console.log("🔄 重置订单状态");
 
   orderStore.clearOrderState();
-
   stopDriverTracking();
 
+  // 清理司机标记
   if (driverMarker) {
     map.remove(driverMarker);
     driverMarker = null;
+    console.log('🗑️ 已清理司机标记');
   }
 
-  if (window.driverRouteLine) {
-    map.remove(window.driverRouteLine);
-    window.driverRouteLine = null;
-  }
+  // 清理所有司机路径
+  clearAllDriverRoutes();
 
+  // 恢复乘客路径为蓝色
   if (routeLine) {
     routeLine.setOptions({
       strokeColor: "#409EFF",
       strokeWeight: 6,
       strokeOpacity: 0.8,
     });
+    console.log('🔄 乘客路径已恢复为蓝色');
   }
-
-  // WebSocket连接现在由全局store管理
 
   // 重置路线初始化标记
   window.routeInitialized = false;
-
   canOrder.value = true;
   isCalling.value = false;
 
@@ -1985,6 +2148,8 @@ const resetOrderState = () => {
 
   // 重新检查未支付订单
   orderStore.checkUnpaidOrders();
+  
+  console.log('✅ 订单状态重置完成');
 };
 
 
@@ -2006,6 +2171,22 @@ const restoreOrderMapElements = () => {
     return;
   }
   
+  // 🔑 关键修复：首先设置目的地信息，然后恢复标记
+  if (currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude) {
+    console.log('🎯 设置目的地信息');
+    destination.value = {
+      name: currentOrder.value.destinationAddress,
+      location: {
+        lng: currentOrder.value.destinationLongitude,
+        lat: currentOrder.value.destinationLatitude
+      }
+    };
+    destinationKeyword.value = currentOrder.value.destinationAddress;
+  }
+  
+  // 然后恢复地图标记
+  restoreMapMarkers();
+  
   console.log('📋 当前订单状态:', orderStatus.value);
   console.log('🚗 司机信息:', driverInfo.value);
   
@@ -2024,20 +2205,9 @@ const restoreOrderMapElements = () => {
     }
   }
   
-  // 如果有目的地信息，恢复路线规划
-  if (currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude) {
+  // 重新规划路线（目的地信息已在上面设置）
+  if (destination.value) {
     console.log('🗺️ 恢复路线规划');
-    
-    // 设置目的地信息
-    destination.value = {
-      name: currentOrder.value.destinationAddress,
-      location: {
-        lng: currentOrder.value.destinationLongitude,
-        lat: currentOrder.value.destinationLatitude
-      }
-    };
-    
-    // 重新规划路线
     setTimeout(() => {
       try {
         showRoute();

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乘客端标记恢复测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        .expected {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        .error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        .fixed {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 乘客端标记恢复修复</h1>
+        <p>修复乘客端在有订单的情况下重新进入页面后起点和终点标记不在正确位置的问题。</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🐛 修复的问题</h3>
+            <div class="step error">
+                <strong>原问题：</strong>页面重新加载后起点和终点标记位置错误
+                <div class="code">
+问题现象：
+1. 乘客有进行中的订单
+2. 刷新页面或重新进入乘客地图
+3. 起点标记不在正确的上车点位置
+4. 终点标记不在正确的目的地位置
+5. 或者标记完全不显示
+
+根本原因：
+1. destinationPosition 变量未定义，导致目的地标记无法恢复
+2. 标记恢复的调用顺序错误
+3. destination.value 在标记恢复时还未设置
+                </div>
+            </div>
+            
+            <div class="step fixed">
+                <strong>修复方案：</strong>优化标记恢复逻辑和调用顺序
+                <div class="code">
+修复措施：
+
+1. 修复目的地标记恢复逻辑
+   // 修复前：使用不存在的 destinationPosition
+   if (destinationPosition.value && !destMarker) {
+     // ❌ destinationPosition 未定义
+   }
+   
+   // 修复后：使用正确的数据源
+   if (destination.value && destination.value.location && !destMarker) {
+     // ✅ 使用 destination.value
+   } else if (currentOrder.value.destinationLatitude && !destMarker) {
+     // ✅ 备用：使用订单中的目的地信息
+   }
+
+2. 优化调用顺序
+   // 修复前：标记恢复在目的地设置之前
+   restoreMapMarkers()  // ❌ 此时 destination.value 还未设置
+   
+   // 修复后：先设置数据，再恢复标记
+   restoreOrderMapElements()  // 设置 destination.value
+   restoreMapMarkers()        // 基于设置的数据恢复标记
+
+3. 修复拖拽事件中的引用
+   // 修复前
+   if (destinationPosition.value) {
+     planRoute();  // ❌ 函数名错误
+   }
+   
+   // 修复后
+   if (destination.value) {
+     showRoute();  // ✅ 正确的函数名
+   }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🔄 标记恢复流程</h3>
+            
+            <div class="step expected">
+                <strong>1. 页面初始化时</strong>
+                <div class="code">
+触发：地图初始化完成
+调用：restoreOrderMapElements()
+流程：
+1. 检查是否有当前订单
+2. 设置 destination.value（从订单信息）
+3. 调用 restoreMapMarkers()
+4. 创建起点标记（基于 currentPosition.value）
+5. 创建终点标记（基于 destination.value 或订单信息）
+6. 恢复司机标记（如果有）
+7. 重新规划路线
+                </div>
+            </div>
+
+            <div class="step expected">
+                <strong>2. 页面重新激活时</strong>
+                <div class="code">
+触发：从其他页面切换回来
+调用：restoreMapMarkers()
+流程：
+1. 检查地图是否初始化
+2. 基于已有的 destination.value 恢复终点标记
+3. 基于 currentPosition.value 恢复起点标记
+4. 恢复司机标记（如果有订单）
+
+注意：不重复调用 restoreOrderMapElements()
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🧪 测试步骤</h3>
+            
+            <div class="step">
+                <strong>步骤 1：</strong>建立测试环境
+                <div class="code">
+1. 乘客登录并下单
+2. 司机接单，确保有进行中的订单
+3. 确认乘客端地图显示正确的起点、终点、司机位置
+                </div>
+            </div>
+
+            <div class="step">
+                <strong>步骤 2：</strong>测试页面刷新
+                <div class="code">
+1. 在乘客地图页面按 F5 刷新
+2. 观察控制台日志：
+   - "🔄 恢复订单相关的地图元素..."
+   - "🎯 设置目的地信息"
+   - "🔄 恢复地图标记..."
+   - "📍 恢复上车点标记"
+   - "🎯 从订单信息恢复目的地标记"
+3. 验证起点和终点标记在正确位置
+                </div>
+            </div>
+
+            <div class="step">
+                <strong>步骤 3：</strong>测试页面切换
+                <div class="code">
+1. 从乘客地图切换到其他页面（如"我的行程"）
+2. 再切换回乘客地图
+3. 观察控制台日志：
+   - "🔄 恢复地图标记..."
+   - "📍 恢复上车点标记"
+   - "🎯 恢复目的地标记"
+4. 验证标记位置正确
+                </div>
+            </div>
+
+            <div class="step expected">
+                <strong>步骤 4：</strong>验证标记功能
+                <div class="code">
+1. 起点标记应该在订单的上车点位置
+2. 终点标记应该在订单的目的地位置
+3. 司机标记应该在司机当前位置
+4. 路线应该正确显示
+5. 地图视野应该包含所有重要标记
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>🔍 故障排除</h3>
+            
+            <div class="step error">
+                <strong>如果起点标记位置错误：</strong>
+                <ul>
+                    <li>检查 currentPosition.value 是否正确</li>
+                    <li>确认订单中的上车点坐标是否正确</li>
+                    <li>查看是否有定位权限问题</li>
+                </ul>
+            </div>
+            
+            <div class="step error">
+                <strong>如果终点标记不显示：</strong>
+                <ul>
+                    <li>检查 destination.value 是否正确设置</li>
+                    <li>确认订单中的目的地坐标是否存在</li>
+                    <li>查看控制台是否有 JavaScript 错误</li>
+                </ul>
+            </div>
+            
+            <div class="step error">
+                <strong>如果标记完全不显示：</strong>
+                <ul>
+                    <li>检查地图是否正确初始化</li>
+                    <li>确认 restoreMapMarkers 函数是否被调用</li>
+                    <li>查看是否有地图API加载问题</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3>✅ 修复验证标准</h3>
+            <div class="step expected">
+                <strong>标记位置正确：</strong>
+                <ul>
+                    <li>✅ 起点标记在正确的上车点位置</li>
+                    <li>✅ 终点标记在正确的目的地位置</li>
+                    <li>✅ 司机标记在司机当前位置</li>
+                    <li>✅ 页面刷新后标记位置保持正确</li>
+                    <li>✅ 页面切换后标记正常恢复</li>
+                </ul>
+            </div>
+            <div class="step expected">
+                <strong>功能正常：</strong>
+                <ul>
+                    <li>✅ 路线规划正确显示</li>
+                    <li>✅ 地图视野合适</li>
+                    <li>✅ 标记拖拽功能正常（如果允许）</li>
+                    <li>✅ 司机位置实时更新</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
