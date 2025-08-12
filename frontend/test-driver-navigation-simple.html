@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机端转向提示功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .navigation-demo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            margin: 15px 0;
+        }
+        .demo-instruction {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .demo-icon {
+            font-size: 32px;
+            min-width: 40px;
+            text-align: center;
+        }
+        .demo-content {
+            flex: 1;
+        }
+        .demo-text {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            line-height: 1.2;
+        }
+        .demo-distance {
+            font-size: 16px;
+            opacity: 0.9;
+            color: #e8f4fd;
+        }
+        .demo-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 14px;
+        }
+        .demo-stats {
+            display: flex;
+            gap: 20px;
+            opacity: 0.8;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        .expected {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 1px solid #e9ecef;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧭 司机端转向提示功能测试</h1>
+        <p>测试司机端的实时导航转向提示功能。</p>
+    </div>
+
+    <div class="container">
+        <h3>🎯 导航指示面板效果预览</h3>
+        
+        <div class="navigation-demo">
+            <div class="demo-instruction">
+                <div class="demo-icon">↗️</div>
+                <div class="demo-content">
+                    <div class="demo-text">300米后右转</div>
+                    <div class="demo-distance">300米</div>
+                </div>
+            </div>
+            <div class="demo-summary">
+                <div class="demo-stats">
+                    <span>总距离: 2.5km</span>
+                    <span>预计: 8分钟</span>
+                </div>
+                <button style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 5px 10px; border-radius: 4px; cursor: pointer;">停止导航</button>
+            </div>
+        </div>
+        
+        <h4>不同转向指示示例</h4>
+        <div class="code">
+⬆️ 直行500米
+↗️ 200米后右转  
+↖️ 150米后左转
+🔄 100米后掉头
+🛣️ 进入高速公路
+🚪 高速出口
+🧭 继续按导航路线行驶
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🧪 测试步骤</h3>
+        
+        <div class="step">
+            <strong>步骤 1：</strong>司机上线并接单
+            <div class="code">
+1. 打开司机端地图页面
+2. 切换到在线状态
+3. 接收并接受一个订单
+4. 确认订单状态为 ASSIGNED
+            </div>
+        </div>
+
+        <div class="step expected">
+            <strong>步骤 2：</strong>验证导航面板显示
+            <div class="code">
+期望结果：
+✅ 页面顶部显示导航指示面板
+✅ 显示转向图标（如 ↗️）
+✅ 显示转向指示文字（如"300米后右转"）
+✅ 显示距离信息
+✅ 显示总距离和预计时间
+✅ 有停止导航按钮
+            </div>
+        </div>
+
+        <div class="step">
+            <strong>步骤 3：</strong>检查控制台日志
+            <div class="code">
+关键日志：
+- "🗺️ 开始路线规划"
+- "✅ 导航信息已更新"
+- "🧭 导航信息已设置"
+- "🧭 导航指示已更新"
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🔧 已修复的问题</h3>
+        
+        <div class="step expected">
+            <strong>1. 添加了缺失的parseNavigationInstructions函数</strong>
+            <p>解析高德地图API返回的路线步骤，提取转向指示信息</p>
+        </div>
+        
+        <div class="step expected">
+            <strong>2. 添加了司机store的setNavigationInfo方法</strong>
+            <p>允许设置和保存导航信息到store中</p>
+        </div>
+        
+        <div class="step expected">
+            <strong>3. 更新了导航面板模板和样式</strong>
+            <p>使用新的转向提示面板，显示图标、文字和距离信息</p>
+        </div>
+        
+        <div class="step expected">
+            <strong>4. 修复了测试页面的HTML解析错误</strong>
+            <p>解决了Vite开发服务器的HTML解析问题</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>🎯 功能特点</h3>
+        <ul>
+            <li><strong>智能转向识别：</strong>自动识别左转、右转、掉头等动作</li>
+            <li><strong>精确距离显示：</strong>显示到下一个转向点的准确距离</li>
+            <li><strong>美观界面设计：</strong>渐变背景，清晰的图标和文字</li>
+            <li><strong>实时更新：</strong>每5秒更新位置和导航指示</li>
+            <li><strong>多重备用方案：</strong>Web API、JS API、简化方案三重保障</li>
+        </ul>
+    </div>
+</body>
+</html>

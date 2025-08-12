@@ -365,20 +365,20 @@
           <el-radio-group v-model="selectedPaymentMethod">
             <el-radio label="WECHAT" class="payment-option">
               <div class="payment-method">
-                <span class="icon">💚</span>
+                <img class="custom-icon" src="/avatars/WeChat.jpg" alt="Logo" >
                 <span>微信支付</span>
               </div>
             </el-radio>
             <el-radio label="ALIPAY" class="payment-option">
               <div class="payment-method">
-                <span class="icon">🔵</span>
-                <span>支付宝</span>
+                <img class="custom-icon" src="/avatars/AliPay.jpg" alt="Logo" >
+                <span>支付宝支付</span>
               </div>
             </el-radio>
-            <el-radio label="CASH" class="payment-option">
+            <el-radio label="CREDIT_CARD" class="payment-option">
               <div class="payment-method">
-                <span class="icon">💵</span>
-                <span>现金支付</span>
+                <img class="custom-icon" src="/avatars/Visa.jpg" alt="Logo" >
+                <span>银行卡支付</span>
               </div>
             </el-radio>
           </el-radio-group>
@@ -1281,7 +1281,7 @@ const handleCurrentChange = (page) => {
 
 .payment-option {
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
 }
 
 .payment-method {
@@ -1446,5 +1446,9 @@ const handleCurrentChange = (page) => {
     align-items: flex-start;
     gap: 10px;
   }
+}
+.custom-icon {
+  width: 30px;  /* 调整宽度 */
+  height: 30px; /* 调整高度 */
 }
 </style>
