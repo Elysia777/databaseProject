@@ -843,9 +843,11 @@ function initMap() {
             draggable: true,
             cursor: "move",
             icon: new window.AMap.Icon({
-              size: new window.AMap.Size(32, 32),
-              image: "https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png",
+              size: new window.AMap.Size(26, 13),
+              image: "https://webapi.amap.com/images/car.png",
+              imageSize: new window.AMap.Size(26, 13)
             }),
+            offset: new AMap.Pixel(0, 0), // 相对于基点的偏移位置
             title: "拖拽调整上车位置",
           });
 

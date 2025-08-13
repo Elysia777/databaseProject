@@ -3,7 +3,17 @@
     <div class="page-header">
       <h2>我的订单</h2>
       <div class="header-actions">
-        <el-select v-model="statusFilter" placeholder="筛选状态" clearable @change="loadOrders">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索订单号或地址"
+          style="width: 200px;"
+          clearable
+          @change="handleSearch">
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-select v-model="statusFilter" placeholder="筛选状态" clearable @change="loadOrders" style="width: 150px;">
           <el-option label="全部" value="" />
           <el-option label="已完成" value="COMPLETED" />
           <el-option label="已取消" value="CANCELLED" />
@@ -11,10 +21,45 @@
           <el-option label="已接单" value="ASSIGNED" />
           <el-option label="已到达" value="PICKUP" />
         </el-select>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+          @change="loadOrders"
+          style="width: 240px;">
+        </el-date-picker>
         <el-button @click="loadOrders" :loading="loading">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
+        <el-button @click="showAdvancedSearch = true" type="primary" plain>
+          <el-icon><Filter /></el-icon>
+          高级筛选
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 统计信息栏 -->
+    <div class="stats-bar" v-if="!loading && orders.length > 0">
+      <div class="stat-item">
+        <span class="stat-label">本页订单:</span>
+        <span class="stat-value">{{ orders.length }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">已完成:</span>
+        <span class="stat-value">{{ completedCount }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">本页收入:</span>
+        <span class="stat-value">¥{{ totalEarnings.toFixed(2) }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">平均收入:</span>
+        <span class="stat-value">¥{{ averageEarnings.toFixed(2) }}</span>
       </div>
     </div>
 
@@ -31,7 +76,7 @@
       </div>
 
       <div v-else class="orders-list">
-        <el-card v-for="order in orders" :key="order.id" class="order-card">
+        <el-card v-for="order in orders" :key="order.id" class="order-card" @click="showOrderDetails(order)">
           <div class="order-header">
             <div class="order-info">
               <span class="order-number">#{{ order.orderNumber || order.id }}</span>
@@ -103,13 +148,87 @@
         />
       </div>
     </div>
+
+    <!-- 高级搜索对话框 -->
+    <el-dialog v-model="showAdvancedSearch" title="高级筛选" width="600px">
+      <el-form :model="advancedFilters" label-width="100px">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="订单类型">
+              <el-select v-model="advancedFilters.orderType" placeholder="选择类型" clearable>
+                <el-option label="全部" value="" />
+                <el-option label="即时订单" value="IMMEDIATE" />
+                <el-option label="预约订单" value="RESERVATION" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="费用范围">
+              <el-input-number v-model="advancedFilters.minFare" :min="0" :precision="2" placeholder="最低费用" style="width: 200px;" />
+              <span style="margin: 0 8px;">-</span>
+              <el-input-number v-model="advancedFilters.maxFare" :min="0" :precision="2" placeholder="最高费用" style="width: 200px;" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="起点地址">
+          <el-input v-model="advancedFilters.pickupAddress" placeholder="输入起点地址关键词" />
+        </el-form-item>
+        <el-form-item label="终点地址">
+          <el-input v-model="advancedFilters.destinationAddress" placeholder="输入终点地址关键词" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="resetAdvancedFilters">重置</el-button>
+          <el-button @click="showAdvancedSearch = false">取消</el-button>
+          <el-button type="primary" @click="applyAdvancedFilters">应用筛选</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 订单详情对话框 -->
+    <el-dialog v-model="showOrderDetail" title="订单详情" width="700px">
+      <div v-if="selectedOrder" class="order-detail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="订单号">{{ selectedOrder.orderNumber || selectedOrder.id }}</el-descriptions-item>
+          <el-descriptions-item label="订单状态">
+            <el-tag :type="getStatusTagType(selectedOrder.status)">
+              {{ getStatusText(selectedOrder.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="订单类型">
+            <el-tag v-if="selectedOrder.orderType === 'RESERVATION'" type="warning">预约单</el-tag>
+            <el-tag v-else type="primary">即时单</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(selectedOrder.createdAt) }}</el-descriptions-item>
+          <el-descriptions-item label="起点地址" :span="2">{{ selectedOrder.pickupAddress || '未知' }}</el-descriptions-item>
+          <el-descriptions-item label="终点地址" :span="2">{{ selectedOrder.destinationAddress || '未知' }}</el-descriptions-item>
+          <el-descriptions-item label="预估距离">{{ (selectedOrder.estimatedDistance || 0).toFixed(1) }} 公里</el-descriptions-item>
+          <el-descriptions-item label="预估时长">{{ selectedOrder.estimatedDuration || '--' }} 分钟</el-descriptions-item>
+          <el-descriptions-item label="预估费用">¥{{ (selectedOrder.estimatedFare || 0).toFixed(2) }}</el-descriptions-item>
+          <el-descriptions-item label="实际费用">¥{{ (selectedOrder.actualFare || selectedOrder.estimatedFare || 0).toFixed(2) }}</el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.scheduledTime" label="预约时间" :span="2">
+            {{ formatDateTime(selectedOrder.scheduledTime) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.pickupTime" label="接客时间">
+            {{ formatDateTime(selectedOrder.pickupTime) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.completionTime" label="完成时间">
+            {{ formatDateTime(selectedOrder.completionTime) }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="selectedOrder.cancelReason" label="取消原因" :span="2">
+            <span class="cancel-reason">{{ selectedOrder.cancelReason }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Loading, LocationFilled, Location } from '@element-plus/icons-vue'
+import { Refresh, Loading, LocationFilled, Location, Search, Filter } from '@element-plus/icons-vue'
 
 // 模拟用户store，避免依赖问题
 const mockUserStore = {
@@ -121,12 +240,44 @@ const mockUserStore = {
 const orders = ref([])
 const loading = ref(false)
 const statusFilter = ref('')
+const searchKeyword = ref('')
+const dateRange = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const totalOrders = ref(0)
 
+// 对话框状态
+const showAdvancedSearch = ref(false)
+const showOrderDetail = ref(false)
+const selectedOrder = ref(null)
+
+// 高级筛选
+const advancedFilters = ref({
+  orderType: '',
+  minFare: null,
+  maxFare: null,
+  pickupAddress: '',
+  destinationAddress: ''
+})
+
 // 计算属性
 const driverId = computed(() => mockUserStore.user?.driverId || mockUserStore.user?.id || 1)
+
+// 统计信息
+const completedCount = computed(() => {
+  return orders.value.filter(order => order.status === 'COMPLETED').length
+})
+
+const totalEarnings = computed(() => {
+  return orders.value
+    .filter(order => order.status === 'COMPLETED')
+    .reduce((sum, order) => sum + (parseFloat(order.actualFare || order.estimatedFare || 0)), 0)
+})
+
+const averageEarnings = computed(() => {
+  const completed = completedCount.value
+  return completed > 0 ? totalEarnings.value / completed : 0
+})
 
 // 加载订单列表
 const loadOrders = async () => {
@@ -141,39 +292,102 @@ const loadOrders = async () => {
       params.append('status', statusFilter.value)
     }
 
+    // 添加日期范围筛选
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.append('startDate', dateRange.value[0])
+      params.append('endDate', dateRange.value[1])
+    }
+
     const token = localStorage.getItem('token')
     if (!token) {
       ElMessage.warning('请先登录')
-      // 添加一些模拟数据用于展示
-      orders.value = [
+      // 生成更多模拟数据用于展示
+      let mockOrders = [
         {
           id: 1,
-          orderNumber: 'ORD20250805001',
+          orderNumber: 'ORD20250813001',
           status: 'COMPLETED',
           orderType: 'IMMEDIATE',
-          pickupAddress: '北京市朝阳区三里屯SOHO',
-          destinationAddress: '北京市海淀区中关村软件园',
-          estimatedDistance: 12.5,
-          estimatedDuration: 35,
-          actualFare: 45.80,
-          createdAt: '2025-08-05T10:30:00',
-          completionTime: '2025-08-05T11:05:00'
+          pickupAddress: '大连市中山区人民路100号',
+          destinationAddress: '大连市沙河口区西安路商业街',
+          estimatedDistance: 8.5,
+          estimatedDuration: 25,
+          actualFare: 32.50,
+          createdAt: '2025-08-13T09:30:00',
+          completionTime: '2025-08-13T09:55:00'
         },
         {
           id: 2,
-          orderNumber: 'ORD20250805002',
+          orderNumber: 'ORD20250813002',
           status: 'COMPLETED',
           orderType: 'RESERVATION',
-          pickupAddress: '北京市东城区王府井大街',
-          destinationAddress: '北京首都国际机场T3航站楼',
-          estimatedDistance: 28.3,
-          estimatedDuration: 55,
-          actualFare: 89.50,
-          createdAt: '2025-08-05T14:15:00',
-          completionTime: '2025-08-05T15:10:00'
+          pickupAddress: '大连市甘井子区大连理工大学',
+          destinationAddress: '大连周水子国际机场',
+          estimatedDistance: 15.3,
+          estimatedDuration: 35,
+          actualFare: 58.80,
+          scheduledTime: '2025-08-13T14:00:00',
+          createdAt: '2025-08-13T12:15:00',
+          completionTime: '2025-08-13T14:35:00'
+        },
+        {
+          id: 3,
+          orderNumber: 'ORD20250813003',
+          status: 'CANCELLED',
+          orderType: 'IMMEDIATE',
+          pickupAddress: '大连市西岗区五四广场',
+          destinationAddress: '大连市金州区开发区',
+          estimatedDistance: 22.1,
+          estimatedDuration: 45,
+          estimatedFare: 78.00,
+          createdAt: '2025-08-13T16:20:00',
+          cancelReason: '乘客取消'
+        },
+        {
+          id: 4,
+          orderNumber: 'ORD20250812001',
+          status: 'COMPLETED',
+          orderType: 'IMMEDIATE',
+          pickupAddress: '大连市中山区友好广场',
+          destinationAddress: '大连火车站',
+          estimatedDistance: 6.2,
+          estimatedDuration: 18,
+          actualFare: 24.50,
+          createdAt: '2025-08-12T20:10:00',
+          completionTime: '2025-08-12T20:28:00'
+        },
+        {
+          id: 5,
+          orderNumber: 'ORD20250812002',
+          status: 'COMPLETED',
+          orderType: 'RESERVATION',
+          pickupAddress: '大连市沙河口区星海广场',
+          destinationAddress: '大连市旅顺口区',
+          estimatedDistance: 35.8,
+          estimatedDuration: 65,
+          actualFare: 125.60,
+          scheduledTime: '2025-08-12T08:00:00',
+          createdAt: '2025-08-11T18:30:00',
+          completionTime: '2025-08-12T09:05:00'
         }
       ]
-      totalOrders.value = 2
+
+      // 应用筛选
+      if (statusFilter.value) {
+        mockOrders = mockOrders.filter(order => order.status === statusFilter.value)
+      }
+
+      if (searchKeyword.value) {
+        const keyword = searchKeyword.value.toLowerCase()
+        mockOrders = mockOrders.filter(order => 
+          (order.orderNumber && order.orderNumber.toLowerCase().includes(keyword)) ||
+          (order.pickupAddress && order.pickupAddress.toLowerCase().includes(keyword)) ||
+          (order.destinationAddress && order.destinationAddress.toLowerCase().includes(keyword))
+        )
+      }
+
+      orders.value = mockOrders
+      totalOrders.value = mockOrders.length
       return
     }
 
@@ -205,6 +419,38 @@ const loadOrders = async () => {
 const handlePageChange = (page) => {
   currentPage.value = page
   loadOrders()
+}
+
+// 处理搜索
+const handleSearch = () => {
+  currentPage.value = 1
+  loadOrders()
+}
+
+// 显示订单详情
+const showOrderDetails = (order) => {
+  selectedOrder.value = order
+  showOrderDetail.value = true
+}
+
+// 应用高级筛选
+const applyAdvancedFilters = () => {
+  // 这里可以添加高级筛选的逻辑
+  // 目前简化处理，只关闭对话框
+  showAdvancedSearch.value = false
+  currentPage.value = 1
+  loadOrders()
+}
+
+// 重置高级筛选
+const resetAdvancedFilters = () => {
+  advancedFilters.value = {
+    orderType: '',
+    minFare: null,
+    maxFare: null,
+    pickupAddress: '',
+    destinationAddress: ''
+  }
 }
 
 // 获取状态标签类型
@@ -280,6 +526,34 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.stats-bar {
+  display: flex;
+  gap: 24px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  color: #666;
+  font-size: 14px;
+}
+
+.stat-value {
+  color: #333;
+  font-weight: 600;
+  font-size: 16px;
 }
 
 .orders-container {
@@ -312,10 +586,12 @@ onMounted(() => {
 
 .order-card {
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .order-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .order-header {
@@ -425,6 +701,10 @@ onMounted(() => {
   padding: 20px 0;
 }
 
+.order-detail .cancel-reason {
+  color: #f56c6c;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .page-header {
@@ -434,7 +714,13 @@ onMounted(() => {
   }
 
   .header-actions {
-    justify-content: space-between;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .stats-bar {
+    flex-direction: column;
+    gap: 12px;
   }
 
   .order-content {

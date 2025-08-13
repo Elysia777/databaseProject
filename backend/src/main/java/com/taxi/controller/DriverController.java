@@ -29,25 +29,25 @@ public class DriverController {
 
     @Autowired
     private DriverMapper driverMapper;
-    
+
     @Autowired
     private OrderMapper orderMapper;
-    
+
     @Autowired
     private UserMapper userMapper;
-    
+
     @Autowired
     private DriverRedisService driverRedisService;
-    
+
     @Autowired
     private OrderDispatchService orderDispatchService;
-    
+
     @Autowired
     private DriverLocationService driverLocationService;
-    
+
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
-    
+
     @Autowired
     private ScheduledOrderService scheduledOrderService;
 
@@ -55,45 +55,45 @@ public class DriverController {
      * 司机上线
      */
     @PostMapping("/{driverId}/online")
-    public Result<String> goOnline(@PathVariable Long driverId, 
-                                   @RequestParam BigDecimal latitude, 
+    public Result<String> goOnline(@PathVariable Long driverId,
+                                   @RequestParam BigDecimal latitude,
                                    @RequestParam BigDecimal longitude) {
         try {
             Driver driver = driverMapper.selectById(driverId);
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            
+
             // 更新司机状态为在线，并更新位置
             driver.setIsOnline(true);
             driver.setCurrentLatitude(latitude);
             driver.setCurrentLongitude(longitude);
             driver.setUpdatedAt(LocalDateTime.now());
-            
+
             driverMapper.updateById(driver);
-            
-            System.out.println("司机上线成功 - ID: " + driverId + 
-                             ", 输入坐标: 纬度=" + latitude + ", 经度=" + longitude);
-            System.out.println("存储到数据库: 纬度字段=" + driver.getCurrentLatitude() + 
-                             ", 经度字段=" + driver.getCurrentLongitude());
-            
+
+            System.out.println("司机上线成功 - ID: " + driverId +
+                    ", 输入坐标: 纬度=" + latitude + ", 经度=" + longitude);
+            System.out.println("存储到数据库: 纬度字段=" + driver.getCurrentLatitude() +
+                    ", 经度字段=" + driver.getCurrentLongitude());
+
             // 司机上线后，建立TCP长连接并加入Redis缓存
             try {
                 // 1. 建立TCP长连接（模拟）
                 driverLocationService.establishConnection(driverId);
-                
+
                 // 2. 加入Redis GEO索引
                 driverRedisService.driverGoOnline(driver);
                 System.out.println("司机 " + driverId + " 已建立TCP连接并加入Redis GEO索引");
-                
+
                 // 注意：不在这里立即检查待分配订单，等WebSocket连接建立后再处理
                 System.out.println("司机 " + driverId + " 上线完成，等待WebSocket连接后推送待分配订单");
-                
+
             } catch (Exception e) {
                 System.err.println("司机上线处理失败: " + e.getMessage());
                 // 不影响司机上线的结果
             }
-            
+
             return Result.success("上线成功");
         } catch (Exception e) {
             return Result.error("上线失败: " + e.getMessage());
@@ -110,27 +110,27 @@ public class DriverController {
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            
+
             // 更新司机状态为离线
             driver.setIsOnline(false);
             driver.setUpdatedAt(LocalDateTime.now());
-            
+
             driverMapper.updateById(driver);
-            
+
             // 司机下线时断开TCP连接并从Redis缓存移除
             try {
                 // 1. 断开TCP长连接（模拟）
                 driverLocationService.closeConnection(driverId);
-                
+
                 // 2. 从Redis缓存移除
                 driverRedisService.driverGoOffline(driverId);
                 System.out.println("司机 " + driverId + " 已断开TCP连接并从在线缓存移除");
             } catch (Exception e) {
                 System.err.println("司机下线处理失败: " + e.getMessage());
             }
-            
+
             System.out.println("司机下线成功 - ID: " + driverId);
-            
+
             return Result.success("下线成功");
         } catch (Exception e) {
             return Result.error("下线失败: " + e.getMessage());
@@ -146,31 +146,31 @@ public class DriverController {
             System.out.println("=== 接单请求开始 ===");
             System.out.println("司机ID: " + driverId);
             System.out.println("订单ID: " + orderId);
-            
+
             // 先检查司机是否存在
             Driver driver = driverMapper.selectById(driverId);
             if (driver == null) {
                 System.out.println("❌ 司机不存在: " + driverId);
                 return Result.error("司机不存在");
             }
-            
+
             // 检查司机是否在线
             if (!driver.getIsOnline()) {
                 System.out.println("❌ 司机不在线: " + driverId);
                 return Result.error("司机不在线");
             }
-            
+
             System.out.println("✅ 司机状态检查通过");
-            
+
             boolean success = orderDispatchService.acceptOrder(orderId, driverId);
-            
+
             if (success) {
                 // 接单成功，返回完整的订单信息
                 Order order = orderMapper.selectById(orderId);
                 if (order != null) {
                     System.out.println("✅ 司机 " + driverId + " 接单 " + orderId + " 成功，返回订单信息");
-                    System.out.println("📍 订单坐标信息: pickup(" + order.getPickupLongitude() + "," + order.getPickupLatitude() + 
-                                     "), destination(" + order.getDestinationLongitude() + "," + order.getDestinationLatitude() + ")");
+                    System.out.println("📍 订单坐标信息: pickup(" + order.getPickupLongitude() + "," + order.getPickupLatitude() +
+                            "), destination(" + order.getDestinationLongitude() + "," + order.getDestinationLatitude() + ")");
                     return Result.success(order);
                 } else {
                     System.out.println("❌ 接单成功但无法获取订单信息");
@@ -191,14 +191,14 @@ public class DriverController {
      * 司机拒单
      */
     @PostMapping("/{driverId}/reject-order/{orderId}")
-    public Result<String> rejectOrder(@PathVariable Long driverId, @PathVariable Long orderId, 
-                                     @RequestParam(defaultValue = "司机拒单") String reason) {
+    public Result<String> rejectOrder(@PathVariable Long driverId, @PathVariable Long orderId,
+                                      @RequestParam(defaultValue = "司机拒单") String reason) {
         try {
             System.out.println("司机 " + driverId + " 拒绝订单 " + orderId + ", 原因: " + reason);
-            
+
             // 调用订单分发服务处理拒单
             orderDispatchService.handleDriverRejectOrder(orderId, driverId, reason);
-            
+
             System.out.println("司机 " + driverId + " 拒单 " + orderId + " 处理完成");
             return Result.success("拒单成功");
         } catch (Exception e) {
@@ -212,13 +212,13 @@ public class DriverController {
      */
     @PostMapping("/{driverId}/location")
     public Result<String> reportLocation(@PathVariable Long driverId,
-                                        @RequestParam BigDecimal latitude,
-                                        @RequestParam BigDecimal longitude,
-                                        @RequestParam(required = false) String vehicleHeading) {
+                                         @RequestParam BigDecimal latitude,
+                                         @RequestParam BigDecimal longitude,
+                                         @RequestParam(required = false) String vehicleHeading) {
         try {
             // 通过DriverLocationService处理位置上报
             driverLocationService.handleLocationUpdate(driverId, latitude, longitude, vehicleHeading);
-            
+
             return Result.success("位置上报成功");
         } catch (Exception e) {
             return Result.error("位置上报失败: " + e.getMessage());
@@ -230,20 +230,20 @@ public class DriverController {
      */
     @PostMapping("/{driverId}/update-location")
     public Result<String> updateLocation(@PathVariable Long driverId,
-                                        @RequestParam BigDecimal latitude,
-                                        @RequestParam BigDecimal longitude) {
+                                         @RequestParam BigDecimal latitude,
+                                         @RequestParam BigDecimal longitude) {
         try {
             Driver driver = driverMapper.selectById(driverId);
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            
+
             // 更新数据库中的司机位置
             driver.setCurrentLatitude(latitude);
             driver.setCurrentLongitude(longitude);
             driver.setUpdatedAt(LocalDateTime.now());
             driverMapper.updateById(driver);
-            
+
             // 更新Redis缓存中的位置信息
             try {
                 driverRedisService.updateDriverLocation(driverId, latitude, longitude);
@@ -251,7 +251,7 @@ public class DriverController {
             } catch (Exception e) {
                 System.err.println("更新缓存位置失败: " + e.getMessage());
             }
-            
+
             return Result.success("位置更新成功");
         } catch (Exception e) {
             return Result.error("位置更新失败: " + e.getMessage());
@@ -281,13 +281,13 @@ public class DriverController {
             if (driver == null) {
                 return Result.error("司机不存在");
             }
-            
+
             // 获取对应的用户信息（包含头像）
             User user = null;
             if (driver.getUserId() != null) {
                 user = userMapper.selectById(driver.getUserId());
             }
-            
+
             // 构建包含头像的司机信息
             Map<String, Object> driverInfo = new HashMap<>();
             driverInfo.put("id", driver.getId());
@@ -303,7 +303,7 @@ public class DriverController {
             driverInfo.put("currentLongitude", driver.getCurrentLongitude());
             driverInfo.put("createdAt", driver.getCreatedAt());
             driverInfo.put("updatedAt", driver.getUpdatedAt());
-            
+
             return Result.success(driverInfo);
         } catch (Exception e) {
             return Result.error("获取司机信息失败: " + e.getMessage());
@@ -357,8 +357,8 @@ public class DriverController {
      */
     @GetMapping("/nearby")
     public Result<List<Driver>> getNearbyDrivers(@RequestParam BigDecimal latitude,
-                                                @RequestParam BigDecimal longitude,
-                                                @RequestParam(defaultValue = "5.0") double radiusKm) {
+                                                 @RequestParam BigDecimal longitude,
+                                                 @RequestParam(defaultValue = "5.0") double radiusKm) {
         try {
             List<Driver> nearbyDrivers = driverRedisService.getNearbyOnlineDrivers(latitude, longitude, radiusKm);
             return Result.success(nearbyDrivers);
@@ -399,20 +399,20 @@ public class DriverController {
     @GetMapping("/{driverId}/connection")
     public Result<Object> getConnectionStatus(@PathVariable Long driverId) {
         try {
-            DriverLocationService.DriverConnectionInfo connectionInfo = 
-                driverLocationService.getDriverConnection(driverId);
-            
+            DriverLocationService.DriverConnectionInfo connectionInfo =
+                    driverLocationService.getDriverConnection(driverId);
+
             if (connectionInfo == null) {
                 return Result.success("司机未连接");
             }
-            
+
             return Result.success(Map.of(
-                "driverId", connectionInfo.getDriverId(),
-                "isOnline", connectionInfo.isOnline(),
-                "lastHeartbeat", connectionInfo.getLastHeartbeat(),
-                "lastLatitude", connectionInfo.getLastLatitude(),
-                "lastLongitude", connectionInfo.getLastLongitude(),
-                "vehicleHeading", connectionInfo.getVehicleHeading()
+                    "driverId", connectionInfo.getDriverId(),
+                    "isOnline", connectionInfo.isOnline(),
+                    "lastHeartbeat", connectionInfo.getLastHeartbeat(),
+                    "lastLatitude", connectionInfo.getLastLatitude(),
+                    "lastLongitude", connectionInfo.getLastLongitude(),
+                    "vehicleHeading", connectionInfo.getVehicleHeading()
             ));
         } catch (Exception e) {
             return Result.error("获取连接状态失败: " + e.getMessage());
@@ -427,8 +427,8 @@ public class DriverController {
         try {
             int activeConnections = driverLocationService.getActiveConnectionCount();
             return Result.success(Map.of(
-                "activeConnections", activeConnections,
-                "timestamp", System.currentTimeMillis()
+                    "activeConnections", activeConnections,
+                    "timestamp", System.currentTimeMillis()
             ));
         } catch (Exception e) {
             return Result.error("获取连接统计失败: " + e.getMessage());
@@ -443,14 +443,14 @@ public class DriverController {
         try {
             // 1. 从数据库获取所有可用司机
             List<Driver> availableDrivers = driverMapper.selectOnlineAndFreeDrivers();
-            
+
             if (availableDrivers.isEmpty()) {
                 return Result.error("数据库中没有可用司机");
             }
-            
+
             int fixedCount = 0;
             StringBuilder result = new StringBuilder("修复结果:\n");
-            
+
             for (Driver driver : availableDrivers) {
                 try {
                     // 2. 确保司机有位置信息
@@ -461,30 +461,30 @@ public class DriverController {
                         driverMapper.updateById(driver);
                         result.append("- 司机").append(driver.getId()).append("设置默认位置\n");
                     }
-                    
+
                     // 3. 重新加入Redis
                     driverRedisService.driverGoOnline(driver);
-                    
+
                     // 4. 验证Redis状态
                     boolean isOnline = driverRedisService.isDriverOnlineAndFree(driver.getId());
                     Driver redisDriver = driverRedisService.getDriverInfo(driver.getId());
-                    
+
                     if (isOnline && redisDriver != null) {
                         fixedCount++;
                         result.append("✅ 司机").append(driver.getId()).append("(").append(driver.getName()).append(") 修复成功\n");
                     } else {
                         result.append("❌ 司机").append(driver.getId()).append("(").append(driver.getName()).append(") 修复失败\n");
                     }
-                    
+
                 } catch (Exception e) {
                     result.append("❌ 司机").append(driver.getId()).append(" 修复异常: ").append(e.getMessage()).append("\n");
                 }
             }
-            
+
             result.append("\n总计修复 ").append(fixedCount).append(" 个司机");
-            
+
             return Result.success(result.toString());
-            
+
         } catch (Exception e) {
             return Result.error("修复失败: " + e.getMessage());
         }
@@ -511,13 +511,13 @@ public class DriverController {
     public Result<Map<String, Object>> getTodayStats(@PathVariable Long driverId) {
         try {
             Map<String, Object> stats = new HashMap<>();
-            
+
             // 这里可以添加实际的统计查询逻辑
             stats.put("todayEarnings", 0.0);
             stats.put("completedOrders", 0);
             stats.put("onlineHours", 0.0);
             stats.put("rating", 5.0);
-            
+
             return Result.success(stats);
         } catch (Exception e) {
             return Result.error("获取今日统计失败: " + e.getMessage());
@@ -529,23 +529,23 @@ public class DriverController {
      */
     @GetMapping("/{driverId}/orders")
     public Result<List<Order>> getDriverOrders(@PathVariable Long driverId,
-                                              @RequestParam(defaultValue = "1") int page,
-                                              @RequestParam(defaultValue = "20") int size,
-                                              @RequestParam(required = false) String status,
-                                              @RequestParam(required = false) String startDate,
-                                              @RequestParam(required = false) String endDate) {
+                                               @RequestParam(defaultValue = "1") int page,
+                                               @RequestParam(defaultValue = "20") int size,
+                                               @RequestParam(required = false) String status,
+                                               @RequestParam(required = false) String startDate,
+                                               @RequestParam(required = false) String endDate) {
         try {
             System.out.println("=== 获取司机历史订单 ===");
             System.out.println("司机ID: " + driverId);
             System.out.println("页码: " + page + ", 大小: " + size);
             System.out.println("状态筛选: " + status);
             System.out.println("日期范围: " + startDate + " 到 " + endDate);
-            
+
             // 计算偏移量
             int offset = (page - 1) * size;
-            
+
             List<Order> orders;
-            
+
             // 如果有日期范围参数，使用日期范围查询
             if (startDate != null && endDate != null) {
                 if (status != null && !status.isEmpty()) {
@@ -562,9 +562,9 @@ public class DriverController {
                     orders = orderMapper.selectDriverOrders(driverId, offset, size);
                 }
             }
-            
+
             System.out.println("查询到 " + orders.size() + " 条订单记录");
-            
+
             return Result.success(orders);
         } catch (Exception e) {
             System.err.println("获取司机订单失败: " + e.getMessage());
@@ -592,39 +592,39 @@ public class DriverController {
     @GetMapping("/{driverId}/status-detail")
     public Result<Map<String, Object>> getDriverStatusDetail(@PathVariable Long driverId) {
         Map<String, Object> detail = new HashMap<>();
-        
+
         try {
             // 1. 数据库中的司机信息
             Driver dbDriver = driverMapper.selectById(driverId);
             detail.put("database", dbDriver);
-            
+
             // 2. Redis中的司机信息
             Driver redisDriver = driverRedisService.getDriverInfo(driverId);
             detail.put("redis", redisDriver);
-            
+
             // 3. Redis中的状态信息
             boolean isOnline = driverRedisService.isDriverOnlineAndFree(driverId);
             detail.put("isOnlineAndFree", isOnline);
-            
+
             // 4. 检查GEO位置
             try {
                 List<org.springframework.data.geo.Point> positions = redisTemplate.opsForGeo()
-                    .position("driver:geo", driverId.toString());
+                        .position("driver:geo", driverId.toString());
                 detail.put("geoPosition", positions != null && !positions.isEmpty() ? positions.get(0) : null);
             } catch (Exception e) {
                 detail.put("geoPosition", "获取失败: " + e.getMessage());
             }
-            
+
             // 5. 状态一致性检查
             Map<String, Object> consistency = new HashMap<>();
             consistency.put("dbExists", dbDriver != null);
             consistency.put("redisExists", redisDriver != null);
-            consistency.put("statusMatch", dbDriver != null && redisDriver != null && 
-                           dbDriver.getStatus().equals(redisDriver.getStatus()));
+            consistency.put("statusMatch", dbDriver != null && redisDriver != null &&
+                    dbDriver.getStatus().equals(redisDriver.getStatus()));
             detail.put("consistency", consistency);
-            
+
             return Result.success(detail);
-            
+
         } catch (Exception e) {
             return Result.error("检查失败: " + e.getMessage());
         }
@@ -639,32 +639,32 @@ public class DriverController {
             @RequestParam String month,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        
+
         try {
             Map<String, Object> result = new HashMap<>();
-            
+
             // 获取月度收入汇总
             Map<String, Object> summary = orderMapper.selectDriverEarningsSummary(driverId, month);
             if (summary == null) {
                 summary = Map.of(
-                    "totalEarnings", 0.0,
-                    "totalOrders", 0,
-                    "averageEarnings", 0.0,
-                    "totalDistance", 0.0
+                        "totalEarnings", 0.0,
+                        "totalOrders", 0,
+                        "averageEarnings", 0.0,
+                        "totalDistance", 0.0
                 );
             }
-            
+
             // 获取每日收入记录
             int offset = (page - 1) * size;
             List<Map<String, Object>> records = orderMapper.selectDriverDailyEarnings(driverId, month, offset, size);
             int total = orderMapper.countDriverDailyEarnings(driverId, month);
-            
+
             result.put("summary", summary);
             result.put("records", records);
             result.put("total", total);
             result.put("page", page);
             result.put("size", size);
-            
+
             return Result.success(result);
         } catch (Exception e) {
             return Result.error("获取收入统计失败: " + e.getMessage());
@@ -679,28 +679,28 @@ public class DriverController {
             @PathVariable Long driverId,
             @RequestParam String month,
             @RequestParam(defaultValue = "daily") String type) {
-        
+
         try {
             Map<String, Object> result = new HashMap<>();
             List<Map<String, Object>> chartData;
-            
+
             if ("weekly".equals(type)) {
                 chartData = orderMapper.selectDriverWeeklyEarnings(driverId, month);
             } else {
                 chartData = orderMapper.selectDriverDailyEarningsChart(driverId, month);
             }
-            
+
             List<String> dates = new java.util.ArrayList<>();
             List<Double> earnings = new java.util.ArrayList<>();
-            
+
             for (Map<String, Object> data : chartData) {
                 dates.add(data.get("date").toString());
                 earnings.add(((Number) data.get("earnings")).doubleValue());
             }
-            
+
             result.put("dates", dates);
             result.put("earnings", earnings);
-            
+
             return Result.success(result);
         } catch (Exception e) {
             return Result.error("获取图表数据失败: " + e.getMessage());

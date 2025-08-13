@@ -16,7 +16,6 @@
         <result column="destination_address" property="destinationAddress" jdbcType="VARCHAR"/>
         <result column="destination_latitude" property="destinationLatitude" jdbcType="DECIMAL"/>
         <result column="destination_longitude" property="destinationLongitude" jdbcType="DECIMAL"/>
-        <!-- 这些字段在实体类中不存在，但在数据库中存在，可以为NULL -->
         <result column="estimated_distance" property="estimatedDistance" jdbcType="DECIMAL"/>
         <result column="estimated_duration" property="estimatedDuration" jdbcType="INTEGER"/>
         <result column="estimated_fare" property="estimatedFare" jdbcType="DECIMAL"/>
@@ -121,7 +120,6 @@
         DELETE FROM orders WHERE id = #{id}
     </delete>
 
-    <!-- 查询司机的历史订单 -->
     <select id="selectDriverOrders" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
@@ -130,7 +128,6 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <!-- 按状态查询司机的订单 -->
     <select id="selectDriverOrdersByStatus" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
@@ -139,7 +136,6 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <!-- 按日期范围查询司机的订单 -->
     <select id="selectDriverOrdersByDateRange" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
@@ -149,7 +145,6 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <!-- 按状态和日期范围查询司机的订单 -->
     <select id="selectDriverOrdersByStatusAndDateRange" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
@@ -226,7 +221,6 @@
         ORDER BY scheduled_time ASC
     </select>
 
-    <!-- 统计司机订单数量 -->
     <select id="countDriverOrders" resultType="int">
         SELECT COUNT(*)
         FROM orders
@@ -236,7 +230,6 @@
         </if>
     </select>
 
-    <!-- 获取司机月度收入汇总 -->
     <select id="selectDriverMonthlySummary" resultType="map">
         SELECT 
             COALESCE(SUM(total_fare), 0) as totalEarnings,
@@ -249,7 +242,6 @@
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
-    <!-- 获取司机收入汇总统计 -->
     <select id="selectDriverEarningsSummary" resultType="map">
         SELECT 
             COALESCE(SUM(total_fare), 0) as totalEarnings,
@@ -262,7 +254,6 @@
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
-    <!-- 获取司机每日收入记录 -->
     <select id="selectDriverDailyEarnings" resultType="map">
         SELECT 
             DATE(completion_time) as date,
@@ -279,7 +270,6 @@
         LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <!-- 统计司机每日收入记录数量 -->
     <select id="countDriverDailyEarnings" resultType="int">
         SELECT COUNT(DISTINCT DATE(completion_time))
         FROM orders
@@ -288,7 +278,6 @@
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
-    <!-- 获取司机每日收入图表数据 -->
     <select id="selectDriverDailyEarningsChart" resultType="map">
         SELECT 
             DATE_FORMAT(completion_time, '%m-%d') as date,
@@ -302,7 +291,6 @@
         ORDER BY DATE(completion_time) ASC
     </select>
 
-    <!-- 获取司机每周收入图表数据 -->
     <select id="selectDriverWeeklyEarnings" resultType="map">
         SELECT 
             CONCAT('第', WEEK(completion_time, 1) - WEEK(DATE_SUB(completion_time, INTERVAL DAYOFMONTH(completion_time) - 1 DAY), 1) + 1, '周') as date,
@@ -316,7 +304,6 @@
         ORDER BY WEEK(completion_time, 1) ASC
     </select>
 
-    <!-- 查询订单详情（包含司机车辆信息） -->
     <select id="selectOrderWithDriverVehicle" resultType="map">
         SELECT 
             o.*,
@@ -334,7 +321,6 @@
         WHERE o.id = #{orderId}
     </select>
 
-    <!-- 查询所有订单（包含乘客和司机姓名） -->
     <select id="selectAllWithUserNames" resultType="map">
         SELECT 
             o.*,
@@ -352,4 +338,4 @@
         ORDER BY o.created_at DESC
     </select>
 
-</mapper> 
+</mapper>

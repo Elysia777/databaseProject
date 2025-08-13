@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机订单查询测试（DriverOrdersFixed）</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .feature-list li:before {
+            content: "✅ ";
+            color: #67c23a;
+            font-weight: bold;
+        }
+        .test-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #409eff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 10px 0;
+            transition: background 0.3s;
+        }
+        .test-button:hover {
+            background: #337ecc;
+        }
+        .note {
+            background: #f0f9ff;
+            border: 1px solid #b3d8ff;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        .warning {
+            background: #fffbf0;
+            border: 1px solid #f0c674;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>司机订单查询功能增强版测试</h1>
+        
+        <div class="note">
+            <h3>📋 功能说明</h3>
+            <p>已为 <code>DriverOrdersFixed.vue</code> 添加了以下增强功能：</p>
+        </div>
+
+        <h2>✨ 新增功能</h2>
+        <ul class="feature-list">
+            <li>搜索功能：支持按订单号、起点、终点地址搜索</li>
+            <li>日期筛选：支持按日期范围筛选订单</li>
+            <li>统计信息：显示本页订单数、已完成数、收入统计</li>
+            <li>高级筛选：订单类型、费用范围、地址筛选</li>
+            <li>订单详情：点击订单卡片查看详细信息</li>
+            <li>响应式设计：适配移动端和桌面端</li>
+        </ul>
+
+        <h2>🎯 测试方法</h2>
+        <div class="warning">
+            <p><strong>注意：</strong>由于没有登录状态，页面会显示模拟数据用于功能演示。</p>
+        </div>
+
+        <ol>
+            <li>
+                <strong>访问页面：</strong>
+                <a href="/dashboard/orders" class="test-button" target="_blank">打开司机订单页面</a>
+            </li>
+            <li>
+                <strong>测试搜索功能：</strong>
+                <ul>
+                    <li>在搜索框中输入 "ORD20250813" 测试订单号搜索</li>
+                    <li>输入 "大连" 测试地址搜索</li>
+                    <li>输入 "机场" 测试目的地搜索</li>
+                </ul>
+            </li>
+            <li>
+                <strong>测试状态筛选：</strong>
+                <ul>
+                    <li>选择 "已完成" 查看完成的订单</li>
+                    <li>选择 "已取消" 查看取消的订单</li>
+                </ul>
+            </li>
+            <li>
+                <strong>测试日期筛选：</strong>
+                <ul>
+                    <li>选择日期范围，如 2025-08-12 到 2025-08-13</li>
+                    <li>观察筛选结果</li>
+                </ul>
+            </li>
+            <li>
+                <strong>测试高级筛选：</strong>
+                <ul>
+                    <li>点击 "高级筛选" 按钮</li>
+                    <li>设置订单类型、费用范围等条件</li>
+                    <li>点击 "应用筛选" 查看结果</li>
+                </ul>
+            </li>
+            <li>
+                <strong>测试订单详情：</strong>
+                <ul>
+                    <li>点击任意订单卡片</li>
+                    <li>查看详细的订单信息</li>
+                </ul>
+            </li>
+            <li>
+                <strong>测试统计信息：</strong>
+                <ul>
+                    <li>观察页面顶部的统计栏</li>
+                    <li>验证订单数量、收入统计是否正确</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>📊 模拟数据说明</h2>
+        <div class="note">
+            <p>页面包含以下模拟订单数据：</p>
+            <ul>
+                <li>ORD20250813001 - 已完成即时订单（大连市内）</li>
+                <li>ORD20250813002 - 已完成预约订单（到机场）</li>
+                <li>ORD20250813003 - 已取消订单</li>
+                <li>ORD20250812001 - 已完成订单（到火车站）</li>
+                <li>ORD20250812002 - 已完成预约订单（到旅顺）</li>
+            </ul>
+        </div>
+
+        <h2>🔧 技术特点</h2>
+        <ul class="feature-list">
+            <li>使用 Vue 3 Composition API</li>
+            <li>Element Plus UI 组件库</li>
+            <li>响应式数据绑定</li>
+            <li>计算属性实现统计功能</li>
+            <li>模块化的筛选逻辑</li>
+            <li>优雅的错误处理</li>
+        </ul>
+
+        <h2>📱 响应式测试</h2>
+        <div class="note">
+            <p>请在不同设备上测试页面效果：</p>
+            <ul>
+                <li>桌面端：完整功能展示</li>
+                <li>平板端：适当的布局调整</li>
+                <li>手机端：垂直布局，操作友好</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ 注意事项</h3>
+            <ul>
+                <li>当前使用模拟数据，实际部署时需要连接真实API</li>
+                <li>高级筛选功能的后端逻辑需要进一步完善</li>
+                <li>分页功能在模拟数据下可能显示不完整</li>
+                <li>建议在真实环境中测试性能和稳定性</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
