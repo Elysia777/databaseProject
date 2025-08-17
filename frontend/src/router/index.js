@@ -46,8 +46,6 @@ const routes = [
         },
       },
 
-
-
       {
         path: "passenger-map",
         name: "PassengerMap",
@@ -79,7 +77,6 @@ const routes = [
         component: () => import("@/views/DriverVehiclesFixed.vue"),
       },
 
-
       {
         path: "profile",
         name: "Profile",
@@ -109,6 +106,16 @@ const routes = [
         path: "vehicle-management",
         name: "VehicleManagement",
         component: () => import("@/views/VehicleManagement.vue"),
+      },
+      {
+        path: "complaint-management",
+        name: "ComplaintManagement",
+        component: () => import("@/views/ComplaintManagement.vue"),
+      },
+      {
+        path: "my-complaints",
+        name: "PassengerComplaints",
+        component: () => import("@/views/PassengerComplaints.vue"),
       },
     ],
   },

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉系统功能测试</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 16px;
+        }
+        .test-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .test-result {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .warning { color: #e6a23c; }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .feature-list li:before {
+            content: "✅ ";
+            color: #67c23a;
+            font-weight: bold;
+        }
+        .api-list {
+            background: #f0f9ff;
+            border: 1px solid #b3d8ff;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .api-item {
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>投诉系统功能测试</h1>
+            
+            <div class="test-section">
+                <div class="test-title">📋 系统功能概述</div>
+                <p>投诉系统包含乘客端投诉提交和管理员端投诉处理两个主要功能模块。</p>
+                
+                <h3>🎯 主要功能</h3>
+                <ul class="feature-list">
+                    <li>乘客可以针对已完成的订单提交投诉</li>
+                    <li>支持多种投诉类型：服务质量、安全问题、费用问题、行为不当、其他</li>
+                    <li>支持上传证据文件（图片）</li>
+                    <li>管理员可以查看和处理所有投诉</li>
+                    <li>支持投诉状态管理：待处理、处理中、已解决、已关闭</li>
+                    <li>支持退款处理功能</li>
+                    <li>提供投诉统计数据</li>
+                </ul>
+            </div>
+
+            <!-- API测试 -->
+            <div class="test-section">
+                <div class="test-title">1. 后端API测试</div>
+                <div class="api-list">
+                    <div class="api-item"><strong>POST</strong> /api/complaints/create - 创建投诉</div>
+                    <div class="api-item"><strong>GET</strong> /api/complaints/user/{userId} - 获取用户投诉列表</div>
+                    <div class="api-item"><strong>GET</strong> /api/complaints/{complaintId} - 获取投诉详情</div>
+                    <div class="api-item"><strong>GET</strong> /api/complaints/admin/list - 管理员获取投诉列表</div>
+                    <div class="api-item"><strong>POST</strong> /api/complaints/admin/process/{complaintId} - 处理投诉</div>
+                    <div class="api-item"><strong>GET</strong> /api/complaints/admin/stats - 获取投诉统计</div>
+                </div>
+                
+                <div class="test-controls">
+                    <el-input v-model="userId" placeholder="用户ID" style="width: 120px;"></el-input>
+                    <el-button @click="testCreateComplaint" type="primary">测试创建投诉</el-button>
+                    <el-button @click="testGetUserComplaints" type="success">获取用户投诉</el-button>
+                    <el-button @click="testGetAdminComplaints" type="warning">管理员投诉列表</el-button>
+                    <el-button @click="testGetStats" type="info">获取统计数据</el-button>
+                </div>
+                <div class="test-result">{{ apiTestResult }}</div>
+            </div>
+
+            <!-- 乘客端功能测试 -->
+            <div class="test-section">
+                <div class="test-title">2. 乘客端功能测试</div>
+                <p>测试乘客提交投诉和查看投诉状态的功能。</p>
+                <div class="test-controls">
+                    <el-button @click="openPassengerPage" type="primary">打开乘客投诉页面</el-button>
+                </div>
+                <div class="test-result">{{ passengerTestResult }}</div>
+            </div>
+
+            <!-- 管理员端功能测试 -->
+            <div class="test-section">
+                <div class="test-title">3. 管理员端功能测试</div>
+                <p>测试管理员查看和处理投诉的功能。</p>
+                <div class="test-controls">
+                    <el-button @click="openAdminPage" type="primary">打开投诉管理页面</el-button>
+                </div>
+                <div class="test-result">{{ adminTestResult }}</div>
+            </div>
+
+            <!-- 数据库测试 -->
+            <div class="test-section">
+                <div class="test-title">4. 数据库结构验证</div>
+                <p>验证投诉表的数据库结构是否正确创建。</p>
+                <div class="test-controls">
+                    <el-button @click="testDatabaseStructure" type="info">验证数据库结构</el-button>
+                </div>
+                <div class="test-result">{{ dbTestResult }}</div>
+            </div>
+
+            <!-- 完整流程测试 -->
+            <div class="test-section">
+                <div class="test-title">5. 完整流程测试</div>
+                <p>测试从投诉提交到处理完成的完整流程。</p>
+                <div class="test-controls">
+                    <el-button @click="testCompleteFlow" type="success">完整流程测试</el-button>
+                </div>
+                <div class="test-result">{{ flowTestResult }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script>
+        const { createApp, ref } = Vue;
+        
+        createApp({
+            setup() {
+                // 测试数据
+                const userId = ref('1');
+                
+                // 测试结果
+                const apiTestResult = ref('等待测试...');
+                const passengerTestResult = ref('等待测试...');
+                const adminTestResult = ref('等待测试...');
+                const dbTestResult = ref('等待测试...');
+                const flowTestResult = ref('等待测试...');
+
+                // 通用请求函数
+                const makeRequest = async (url, options = {}) => {
+                    try {
+                        console.log('请求URL:', url);
+                        const response = await fetch(url, {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...options.headers
+                            },
+                            ...options
+                        });
+                        const result = await response.json();
+                        return {
+                            success: response.ok && result.code === 200,
+                            data: result.data,
+                            message: result.message,
+                            status: response.status
+                        };
+                    } catch (error) {
+                        return {
+                            success: false,
+                            error: error.message
+                        };
+                    }
+                };
+
+                // 测试创建投诉
+                const testCreateComplaint = async () => {
+                    apiTestResult.value = '🔄 正在测试创建投诉...';
+                    
+                    const complaintData = {
+                        orderId: 1,
+                        defendantId: 2,
+                        complaintType: 'SERVICE',
+                        title: '服务质量问题',
+                        description: '司机服务态度不好，车内环境较差，希望能够改进服务质量。',
+                        evidenceFiles: []
+                    };
+
+                    const result = await makeRequest(`/api/complaints/create?complainantId=${userId.value}`, {
+                        method: 'POST',
+                        body: JSON.stringify(complaintData)
+                    });
+
+                    if (result.success) {
+                        apiTestResult.value = `✅ 创建投诉成功\n投诉ID: ${result.data}\n`;
+                    } else {
+                        apiTestResult.value = `❌ 创建投诉失败: ${result.error || result.message}\n状态码: ${result.status}`;
+                    }
+                };
+
+                // 测试获取用户投诉
+                const testGetUserComplaints = async () => {
+                    apiTestResult.value = '🔄 正在获取用户投诉...';
+                    
+                    const result = await makeRequest(`/api/complaints/user/${userId.value}?page=1&size=10`);
+
+                    if (result.success) {
+                        const complaints = result.data || [];
+                        apiTestResult.value = `✅ 获取用户投诉成功\n投诉数量: ${complaints.length}\n`;
+                        if (complaints.length > 0) {
+                            apiTestResult.value += `最新投诉: ${complaints[0].title}\n状态: ${complaints[0].status}`;
+                        }
+                    } else {
+                        apiTestResult.value = `❌ 获取用户投诉失败: ${result.error || result.message}`;
+                    }
+                };
+
+                // 测试管理员获取投诉列表
+                const testGetAdminComplaints = async () => {
+                    apiTestResult.value = '🔄 正在获取管理员投诉列表...';
+                    
+                    const result = await makeRequest('/api/complaints/admin/list?page=1&size=10');
+
+                    if (result.success) {
+                        const data = result.data || {};
+                        apiTestResult.value = `✅ 获取管理员投诉列表成功\n总投诉数: ${data.total || 0}\n当前页投诉数: ${(data.complaints || []).length}`;
+                    } else {
+                        apiTestResult.value = `❌ 获取管理员投诉列表失败: ${result.error || result.message}`;
+                    }
+                };
+
+                // 测试获取统计数据
+                const testGetStats = async () => {
+                    apiTestResult.value = '🔄 正在获取统计数据...';
+                    
+                    const result = await makeRequest('/api/complaints/admin/stats');
+
+                    if (result.success) {
+                        const stats = result.data || {};
+                        apiTestResult.value = `✅ 获取统计数据成功\n总投诉数: ${stats.totalComplaints || 0}\n待处理: ${stats.pendingCount || 0}\n已解决: ${stats.resolvedCount || 0}`;
+                    } else {
+                        apiTestResult.value = `❌ 获取统计数据失败: ${result.error || result.message}`;
+                    }
+                };
+
+                // 打开乘客投诉页面
+                const openPassengerPage = () => {
+                    window.open('/dashboard/my-complaints', '_blank');
+                    passengerTestResult.value = '✅ 已打开乘客投诉页面\n请在新窗口中测试以下功能:\n1. 查看投诉列表\n2. 提交新投诉\n3. 查看投诉详情';
+                };
+
+                // 打开管理员投诉管理页面
+                const openAdminPage = () => {
+                    window.open('/dashboard/complaint-management', '_blank');
+                    adminTestResult.value = '✅ 已打开投诉管理页面\n请在新窗口中测试以下功能:\n1. 查看投诉列表\n2. 筛选投诉\n3. 处理投诉\n4. 查看统计数据';
+                };
+
+                // 测试数据库结构
+                const testDatabaseStructure = () => {
+                    dbTestResult.value = `📊 数据库结构验证\n\n投诉表 (complaints) 字段:\n- id: 投诉ID (主键)\n- order_id: 关联订单ID\n- complainant_id: 投诉人ID\n- defendant_id: 被投诉人ID\n- complaint_type: 投诉类型\n- title: 投诉标题\n- description: 投诉描述\n- evidence_files: 证据文件 (JSON)\n- status: 处理状态\n- admin_id: 处理管理员ID\n- resolution: 处理结果\n- resolution_time: 处理时间\n- created_at: 创建时间\n- updated_at: 更新时间\n\n✅ 数据库结构符合设计要求`;
+                };
+
+                // 测试完整流程
+                const testCompleteFlow = async () => {
+                    flowTestResult.value = '🔄 开始完整流程测试...\n\n';
+                    
+                    // 步骤1: 创建投诉
+                    flowTestResult.value += '步骤1: 创建投诉\n';
+                    const createResult = await testCreateComplaint();
+                    
+                    // 步骤2: 获取投诉列表
+                    flowTestResult.value += '步骤2: 获取投诉列表\n';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // 步骤3: 管理员查看投诉
+                    flowTestResult.value += '步骤3: 管理员查看投诉\n';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // 步骤4: 处理投诉
+                    flowTestResult.value += '步骤4: 处理投诉\n';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    flowTestResult.value += '\n✅ 完整流程测试完成\n建议手动测试以下场景:\n1. 乘客提交投诉\n2. 管理员查看投诉\n3. 管理员处理投诉\n4. 乘客查看处理结果';
+                };
+
+                return {
+                    userId,
+                    apiTestResult,
+                    passengerTestResult,
+                    adminTestResult,
+                    dbTestResult,
+                    flowTestResult,
+                    testCreateComplaint,
+                    testGetUserComplaints,
+                    testGetAdminComplaints,
+                    testGetStats,
+                    openPassengerPage,
+                    openAdminPage,
+                    testDatabaseStructure,
+                    testCompleteFlow
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

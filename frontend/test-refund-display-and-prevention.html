@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>退款显示和防重复退款测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .order-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .refund-badge {
+            background-color: #17a2b8;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .refund-amount {
+            color: #e6a23c;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>退款显示和防重复退款测试</h1>
+        <p>测试以下功能：</p>
+        <ul>
+            <li><strong>乘客端显示退款金额</strong> - 在订单列表中显示退款信息</li>
+            <li><strong>防止重复退款</strong> - 已退款订单不能再次退款</li>
+            <li><strong>退款状态检查</strong> - 管理员处理投诉时的退款限制</li>
+        </ul>
+    </div>
+
+    <!-- 乘客登录 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">1. 乘客登录</h3>
+            <input type="text" id="passengerUsername" value="passenger1" placeholder="乘客用户名">
+            <input type="password" id="passengerPassword" value="123456" placeholder="密码">
+            <button onclick="passengerLogin()">乘客登录</button>
+            <div id="passengerLoginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 查看订单退款信息 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">2. 查看订单退款信息</h3>
+            <p>测试乘客端是否正确显示退款金额</p>
+            <button onclick="getOrdersWithRefund()">获取订单（含退款信息）</button>
+            <div id="ordersRefundResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 管理员登录 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">3. 管理员登录</h3>
+            <input type="text" id="adminUsername" value="admin" placeholder="管理员用户名">
+            <input type="password" id="adminPassword" value="123456" placeholder="密码">
+            <button onclick="adminLogin()">管理员登录</button>
+            <div id="adminLoginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 测试防重复退款 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">4. 测试防重复退款</h3>
+            <p>尝试对已退款的订单再次退款</p>
+            <input type="number" id="complaintId" placeholder="投诉ID">
+            <input type="number" id="refundAmount" value="30.00" step="0.01" placeholder="退款金额">
+            <textarea id="resolution" placeholder="处理结果">经调查，投诉属实，给予退款处理。</textarea>
+            <button onclick="testDuplicateRefund()">尝试重复退款</button>
+            <div id="duplicateRefundResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 查看投诉详情 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">5. 查看投诉和订单状态</h3>
+            <button onclick="getComplaintsWithRefund()">获取投诉列表</button>
+            <button onclick="checkOrderStatus()">检查订单状态</button>
+            <div id="statusCheckResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let passengerToken = '';
+        let passengerUserId = null;
+        let adminToken = '';
+        let adminId = null;
+        let testOrderId = null;
+
+        async function passengerLogin() {
+            const username = document.getElementById('passengerUsername').value;
+            const password = document.getElementById('passengerPassword').value;
+            const resultDiv = document.getElementById('passengerLoginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    passengerToken = result.data.token;
+                    passengerUserId = result.data.user.id;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 乘客登录成功！
+用户ID: ${passengerUserId}
+角色: ${result.data.user.role}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getOrdersWithRefund() {
+            if (!passengerToken || !passengerUserId) {
+                alert('请先乘客登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('ordersRefundResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${passengerUserId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${passengerToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const orders = result.data || [];
+                    const refundedOrders = orders.filter(order => order.paymentStatus === 'REFUNDED');
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 获取订单成功！
+订单总数: ${orders.length}
+已退款订单数: ${refundedOrders.length}
+
+已退款订单详情:
+${refundedOrders.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+退款金额: ${order.refundAmount ? '¥' + order.refundAmount.toFixed(2) : '未设置'}
+订单费用: ¥${order.actualFare || '0.00'}
+---`).join('\n')}
+
+${refundedOrders.length === 0 ? 
+'ℹ️ 没有已退款订单' : 
+'✅ 找到已退款订单，检查是否正确显示退款金额'}`;
+
+                    // 保存第一个已退款订单的ID用于后续测试
+                    if (refundedOrders.length > 0) {
+                        testOrderId = refundedOrders[0].id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function adminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const resultDiv = document.getElementById('adminLoginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    adminToken = result.data.token;
+                    adminId = result.data.user.id;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 管理员登录成功！
+用户ID: ${adminId}
+角色: ${result.data.user.role}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testDuplicateRefund() {
+            if (!adminToken || !adminId) {
+                alert('请先管理员登录！');
+                return;
+            }
+
+            const complaintId = document.getElementById('complaintId').value;
+            const refundAmount = parseFloat(document.getElementById('refundAmount').value);
+            const resolution = document.getElementById('resolution').value;
+            const resultDiv = document.getElementById('duplicateRefundResult');
+
+            if (!complaintId || !refundAmount || !resolution) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请填写完整信息';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/complaints/admin/process/${complaintId}?adminId=${adminId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({
+                        status: 'RESOLVED',
+                        resolution: resolution,
+                        refundAmount: refundAmount
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.className = 'result warning';
+                    resultDiv.innerHTML = `⚠️ 退款处理成功（可能是首次退款）
+投诉ID: ${complaintId}
+退款金额: ¥${refundAmount.toFixed(2)}
+
+如果这是对已退款订单的重复退款，说明防重复退款逻辑可能有问题。`;
+                } else {
+                    if (result.message && result.message.includes('重复退款')) {
+                        resultDiv.className = 'result success';
+                        resultDiv.innerHTML = `✅ 防重复退款逻辑正常工作！
+错误信息: ${result.message}
+
+系统正确阻止了重复退款操作。`;
+                    } else {
+                        resultDiv.className = 'result error';
+                        resultDiv.innerHTML = `❌ 处理失败: ${result.message}`;
+                    }
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 处理异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getComplaintsWithRefund() {
+            if (!adminToken) {
+                alert('请先管理员登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('statusCheckResult');
+            
+            try {
+                const response = await fetch('/api/complaints/admin/list?page=1&size=10', {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const complaints = result.data.complaints || [];
+                    const refundComplaints = complaints.filter(c => c.refund_amount && c.refund_amount > 0);
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 获取投诉列表成功！
+投诉总数: ${complaints.length}
+有退款的投诉数: ${refundComplaints.length}
+
+有退款的投诉:
+${refundComplaints.map(c => 
+`投诉ID: ${c.id} | 标题: ${c.title}
+订单ID: ${c.order_id} | 退款金额: ¥${c.refund_amount}
+状态: ${c.status}
+---`).join('\n')}
+
+${refundComplaints.length > 0 ? 
+'可以选择其中一个投诉ID进行重复退款测试' : 
+'没有找到有退款的投诉'}`;
+
+                    // 自动填充第一个有退款的投诉ID
+                    if (refundComplaints.length > 0) {
+                        document.getElementById('complaintId').value = refundComplaints[0].id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取投诉失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取投诉异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function checkOrderStatus() {
+            if (!testOrderId) {
+                alert('请先获取订单信息！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('statusCheckResult');
+            
+            try {
+                const response = await fetch(`/api/orders/${testOrderId}`, {
+                    headers: { 'Authorization': `Bearer ${adminToken || passengerToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const order = result.data;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 订单状态查询成功！
+订单ID: ${order.id}
+订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+订单费用: ¥${order.actualFare || '0.00'}
+退款金额: ${order.refundAmount ? '¥' + order.refundAmount.toFixed(2) : '无'}
+
+${order.paymentStatus === 'REFUNDED' ? 
+'✅ 订单状态为已退款' : 
+'ℹ️ 订单状态不是已退款'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 查询订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 查询订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('退款显示和防重复退款测试页面已加载');
+        };
+    </script>
+</body>
+</html>

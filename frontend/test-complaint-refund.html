@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉退款功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .step h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .complaint-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .refund-highlight {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>投诉退款功能测试</h1>
+        <p>测试投诉处理中的退款功能，包括退款金额保存和订单状态更新。</p>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤1: 管理员登录</h3>
+            <input type="text" id="adminUsername" value="admin" placeholder="管理员用户名">
+            <input type="password" id="adminPassword" value="123456" placeholder="密码">
+            <button onclick="adminLogin()">管理员登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤2: 获取投诉列表</h3>
+            <button onclick="getComplaints()">获取所有投诉</button>
+            <div id="complaintsResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤3: 处理投诉（包含退款）</h3>
+            <input type="number" id="complaintId" placeholder="投诉ID（从上一步获取）">
+            <select id="processStatus">
+                <option value="INVESTIGATING">处理中</option>
+                <option value="RESOLVED">已解决</option>
+                <option value="CLOSED">已关闭</option>
+            </select>
+            <textarea id="resolution" placeholder="处理结果">经调查，投诉属实。已对相关人员进行处理，并给予乘客相应退款。</textarea>
+            <input type="number" id="refundAmount" step="0.01" placeholder="退款金额（例如：50.00）" value="50.00">
+            <button onclick="processComplaint()">处理投诉</button>
+            <div id="processResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤4: 验证退款结果</h3>
+            <button onclick="checkComplaintDetails()">查看投诉详情</button>
+            <button onclick="checkOrderStatus()">检查订单状态</button>
+            <div id="verifyResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤5: 创建测试投诉（可选）</h3>
+            <p>如果没有现有投诉可以测试，可以先创建一个测试投诉</p>
+            <button onclick="createTestComplaint()">创建测试投诉</button>
+            <div id="createResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let adminToken = '';
+        let adminId = null;
+        let currentComplaintId = null;
+        let currentOrderId = null;
+
+        async function adminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    adminToken = result.data.token;
+                    adminId = result.data.user.id;
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 管理员登录成功！
+用户ID: ${adminId}
+角色: ${result.data.user.role}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getComplaints() {
+            if (!adminToken) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complaintsResult');
+            
+            try {
+                const response = await fetch('/api/complaints/admin/list?page=1&size=10', {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const complaints = result.data.complaints || [];
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 获取投诉列表成功！
+投诉总数: ${result.data.total}
+
+投诉列表:
+${complaints.map(c => 
+`ID: ${c.id} | 标题: ${c.title} | 状态: ${c.status}
+投诉人: ${c.complainantName} | 被投诉人: ${c.defendantName}
+订单ID: ${c.order_id || '无'} | 当前退款: ${c.refund_amount ? '¥' + c.refund_amount : '无'}
+---`).join('\n')}`;
+
+                    // 自动填充第一个投诉的ID
+                    if (complaints.length > 0) {
+                        document.getElementById('complaintId').value = complaints[0].id;
+                        currentComplaintId = complaints[0].id;
+                        currentOrderId = complaints[0].order_id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取投诉失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取投诉异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function processComplaint() {
+            if (!adminToken) {
+                alert('请先登录！');
+                return;
+            }
+
+            const complaintId = document.getElementById('complaintId').value;
+            const status = document.getElementById('processStatus').value;
+            const resolution = document.getElementById('resolution').value;
+            const refundAmount = parseFloat(document.getElementById('refundAmount').value) || 0;
+            const resultDiv = document.getElementById('processResult');
+
+            if (!complaintId || !resolution) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请填写投诉ID和处理结果';
+                resultDiv.style.display = 'block';
+                return;
+            }
+
+            currentComplaintId = complaintId;
+            
+            try {
+                const response = await fetch(`/api/complaints/admin/process/${complaintId}?adminId=${adminId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}`
+                    },
+                    body: JSON.stringify({
+                        status: status,
+                        resolution: resolution,
+                        refundAmount: refundAmount > 0 ? refundAmount : null
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 投诉处理成功！
+投诉ID: ${complaintId}
+处理状态: ${status}
+退款金额: ${refundAmount > 0 ? '¥' + refundAmount.toFixed(2) : '无退款'}
+处理结果: ${resolution}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 处理投诉失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 处理投诉异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function checkComplaintDetails() {
+            if (!adminToken || !currentComplaintId) {
+                alert('请先处理投诉！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('verifyResult');
+            
+            try {
+                const response = await fetch(`/api/complaints/${currentComplaintId}`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const complaint = result.data;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 投诉详情查询成功！
+投诉ID: ${complaint.id}
+状态: ${complaint.status}
+退款金额: ${complaint.refund_amount ? '¥' + complaint.refund_amount : '无'}
+处理时间: ${complaint.resolution_time || '未处理'}
+处理结果: ${complaint.resolution || '无'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 查询投诉详情失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 查询投诉详情异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function checkOrderStatus() {
+            if (!adminToken || !currentOrderId) {
+                alert('请先选择有关联订单的投诉！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('verifyResult');
+            
+            try {
+                const response = await fetch(`/api/orders/${currentOrderId}`, {
+                    headers: { 'Authorization': `Bearer ${adminToken}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const order = result.data;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 订单状态查询成功！
+订单ID: ${order.id}
+订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+订单状态: ${order.status}
+实际费用: ¥${order.actualFare || '0.00'}
+
+${order.paymentStatus === 'REFUNDED' ? 
+'🎉 订单支付状态已更新为REFUNDED！' : 
+'⚠️ 订单支付状态未更新为REFUNDED'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 查询订单状态失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 查询订单状态异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function createTestComplaint() {
+            const resultDiv = document.getElementById('createResult');
+            
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = `ℹ️ 创建测试投诉需要以下步骤：
+
+1. 确保有测试用户（乘客和司机）
+2. 确保有已完成的测试订单
+3. 使用乘客或司机账户创建投诉
+
+建议使用现有的投诉测试页面：
+- test-complaint-system.html（乘客投诉）
+- test-driver-complaints.html（司机投诉）
+
+或者手动在数据库中插入测试数据。`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 页面加载时的提示
+        window.onload = function() {
+            console.log('投诉退款功能测试页面已加载');
+            console.log('测试流程：管理员登录 → 获取投诉 → 处理投诉（含退款）→ 验证结果');
+        };
+    </script>
+</body>
+</html>

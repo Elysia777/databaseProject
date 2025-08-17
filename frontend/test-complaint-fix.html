@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉功能修复验证</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .fix-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #67c23a;
+        }
+        .fix-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+        .error-item {
+            border-left-color: #f56c6c;
+            background: #fef0f0;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .warning { color: #e6a23c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>投诉功能修复验证</h1>
+        
+        <h2>🐛 已修复的问题</h2>
+        
+        <div class="fix-item">
+            <span class="fix-icon success">✅</span>
+            <div>
+                <strong>变量重复声明错误</strong><br>
+                修复了 ComplaintManagement.vue 中 `showProcessDialog` 变量和函数名冲突的问题
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon success">✅</span>
+            <div>
+                <strong>函数重命名</strong><br>
+                将处理对话框函数重命名为 `showProcessDialogHandler` 避免冲突
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon success">✅</span>
+            <div>
+                <strong>模板引用更新</strong><br>
+                更新了模板中的函数调用引用，确保正确调用新的函数名
+            </div>
+        </div>
+
+        <h2>🔧 修复详情</h2>
+        
+        <h3>原问题</h3>
+        <div class="error-item">
+            <span class="fix-icon error">❌</span>
+            <div>
+                <strong>错误信息:</strong><br>
+                <code>Identifier 'showProcessDialog' has already been declared</code><br>
+                <strong>原因:</strong> 同时声明了响应式变量和函数，导致标识符冲突
+            </div>
+        </div>
+
+        <h3>修复方案</h3>
+        <pre style="background: #f8f9fa; padding: 16px; border-radius: 4px; overflow-x: auto;">
+// 修复前 (有冲突)
+const showProcessDialog = ref(false)  // 响应式变量
+const showProcessDialog = (complaint) => { ... }  // 函数 - 冲突!
+
+// 修复后 (无冲突)
+const showProcessDialog = ref(false)  // 响应式变量
+const showProcessDialogHandler = (complaint) => { ... }  // 函数 - 重命名
+        </pre>
+
+        <h2>🧪 验证步骤</h2>
+        
+        <ol>
+            <li><strong>编译验证</strong>
+                <ul>
+                    <li>启动开发服务器，确认没有编译错误</li>
+                    <li>检查浏览器控制台是否有JavaScript错误</li>
+                </ul>
+            </li>
+            <li><strong>功能验证</strong>
+                <ul>
+                    <li>访问投诉管理页面: <a href="/dashboard/complaint-management" target="_blank">/dashboard/complaint-management</a></li>
+                    <li>点击"处理"按钮，验证对话框是否正常弹出</li>
+                    <li>测试投诉处理功能是否正常工作</li>
+                </ul>
+            </li>
+            <li><strong>菜单验证</strong>
+                <ul>
+                    <li>以管理员身份登录，检查"投诉管理"菜单是否显示</li>
+                    <li>以乘客身份登录，检查"我的投诉"菜单是否显示</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h2>📁 修改的文件</h2>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">📝</span>
+            <div>
+                <strong>frontend/src/views/ComplaintManagement.vue</strong><br>
+                修复了变量重复声明问题，重命名了处理对话框函数
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">📝</span>
+            <div>
+                <strong>frontend/src/views/Dashboard.vue</strong><br>
+                添加了投诉相关的菜单项和页面标题映射
+            </div>
+        </div>
+
+        <h2>🚀 下一步测试</h2>
+        
+        <p>现在可以进行完整的投诉系统测试：</p>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">🔗</span>
+            <div>
+                <a href="/dashboard/complaint-management" target="_blank">测试投诉管理页面</a>
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">🔗</span>
+            <div>
+                <a href="/dashboard/my-complaints" target="_blank">测试乘客投诉页面</a>
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">🔗</span>
+            <div>
+                <a href="test-complaint-system.html" target="_blank">完整功能测试页面</a>
+            </div>
+        </div>
+
+        <h2>⚠️ 注意事项</h2>
+        
+        <div class="fix-item">
+            <span class="fix-icon warning">⚠️</span>
+            <div>
+                确保后端服务已启动，投诉相关的API接口可用
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon warning">⚠️</span>
+            <div>
+                确保数据库中的 complaints 表已正确创建
+            </div>
+        </div>
+        
+        <div class="fix-item">
+            <span class="fix-icon info">ℹ️</span>
+            <div>
+                如果仍有问题，请检查浏览器开发者工具的控制台错误信息
+            </div>
+        </div>
+    </div>
+</body>
+</html>

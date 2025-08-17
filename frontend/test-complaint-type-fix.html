@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉功能类型转换修复验证</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 16px;
+        }
+        .test-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .test-result {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .fix-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #67c23a;
+        }
+        .fix-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>投诉功能类型转换修复验证</h1>
+            
+            <div class="test-section">
+                <div class="test-title">🐛 修复的问题</div>
+                
+                <div class="fix-item">
+                    <span class="fix-icon success">✅</span>
+                    <div>
+                        <strong>MyBatis参数类型转换错误</strong><br>
+                        修复了Integer无法转换为Long的ClassCastException
+                    </div>
+                </div>
+                
+                <div class="fix-item">
+                    <span class="fix-icon success">✅</span>
+                    <div>
+                        <strong>XML映射参数类型错误</strong><br>
+                        移除了多参数方法中错误的parameterType声明
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">1. 投诉查询API测试</div>
+                <div class="test-controls">
+                    <el-input v-model="userId" placeholder="用户ID" style="width: 120px;"></el-input>
+                    <el-button @click="testUserComplaints" type="primary">测试用户投诉查询</el-button>
+                </div>
+                <div class="test-result">{{ testResult }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script>
+        const { createApp, ref } = Vue;
+        
+        createApp({
+            setup() {
+                const userId = ref('3');
+                const testResult = ref('等待测试...');
+
+                const testUserComplaints = async () => {
+                    testResult.value = '🔄 正在测试用户投诉查询...';
+                    
+                    try {
+                        const response = await fetch(`/api/complaints/user/${userId.value}?page=1&size=10`);
+                        const result = await response.json();
+                        
+                        if (result.code === 200) {
+                            testResult.value = `✅ 用户投诉查询成功\n用户ID: ${userId.value}\n投诉数量: ${result.data.length}`;
+                        } else {
+                            testResult.value = `❌ 查询失败: ${result.message}`;
+                        }
+                    } catch (error) {
+                        testResult.value = `❌ 请求异常: ${error.message}`;
+                    }
+                };
+
+                return {
+                    userId,
+                    testResult,
+                    testUserComplaints
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

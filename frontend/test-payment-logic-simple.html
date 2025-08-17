@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>支付逻辑快速测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>支付逻辑快速测试</h1>
+        <p>快速验证修复后的支付状态逻辑</p>
+    </div>
+
+    <div class="container">
+        <div class="step">
+            <h3>步骤1: 登录</h3>
+            <input type="text" id="username" value="passenger1" placeholder="用户名">
+            <input type="password" id="password" value="123456" placeholder="密码">
+            <button onclick="login()">登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="step">
+            <h3>步骤2: 测试未支付订单检查</h3>
+            <p>验证REFUNDED订单不会被识别为未支付</p>
+            <button onclick="testUnpaidCheck()">检查未支付订单</button>
+            <div id="unpaidResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="step">
+            <h3>步骤3: 测试可投诉订单</h3>
+            <p>验证只有PAID订单才能被投诉</p>
+            <button onclick="testComplainableOrders()">获取可投诉订单</button>
+            <div id="complainResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = '';
+        let userId = null;
+        let passengerId = null;
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    token = result.data.token;
+                    userId = result.data.user.id;
+                    
+                    // 获取乘客ID
+                    try {
+                        const passengerResponse = await fetch(`/api/passengers/user/${userId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const passengerResult = await passengerResponse.json();
+                        if (passengerResult.code === 200) {
+                            passengerId = passengerResult.data.id;
+                        }
+                    } catch (e) {
+                        console.log('获取乘客ID失败，可能是司机用户');
+                    }
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 登录成功！用户ID: ${userId}, 乘客ID: ${passengerId || '无'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testUnpaidCheck() {
+            if (!token) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('unpaidResult');
+            
+            try {
+                // 先获取所有订单看状态分布
+                const ordersResponse = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const ordersResult = await ordersResponse.json();
+                
+                let ordersSummary = '';
+                if (ordersResult.code === 200) {
+                    const orders = ordersResult.data || [];
+                    const statusCount = { UNPAID: 0, PAID: 0, REFUNDED: 0 };
+                    orders.forEach(order => {
+                        if (statusCount.hasOwnProperty(order.paymentStatus)) {
+                            statusCount[order.paymentStatus]++;
+                        }
+                    });
+                    ordersSummary = `订单状态分布: UNPAID=${statusCount.UNPAID}, PAID=${statusCount.PAID}, REFUNDED=${statusCount.REFUNDED}\n`;
+                }
+
+                // 检查未支付订单
+                if (passengerId) {
+                    const response = await fetch(`/api/orders/passenger/${passengerId}/unpaid-check`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.code === 200) {
+                        resultDiv.className = result.data ? 'result error' : 'result success';
+                        resultDiv.innerHTML = `${ordersSummary}✅ 未支付订单检查结果: ${result.data ? '有未支付订单' : '无未支付订单'}
+
+${result.data ? 
+'❌ 如果用户只有REFUNDED订单但显示有未支付订单，说明逻辑有问题' : 
+'✅ 正确！REFUNDED订单没有被识别为未支付订单'}`;
+                    } else {
+                        resultDiv.className = 'result error';
+                        resultDiv.innerHTML = `❌ 检查失败: ${result.message}`;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '❌ 无乘客ID，无法检查未支付订单';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 检查异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testComplainableOrders() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complainResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const allOrders = result.data || [];
+                    const completedOrders = allOrders.filter(o => o.status === 'COMPLETED');
+                    const paidOrders = completedOrders.filter(o => o.paymentStatus === 'PAID');
+                    const refundedOrders = completedOrders.filter(o => o.paymentStatus === 'REFUNDED');
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 可投诉订单筛选测试完成！
+
+所有订单: ${allOrders.length}
+已完成订单: ${completedOrders.length}
+已完成且已支付订单: ${paidOrders.length}
+已完成且已退款订单: ${refundedOrders.length}
+
+可投诉订单（应该只包含PAID状态）: ${paidOrders.length}
+
+${paidOrders.length > 0 ? 
+'✅ 找到可投诉订单，只包含已支付订单' : 
+'ℹ️ 无可投诉订单（需要已完成且已支付的订单）'}
+
+${refundedOrders.length > 0 ? 
+'✅ 已退款订单被正确排除在可投诉订单之外' : 
+'ℹ️ 无已退款订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

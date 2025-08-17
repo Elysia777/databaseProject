@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单支付状态逻辑测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 2px;
+        }
+        .status-unpaid { background-color: #f8d7da; color: #721c24; }
+        .status-paid { background-color: #d4edda; color: #155724; }
+        .status-refunded { background-color: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>订单支付状态逻辑测试</h1>
+        <p>测试修复后的订单支付状态逻辑：</p>
+        <ul>
+            <li><strong>REFUNDED订单不应阻止新订单创建</strong></li>
+            <li><strong>只有PAID状态的订单才能被投诉</strong></li>
+        </ul>
+    </div>
+
+    <!-- 登录测试 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">1. 用户登录</h3>
+            <input type="text" id="username" value="passenger1" placeholder="用户名">
+            <input type="password" id="password" value="123456" placeholder="密码">
+            <button onclick="login()">登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 检查未支付订单 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">2. 检查未支付订单逻辑</h3>
+            <p>测试REFUNDED订单是否被错误地识别为未支付订单</p>
+            <button onclick="checkUnpaidOrders()">检查未支付订单</button>
+            <button onclick="getUnpaidOrdersList()">获取未支付订单列表</button>
+            <div id="unpaidResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 获取所有订单状态 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">3. 查看所有订单状态</h3>
+            <p>查看用户的所有订单及其支付状态</p>
+            <button onclick="getAllOrders()">获取所有订单</button>
+            <div id="allOrdersResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 获取可投诉订单 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">4. 获取可投诉订单</h3>
+            <p>测试只有PAID状态的订单才能被投诉</p>
+            <button onclick="getComplainableOrders()">获取可投诉订单</button>
+            <div id="complainableResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 模拟订单状态变更 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">5. 模拟订单状态变更</h3>
+            <p>模拟订单从PAID变为REFUNDED的过程</p>
+            <input type="number" id="orderId" placeholder="订单ID">
+            <select id="newPaymentStatus">
+                <option value="UNPAID">未支付</option>
+                <option value="PAID">已支付</option>
+                <option value="REFUNDED">已退款</option>
+            </select>
+            <button onclick="updateOrderPaymentStatus()">更新订单支付状态</button>
+            <div id="updateResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 创建新订单测试 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">6. 创建新订单测试</h3>
+            <p>测试有REFUNDED订单的用户是否能创建新订单</p>
+            <button onclick="testCreateNewOrder()">测试创建新订单</button>
+            <div id="createOrderResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = '';
+        let userId = null;
+        let passengerId = null;
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    token = result.data.token;
+                    userId = result.data.user.id;
+                    
+                    // 获取乘客ID
+                    const passengerResponse = await fetch(`/api/passengers/user/${userId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const passengerResult = await passengerResponse.json();
+                    if (passengerResult.code === 200) {
+                        passengerId = passengerResult.data.id;
+                    }
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 登录成功！
+用户ID: ${userId}
+乘客ID: ${passengerId}
+角色: ${result.data.user.role}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function checkUnpaidOrders() {
+            if (!token || !passengerId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('unpaidResult');
+            
+            try {
+                const response = await fetch(`/api/orders/passenger/${passengerId}/unpaid-check`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.className = result.data ? 'result warning' : 'result success';
+                    resultDiv.innerHTML = `✅ 未支付订单检查完成！
+结果: ${result.data ? '有未支付订单' : '无未支付订单'}
+
+${result.data ? 
+'⚠️ 用户有未支付订单，可能无法创建新订单' : 
+'✅ 用户无未支付订单，可以创建新订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 检查失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 检查异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getUnpaidOrdersList() {
+            if (!token) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('unpaidResult');
+            
+            try {
+                const response = await fetch('/api/orders/unpaid', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const orders = result.data || [];
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 未支付订单列表获取成功！
+未支付订单数: ${orders.length}
+
+${orders.map(order => 
+`订单ID: ${order.id}
+订单号: ${order.orderNumber}
+订单状态: ${order.status}
+支付状态: ${order.paymentStatus}
+实际费用: ¥${order.actualFare || '0.00'}
+---`).join('\n')}
+
+${orders.length === 0 ? '✅ 无未支付订单，用户可以创建新订单' : '⚠️ 有未支付订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getAllOrders() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('allOrdersResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const orders = result.data || [];
+                    
+                    // 统计各种状态的订单
+                    const statusCount = {
+                        UNPAID: 0,
+                        PAID: 0,
+                        REFUNDED: 0
+                    };
+                    
+                    orders.forEach(order => {
+                        if (statusCount.hasOwnProperty(order.paymentStatus)) {
+                            statusCount[order.paymentStatus]++;
+                        }
+                    });
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 所有订单获取成功！
+订单总数: ${orders.length}
+
+支付状态统计:
+- 未支付 (UNPAID): ${statusCount.UNPAID}
+- 已支付 (PAID): ${statusCount.PAID}
+- 已退款 (REFUNDED): ${statusCount.REFUNDED}
+
+订单详情:
+${orders.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+订单状态: ${order.status} | 支付状态: ${order.paymentStatus}
+费用: ¥${order.actualFare || '0.00'}
+---`).join('\n')}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function getComplainableOrders() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complainableResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const allOrders = result.data || [];
+                    
+                    // 筛选可投诉的订单（已完成且已支付）
+                    const complainableOrders = allOrders.filter(order => 
+                        order.status === 'COMPLETED' && order.paymentStatus === 'PAID'
+                    );
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 可投诉订单筛选完成！
+所有订单数: ${allOrders.length}
+可投诉订单数: ${complainableOrders.length}
+
+筛选条件: 订单状态=COMPLETED 且 支付状态=PAID
+
+可投诉订单列表:
+${complainableOrders.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+订单状态: ${order.status} | 支付状态: ${order.paymentStatus}
+费用: ¥${order.actualFare || '0.00'}
+---`).join('\n')}
+
+${complainableOrders.length === 0 ? 
+'ℹ️ 无可投诉订单（需要已完成且已支付的订单）' : 
+'✅ 找到可投诉订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function updateOrderPaymentStatus() {
+            const orderId = document.getElementById('orderId').value;
+            const newStatus = document.getElementById('newPaymentStatus').value;
+            const resultDiv = document.getElementById('updateResult');
+
+            if (!orderId) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请输入订单ID';
+                resultDiv.style.display = 'block';
+                return;
+            }
+
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = `ℹ️ 订单支付状态更新功能需要管理员权限或专门的API。
+            
+建议的测试方法:
+1. 使用管理员账户登录
+2. 通过投诉处理功能将订单状态设为REFUNDED
+3. 然后测试该订单是否还会被识别为未支付订单
+
+或者直接在数据库中更新:
+UPDATE orders SET payment_status = '${newStatus}' WHERE id = ${orderId};`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testCreateNewOrder() {
+            const resultDiv = document.getElementById('createOrderResult');
+            
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = `ℹ️ 创建新订单测试说明:
+
+1. 首先确保用户有REFUNDED状态的订单
+2. 然后尝试创建新订单
+3. 如果修复成功，应该能够正常创建新订单
+
+测试步骤:
+1. 先运行"检查未支付订单"测试
+2. 如果显示"无未支付订单"，说明REFUNDED订单没有被错误识别
+3. 这时用户应该能够正常创建新订单
+
+注意: REFUNDED订单不应该阻止用户创建新订单，因为退款订单已经完成了支付流程。`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('订单支付状态逻辑测试页面已加载');
+        };
+    </script>
+</body>
+</html>

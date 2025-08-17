@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>司机端投诉功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .complaint-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-pending { background-color: #fff3cd; color: #856404; }
+        .status-investigating { background-color: #cce5ff; color: #004085; }
+        .status-resolved { background-color: #d4edda; color: #155724; }
+        .status-closed { background-color: #e2e3e5; color: #383d41; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>司机端投诉功能测试</h1>
+        <p>测试司机投诉乘客的功能，包括创建投诉、查看投诉列表等。</p>
+    </div>
+
+    <!-- 登录测试 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">1. 司机登录测试</h3>
+            <div class="form-group">
+                <label>用户名:</label>
+                <input type="text" id="loginUsername" value="driver1" placeholder="输入司机用户名">
+            </div>
+            <div class="form-group">
+                <label>密码:</label>
+                <input type="password" id="loginPassword" value="123456" placeholder="输入密码">
+            </div>
+            <button onclick="testDriverLogin()">司机登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 获取司机订单 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">2. 获取司机订单列表</h3>
+            <p>获取司机的已完成订单，用于投诉功能</p>
+            <button onclick="getDriverOrders()">获取司机订单</button>
+            <div id="ordersResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 创建投诉 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">3. 司机创建投诉</h3>
+            <div class="form-group">
+                <label>关联订单ID:</label>
+                <input type="number" id="complaintOrderId" placeholder="输入订单ID">
+            </div>
+            <div class="form-group">
+                <label>投诉类型:</label>
+                <select id="complaintType">
+                    <option value="BEHAVIOR">乘客行为不当</option>
+                    <option value="SAFETY">安全问题</option>
+                    <option value="PAYMENT">费用纠纷</option>
+                    <option value="SERVICE">服务态度</option>
+                    <option value="OTHER">其他问题</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>投诉标题:</label>
+                <input type="text" id="complaintTitle" value="乘客行为不当" placeholder="输入投诉标题">
+            </div>
+            <div class="form-group">
+                <label>投诉描述:</label>
+                <textarea id="complaintDescription" placeholder="详细描述投诉内容">乘客在乘车过程中态度恶劣，对司机进行言语攻击，严重影响行车安全。</textarea>
+            </div>
+            <button onclick="createDriverComplaint()">提交投诉</button>
+            <div id="createComplaintResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 查看投诉列表 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">4. 查看司机投诉列表</h3>
+            <button onclick="getDriverComplaints()">获取投诉列表</button>
+            <div id="complaintsListResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 测试数据准备 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">5. 测试数据准备</h3>
+            <p>为了测试投诉功能，需要确保有司机和相关的已完成订单</p>
+            <button onclick="checkTestData()">检查测试数据</button>
+            <button onclick="createTestOrder()">创建测试订单</button>
+            <div id="testDataResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = '';
+        let currentUserId = null;
+
+        // 司机登录测试
+        async function testDriverLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    currentToken = result.data.token;
+                    currentUserId = result.data.user.id;
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 司机登录成功！
+用户ID: ${result.data.user.id}
+用户名: ${result.data.user.username}
+角色: ${result.data.user.role}
+Token: ${currentToken.substring(0, 20)}...`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 获取司机订单
+        async function getDriverOrders() {
+            if (!currentToken || !currentUserId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('ordersResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${currentUserId}/orders`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const orders = result.data || [];
+                    const completedOrders = orders.filter(order => order.status === 'COMPLETED');
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 获取订单成功！
+总订单数: ${orders.length}
+已完成订单数: ${completedOrders.length}
+
+已完成订单列表:
+${completedOrders.map(order => 
+`订单ID: ${order.id}
+订单号: ${order.orderNumber}
+乘客ID: ${order.passengerId}
+起点: ${order.pickupAddress}
+终点: ${order.destinationAddress}
+状态: ${order.status}
+创建时间: ${order.createdAt}
+---`).join('\n')}`;
+
+                    // 自动填充第一个已完成订单的ID
+                    if (completedOrders.length > 0) {
+                        document.getElementById('complaintOrderId').value = completedOrders[0].id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 创建司机投诉
+        async function createDriverComplaint() {
+            if (!currentToken || !currentUserId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const orderId = document.getElementById('complaintOrderId').value;
+            const complaintType = document.getElementById('complaintType').value;
+            const title = document.getElementById('complaintTitle').value;
+            const description = document.getElementById('complaintDescription').value;
+            const resultDiv = document.getElementById('createComplaintResult');
+
+            if (!orderId || !title || !description) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '❌ 请填写完整的投诉信息';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/complaints/create?complainantId=${currentUserId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    body: JSON.stringify({
+                        orderId: parseInt(orderId),
+                        complaintType: complaintType,
+                        title: title,
+                        description: description,
+                        evidenceFiles: []
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 投诉创建成功！
+投诉ID: ${result.data}
+投诉人: ${currentUserId}
+关联订单: ${orderId}
+投诉类型: ${complaintType}
+投诉标题: ${title}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 创建投诉失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 创建投诉异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 获取司机投诉列表
+        async function getDriverComplaints() {
+            if (!currentToken || !currentUserId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complaintsListResult');
+            
+            try {
+                const response = await fetch(`/api/complaints/user/${currentUserId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const complaints = result.data || [];
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 获取投诉列表成功！
+投诉总数: ${complaints.length}
+
+投诉列表:
+${complaints.map(complaint => 
+`投诉ID: ${complaint.id}
+标题: ${complaint.title}
+类型: ${complaint.complaintType}
+状态: ${complaint.status}
+创建时间: ${complaint.createdAt}
+描述: ${complaint.description}
+${complaint.resolution ? `处理结果: ${complaint.resolution}` : ''}
+---`).join('\n')}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取投诉列表失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取投诉列表异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 检查测试数据
+        async function checkTestData() {
+            const resultDiv = document.getElementById('testDataResult');
+            
+            try {
+                // 检查司机数据
+                const driversResponse = await fetch('/api/drivers');
+                const driversResult = await driversResponse.json();
+                
+                // 检查订单数据
+                const ordersResponse = await fetch('/api/orders');
+                const ordersResult = await ordersResponse.json();
+                
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = `📊 测试数据检查结果:
+
+司机数据:
+${driversResult.code === 200 ? 
+`✅ 司机总数: ${driversResult.data?.length || 0}` : 
+`❌ 获取司机数据失败: ${driversResult.message}`}
+
+订单数据:
+${ordersResult.code === 200 ? 
+`✅ 订单总数: ${ordersResult.data?.length || 0}
+已完成订单: ${ordersResult.data?.filter(o => o.status === 'COMPLETED').length || 0}` : 
+`❌ 获取订单数据失败: ${ordersResult.message}`}
+
+建议:
+1. 确保有司机账户可以登录
+2. 确保有已完成的订单可以投诉
+3. 如果没有测试数据，请先创建`;
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 检查测试数据异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 创建测试订单
+        async function createTestOrder() {
+            if (!currentToken || !currentUserId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('testDataResult');
+            
+            try {
+                // 这里可以创建一个测试订单
+                // 注意：这需要根据实际的订单创建API来实现
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = `ℹ️ 创建测试订单功能需要根据实际的订单创建API来实现。
+                
+建议手动操作:
+1. 通过乘客端创建订单
+2. 司机接单并完成订单
+3. 然后使用司机账户进行投诉测试`;
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 创建测试订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('司机端投诉功能测试页面已加载');
+        };
+    </script>
+</body>
+</html>
