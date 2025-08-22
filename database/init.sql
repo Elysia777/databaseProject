@@ -203,6 +203,7 @@ CREATE TABLE complaints (
     status ENUM('PENDING', 'INVESTIGATING', 'RESOLVED', 'CLOSED') DEFAULT 'PENDING' COMMENT '处理状态',
     admin_id BIGINT COMMENT '处理管理员ID',
     resolution TEXT COMMENT '处理结果',
+    refund_amount DECIMAL(10,2) DEFAULT 0.00 COMMENT '退款金额',
     resolution_time DATETIME COMMENT '处理时间',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乘客端退款显示测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .order-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .refund-badge {
+            background-color: #17a2b8;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .refund-amount {
+            color: #e6a23c;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .complaint-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>乘客端退款显示测试</h1>
+        <p>测试以下功能：</p>
+        <ul>
+            <li><strong>乘客端订单退款金额显示</strong> - 在MyTrips页面显示退款信息</li>
+            <li><strong>投诉关联订单信息</strong> - 在投诉详情中显示关联的订单信息</li>
+            <li><strong>API数据完整性</strong> - 验证API返回的退款数据</li>
+        </ul>
+    </div>
+
+    <!-- 乘客登录 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">1. 乘客登录</h3>
+            <input type="text" id="username" value="passenger1" placeholder="乘客用户名">
+            <input type="password" id="password" value="123456" placeholder="密码">
+            <button onclick="login()">乘客登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 测试订单API -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">2. 测试订单API（含退款信息）</h3>
+            <p>测试修改后的订单API是否正确返回退款信息</p>
+            <button onclick="testOrdersAPI()">获取订单列表</button>
+            <button onclick="testSingleOrderAPI()">测试单个订单API</button>
+            <div id="ordersAPIResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 测试投诉API -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">3. 测试投诉API</h3>
+            <p>测试乘客的投诉列表和详情</p>
+            <button onclick="testComplaintsAPI()">获取投诉列表</button>
+            <button onclick="testComplaintDetail()">测试投诉详情</button>
+            <div id="complaintsAPIResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 模拟前端显示逻辑 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">4. 模拟前端显示逻辑</h3>
+            <p>模拟MyTrips.vue和PassengerComplaints.vue的显示逻辑</p>
+            <button onclick="simulateFrontendDisplay()">模拟前端显示</button>
+            <div id="frontendDisplayResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- 数据完整性检查 -->
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">5. 数据完整性检查</h3>
+            <p>检查订单、投诉、退款数据的一致性</p>
+            <button onclick="checkDataIntegrity()">检查数据完整性</button>
+            <div id="dataIntegrityResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = '';
+        let userId = null;
+        let orders = [];
+        let complaints = [];
+        let testOrderId = null;
+        let testComplaintId = null;
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    token = result.data.token;
+                    userId = result.data.user.id;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 乘客登录成功！
+用户ID: ${userId}
+角色: ${result.data.user.role}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testOrdersAPI() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('ordersAPIResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    orders = result.data || [];
+                    const refundedOrders = orders.filter(order => order.paymentStatus === 'REFUNDED');
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 订单API测试成功！
+订单总数: ${orders.length}
+已退款订单数: ${refundedOrders.length}
+
+订单数据结构检查:
+${orders.slice(0, 3).map(order => 
+`订单ID: ${order.id}
+订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+退款金额字段: ${order.hasOwnProperty('refundAmount') ? '存在' : '不存在'}
+退款金额值: ${order.refundAmount || '无'}
+hasRefund字段: ${order.hasOwnProperty('hasRefund') ? order.hasRefund : '不存在'}
+---`).join('\n')}
+
+已退款订单详情:
+${refundedOrders.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+退款金额: ${order.refundAmount ? '¥' + order.refundAmount.toFixed(2) : '未设置'}
+订单费用: ¥${order.actualFare || '0.00'}
+---`).join('\n')}`;
+
+                    // 保存第一个已退款订单的ID用于后续测试
+                    if (refundedOrders.length > 0) {
+                        testOrderId = refundedOrders[0].id;
+                    } else if (orders.length > 0) {
+                        testOrderId = orders[0].id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testSingleOrderAPI() {
+            if (!token || !testOrderId) {
+                alert('请先获取订单列表！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('ordersAPIResult');
+            
+            try {
+                const response = await fetch(`/api/orders/${testOrderId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const order = result.data;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 单个订单API测试成功！
+订单ID: ${order.id}
+订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus}
+退款金额字段: ${order.hasOwnProperty('refundAmount') ? '存在' : '不存在'}
+退款金额值: ${order.refundAmount || '无'}
+hasRefund字段: ${order.hasOwnProperty('hasRefund') ? order.hasRefund : '不存在'}
+
+${order.paymentStatus === 'REFUNDED' ? 
+`✅ 已退款订单，退款金额: ${order.refundAmount ? '¥' + order.refundAmount.toFixed(2) : '未设置'}` : 
+'ℹ️ 非退款订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取订单详情失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取订单详情异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testComplaintsAPI() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complaintsAPIResult');
+            
+            try {
+                const response = await fetch(`/api/complaints/user/${userId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    complaints = result.data || [];
+                    const refundComplaints = complaints.filter(c => c.refundAmount && c.refundAmount > 0);
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 投诉API测试成功！
+投诉总数: ${complaints.length}
+有退款的投诉数: ${refundComplaints.length}
+
+投诉数据结构检查:
+${complaints.slice(0, 3).map(complaint => 
+`投诉ID: ${complaint.id}
+标题: ${complaint.title}
+关联订单ID: ${complaint.orderId || '无'}
+退款金额字段: ${complaint.hasOwnProperty('refundAmount') ? '存在' : '不存在'}
+退款金额值: ${complaint.refundAmount || '无'}
+---`).join('\n')}
+
+有退款的投诉:
+${refundComplaints.map(complaint => 
+`投诉ID: ${complaint.id} | 标题: ${complaint.title}
+关联订单ID: ${complaint.orderId}
+退款金额: ¥${complaint.refundAmount.toFixed(2)}
+状态: ${complaint.status}
+---`).join('\n')}`;
+
+                    // 保存第一个投诉的ID用于后续测试
+                    if (complaints.length > 0) {
+                        testComplaintId = complaints[0].id;
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取投诉失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取投诉异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testComplaintDetail() {
+            if (!token || !testComplaintId) {
+                alert('请先获取投诉列表！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('complaintsAPIResult');
+            
+            try {
+                // 模拟前端获取投诉详情和关联订单信息的逻辑
+                const complaint = complaints.find(c => c.id === testComplaintId);
+                if (!complaint) {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '❌ 未找到测试投诉';
+                    resultDiv.style.display = 'block';
+                    return;
+                }
+
+                let orderInfo = null;
+                if (complaint.orderId) {
+                    const orderResponse = await fetch(`/api/orders/${complaint.orderId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    const orderResult = await orderResponse.json();
+                    if (orderResult.code === 200) {
+                        orderInfo = orderResult.data;
+                    }
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `✅ 投诉详情测试成功！
+投诉ID: ${complaint.id}
+标题: ${complaint.title}
+关联订单ID: ${complaint.orderId || '无'}
+退款金额: ${complaint.refundAmount ? '¥' + complaint.refundAmount.toFixed(2) : '无'}
+
+关联订单信息:
+${orderInfo ? 
+`订单号: ${orderInfo.orderNumber}
+订单金额: ¥${orderInfo.actualFare || '0.00'}
+支付状态: ${orderInfo.paymentStatus}
+退款金额: ${orderInfo.refundAmount ? '¥' + orderInfo.refundAmount.toFixed(2) : '无'}
+起点: ${orderInfo.pickupAddress || '无'}
+终点: ${orderInfo.destinationAddress || '无'}` : 
+'无关联订单或获取失败'}`;
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 测试投诉详情异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function simulateFrontendDisplay() {
+            const resultDiv = document.getElementById('frontendDisplayResult');
+            
+            if (orders.length === 0 || complaints.length === 0) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = '⚠️ 请先获取订单和投诉数据';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            // 模拟MyTrips.vue的显示逻辑
+            const orderDisplayResults = orders.map(order => {
+                let displayText = '';
+                let statusClass = '';
+                
+                if (order.paymentStatus === 'PAID') {
+                    displayText = '已支付';
+                    statusClass = 'paid';
+                } else if (order.paymentStatus === 'REFUNDED') {
+                    displayText = `已退款${order.refundAmount && order.refundAmount > 0 ? ' (¥' + order.refundAmount.toFixed(2) + ')' : ''}`;
+                    statusClass = 'refunded';
+                } else if (order.status === 'COMPLETED' && order.paymentStatus === 'UNPAID') {
+                    displayText = '待支付';
+                    statusClass = 'unpaid';
+                } else {
+                    displayText = getPaymentStatusText(order.paymentStatus);
+                    statusClass = 'other';
+                }
+                
+                return {
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    status: order.status,
+                    paymentStatus: order.paymentStatus,
+                    displayText: displayText,
+                    statusClass: statusClass,
+                    refundAmount: order.refundAmount
+                };
+            });
+            
+            // 模拟PassengerComplaints.vue的显示逻辑
+            const complaintDisplayResults = complaints.map(complaint => {
+                return {
+                    id: complaint.id,
+                    title: complaint.title,
+                    orderId: complaint.orderId,
+                    refundAmount: complaint.refundAmount,
+                    hasOrderInfo: !!complaint.orderId,
+                    displayRefund: complaint.refundAmount && complaint.refundAmount > 0
+                };
+            });
+            
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `✅ 前端显示逻辑模拟完成！
+
+MyTrips.vue 订单显示:
+${orderDisplayResults.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+支付状态: ${order.paymentStatus} → 显示: ${order.displayText}
+样式类: ${order.statusClass}
+${order.refundAmount ? `退款金额: ¥${order.refundAmount.toFixed(2)}` : ''}
+---`).join('\n')}
+
+PassengerComplaints.vue 投诉显示:
+${complaintDisplayResults.map(complaint => 
+`投诉ID: ${complaint.id} | 标题: ${complaint.title}
+关联订单: ${complaint.hasOrderInfo ? '有' : '无'}
+显示退款: ${complaint.displayRefund ? '是 (¥' + complaint.refundAmount.toFixed(2) + ')' : '否'}
+---`).join('\n')}`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function checkDataIntegrity() {
+            const resultDiv = document.getElementById('dataIntegrityResult');
+            
+            if (orders.length === 0 || complaints.length === 0) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = '⚠️ 请先获取订单和投诉数据';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            // 检查数据一致性
+            const refundedOrders = orders.filter(order => order.paymentStatus === 'REFUNDED');
+            const refundComplaints = complaints.filter(c => c.refundAmount && c.refundAmount > 0);
+            
+            // 检查退款订单是否都有对应的退款投诉
+            const orderComplaintMapping = [];
+            for (const order of refundedOrders) {
+                const relatedComplaints = complaints.filter(c => c.orderId === order.id && c.refundAmount > 0);
+                orderComplaintMapping.push({
+                    orderId: order.id,
+                    orderRefundAmount: order.refundAmount,
+                    complaintCount: relatedComplaints.length,
+                    totalComplaintRefund: relatedComplaints.reduce((sum, c) => sum + (c.refundAmount || 0), 0)
+                });
+            }
+            
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `✅ 数据完整性检查完成！
+
+统计信息:
+- 总订单数: ${orders.length}
+- 已退款订单数: ${refundedOrders.length}
+- 总投诉数: ${complaints.length}
+- 有退款的投诉数: ${refundComplaints.length}
+
+订单-投诉退款映射:
+${orderComplaintMapping.map(mapping => 
+`订单ID: ${mapping.orderId}
+订单退款金额: ${mapping.orderRefundAmount ? '¥' + mapping.orderRefundAmount.toFixed(2) : '无'}
+相关退款投诉数: ${mapping.complaintCount}
+投诉退款总额: ¥${mapping.totalComplaintRefund.toFixed(2)}
+数据一致性: ${Math.abs((mapping.orderRefundAmount || 0) - mapping.totalComplaintRefund) < 0.01 ? '✅ 一致' : '❌ 不一致'}
+---`).join('\n')}
+
+${orderComplaintMapping.length === 0 ? 
+'ℹ️ 没有退款订单需要检查' : 
+'检查完成'}`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 辅助函数
+        function getPaymentStatusText(status) {
+            const statusMap = {
+                'UNPAID': '未支付',
+                'PAID': '已支付',
+                'REFUNDED': '已退款'
+            };
+            return statusMap[status] || status;
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('乘客端退款显示测试页面已加载');
+        };
+    </script>
+</body>
+</html>

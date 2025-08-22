@@ -2,10 +2,15 @@ package com.taxi.controller;
 
 import com.taxi.common.Result;
 import com.taxi.dto.CreateOrderRequest;
+import com.taxi.dto.OrderWithRefundInfo;
 import com.taxi.entity.Order;
 import com.taxi.entity.Driver;
+import com.taxi.entity.Passenger;
 import com.taxi.mapper.OrderMapper;
 import com.taxi.mapper.DriverMapper;
+import com.taxi.mapper.PassengerMapper;
+import com.taxi.mapper.ComplaintMapper;
+import com.taxi.entity.Complaint;
 import com.taxi.service.OrderService;
 import com.taxi.service.DriverRedisService;
 import com.taxi.service.WebSocketNotificationService;
@@ -32,6 +37,12 @@ public class OrderController {
 
     @Autowired
     private DriverMapper driverMapper;
+    
+    @Autowired
+    private PassengerMapper passengerMapper;
+
+    @Autowired
+    private ComplaintMapper complaintMapper;
 
     @Autowired
     private DriverRedisService driverRedisService;
@@ -79,6 +90,7 @@ public class OrderController {
             System.out.println("  预估费用: " + order.getEstimatedFare());
 
             order.setOrderType("REAL_TIME");
+            order.setPaymentStatus("UNPAID"); // 明确设置支付状态为未支付
             order.setCreatedAt(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
 
@@ -169,13 +181,34 @@ public class OrderController {
 
     /** 根据ID获取订单详情 */
     @GetMapping("/{orderId}")
-    public Result<Order> getOrderById(@PathVariable Long orderId) {
+    public Result<OrderWithRefundInfo> getOrderById(@PathVariable Long orderId) {
         try {
             Order order = orderMapper.selectById(orderId);
             if (order == null) {
                 return Result.error("订单不存在");
             }
-            return Result.success(order);
+            
+            // 转换为包含退款信息的DTO
+            OrderWithRefundInfo orderWithRefund = new OrderWithRefundInfo(order);
+            
+            if ("REFUNDED".equals(order.getPaymentStatus())) {
+                // 查询该订单相关的投诉，获取退款金额
+                try {
+                    List<Complaint> complaints = complaintMapper.selectByOrderId(order.getId());
+                    double totalRefund = complaints.stream()
+                            .filter(c -> c.getRefundAmount() != null && c.getRefundAmount() > 0)
+                            .mapToDouble(Complaint::getRefundAmount)
+                            .sum();
+                    
+                    orderWithRefund.setRefundAmount(totalRefund);
+                    System.out.println("订单 " + order.getId() + " 的退款金额: " + totalRefund);
+                } catch (Exception e) {
+                    System.err.println("获取订单 " + order.getId() + " 的退款信息失败: " + e.getMessage());
+                    orderWithRefund.setRefundAmount(0.0);
+                }
+            }
+            
+            return Result.success(orderWithRefund);
         } catch (Exception e) {
             return Result.error("获取订单详情失败: " + e.getMessage());
         }
@@ -349,6 +382,86 @@ public class OrderController {
         }
     }
 
+    /** 通过用户ID获取乘客的历史订单（用于投诉功能） */
+    @GetMapping("/user/{userId}/orders")
+    public Result<List<OrderWithRefundInfo>> getOrdersByUserId(@PathVariable Long userId) {
+        try {
+            System.out.println("=== 通过用户ID获取订单 ===");
+            System.out.println("用户ID: " + userId);
+
+            // 首先检查用户是司机还是乘客
+            List<Order> orders = new java.util.ArrayList<>();
+            
+            // 检查是否是司机
+            try {
+                Driver driver = driverMapper.selectByUserId(userId);
+                if (driver != null) {
+                    System.out.println("✅ 找到司机信息，司机ID: " + driver.getId());
+                    orders = orderMapper.selectByDriverId(driver.getId());
+                    System.out.println("✅ 找到 " + orders.size() + " 个司机订单");
+                }
+            } catch (Exception e) {
+                System.out.println("用户不是司机，检查是否是乘客");
+            }
+            
+            // 如果不是司机，检查是否是乘客
+            if (orders.isEmpty()) {
+                try {
+                    Passenger passenger = passengerMapper.selectByUserId(userId);
+                    if (passenger != null) {
+                        System.out.println("✅ 找到乘客信息，乘客ID: " + passenger.getId());
+                        orders = orderMapper.selectByPassengerId(passenger.getId());
+                        System.out.println("✅ 找到 " + orders.size() + " 个乘客订单");
+                    }
+                } catch (Exception e) {
+                    System.out.println("用户也不是乘客");
+                }
+            }
+            
+            if (orders.isEmpty()) {
+                System.out.println("❌ 用户既不是司机也不是乘客，或没有订单，用户ID: " + userId);
+                return Result.success(new java.util.ArrayList<>());
+            }
+
+            // 转换为包含退款信息的DTO
+            List<OrderWithRefundInfo> ordersWithRefund = new java.util.ArrayList<>();
+            
+            for (Order order : orders) {
+                OrderWithRefundInfo orderWithRefund = new OrderWithRefundInfo(order);
+                
+                if ("REFUNDED".equals(order.getPaymentStatus())) {
+                    // 查询该订单相关的投诉，获取退款金额
+                    try {
+                        List<Complaint> complaints = complaintMapper.selectByOrderId(order.getId());
+                        double totalRefund = complaints.stream()
+                                .filter(c -> c.getRefundAmount() != null && c.getRefundAmount() > 0)
+                                .mapToDouble(Complaint::getRefundAmount)
+                                .sum();
+                        
+                        orderWithRefund.setRefundAmount(totalRefund);
+                        System.out.println("订单 " + order.getId() + " 的退款金额: " + totalRefund);
+                    } catch (Exception e) {
+                        System.err.println("获取订单 " + order.getId() + " 的退款信息失败: " + e.getMessage());
+                        orderWithRefund.setRefundAmount(0.0);
+                    }
+                }
+                
+                ordersWithRefund.add(orderWithRefund);
+            }
+
+            // 按创建时间倒序排列
+            ordersWithRefund.sort((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()));
+
+            System.out.println("✅ 找到 " + ordersWithRefund.size() + " 个历史订单");
+
+            return Result.success(ordersWithRefund);
+        } catch (Exception e) {
+            System.err.println("❌ 获取订单失败: " + e.getMessage());
+            e.printStackTrace();
+            return Result.error("获取订单失败: " + e.getMessage());
+        }
+    }
+
     /** 检查乘客是否有未支付订单 */
     @GetMapping("/passenger/{passengerId}/unpaid-check")
     public Result<Boolean> checkUnpaidOrders(@PathVariable Long passengerId) {
@@ -357,7 +470,8 @@ public class OrderController {
 
             boolean hasUnpaid = orders.stream()
                     .anyMatch(order -> "COMPLETED".equals(order.getStatus()) &&
-                            !"PAID".equals(order.getPaymentStatus()));
+                            "UNPAID".equals(order.getPaymentStatus()) &&
+                            !"REFUNDED".equals(order.getPaymentStatus()));
 
             return Result.success(hasUnpaid);
         } catch (Exception e) {
@@ -392,7 +506,8 @@ public class OrderController {
 
             List<Order> unpaidOrders = allOrders.stream()
                     .filter(order -> "COMPLETED".equals(order.getStatus()) &&
-                            !"PAID".equals(order.getPaymentStatus()))
+                            "UNPAID".equals(order.getPaymentStatus()) &&
+                            !"REFUNDED".equals(order.getPaymentStatus()))
                     .collect(Collectors.toList());
 
             System.out.println("找到 " + unpaidOrders.size() + " 个未支付订单");
@@ -520,6 +635,11 @@ public class OrderController {
             order.setStatus("COMPLETED");
             order.setCompletionTime(LocalDateTime.now());
             order.setUpdatedAt(LocalDateTime.now());
+            
+            // 确保支付状态为未支付，等待乘客支付
+            if (order.getPaymentStatus() == null || !"UNPAID".equals(order.getPaymentStatus())) {
+                order.setPaymentStatus("UNPAID");
+            }
 
             // 计算实际费用（这里简化处理，使用预估费用）
             if (order.getActualFare() == null) {

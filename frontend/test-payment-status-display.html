@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>支付状态显示测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .order-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: 2px;
+        }
+        .status-unpaid { background-color: #fff3cd; color: #856404; }
+        .status-paid { background-color: #d4edda; color: #155724; }
+        .status-refunded { background-color: #cce5ff; color: #004085; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>支付状态显示测试</h1>
+        <p>测试修复后的支付状态显示逻辑，确保REFUNDED订单正确显示为"已退款"而不是"未支付"。</p>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">步骤1: 用户登录</h3>
+            <input type="text" id="username" value="passenger1" placeholder="用户名">
+            <input type="password" id="password" value="123456" placeholder="密码">
+            <button onclick="login()">登录</button>
+            <div id="loginResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">步骤2: 获取订单列表并检查支付状态显示</h3>
+            <p>检查各种支付状态的订单是否正确显示</p>
+            <button onclick="testOrderStatusDisplay()">获取订单并测试显示</button>
+            <div id="orderDisplayResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">步骤3: 测试未支付订单检查逻辑</h3>
+            <p>验证REFUNDED订单不会被识别为未支付订单</p>
+            <button onclick="testUnpaidLogic()">测试未支付订单逻辑</button>
+            <div id="unpaidLogicResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="test-section">
+            <h3 class="test-title">步骤4: 模拟前端支付状态判断</h3>
+            <p>模拟前端的isUnpaid函数逻辑</p>
+            <button onclick="testFrontendLogic()">测试前端逻辑</button>
+            <div id="frontendLogicResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = '';
+        let userId = null;
+        let orders = [];
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    token = result.data.token;
+                    userId = result.data.user.id;
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 登录成功！用户ID: ${userId}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 登录失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 登录异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testOrderStatusDisplay() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('orderDisplayResult');
+            
+            try {
+                const response = await fetch(`/api/orders/user/${userId}/orders`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    orders = result.data || [];
+                    
+                    // 统计各种支付状态
+                    const statusCount = {
+                        UNPAID: 0,
+                        PAID: 0,
+                        REFUNDED: 0
+                    };
+                    
+                    orders.forEach(order => {
+                        if (statusCount.hasOwnProperty(order.paymentStatus)) {
+                            statusCount[order.paymentStatus]++;
+                        }
+                    });
+                    
+                    // 模拟前端显示逻辑
+                    const displayResults = orders.map(order => {
+                        let displayText = '';
+                        let statusClass = '';
+                        
+                        if (order.paymentStatus === 'PAID') {
+                            displayText = '已支付';
+                            statusClass = 'status-paid';
+                        } else if (isUnpaidOrder(order)) {
+                            displayText = '待支付';
+                            statusClass = 'status-unpaid';
+                        } else {
+                            displayText = getPaymentStatusText(order.paymentStatus);
+                            statusClass = getStatusClass(order.paymentStatus);
+                        }
+                        
+                        return {
+                            id: order.id,
+                            orderNumber: order.orderNumber,
+                            status: order.status,
+                            paymentStatus: order.paymentStatus,
+                            displayText: displayText,
+                            statusClass: statusClass
+                        };
+                    });
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 订单支付状态显示测试完成！
+
+订单总数: ${orders.length}
+支付状态统计:
+- 未支付 (UNPAID): ${statusCount.UNPAID}
+- 已支付 (PAID): ${statusCount.PAID}
+- 已退款 (REFUNDED): ${statusCount.REFUNDED}
+
+前端显示结果:
+${displayResults.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+订单状态: ${order.status} | 支付状态: ${order.paymentStatus}
+前端显示: ${order.displayText}
+---`).join('\n')}
+
+${statusCount.REFUNDED > 0 ? 
+'✅ 已退款订单应该显示为"已退款"，不应该显示为"待支付"' : 
+'ℹ️ 没有已退款订单进行测试'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        async function testUnpaidLogic() {
+            if (!token || !userId) {
+                alert('请先登录！');
+                return;
+            }
+
+            const resultDiv = document.getElementById('unpaidLogicResult');
+            
+            try {
+                // 获取未支付订单列表
+                const response = await fetch('/api/orders/unpaid', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    const unpaidOrders = result.data || [];
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `✅ 未支付订单检查完成！
+
+后端返回的未支付订单数: ${unpaidOrders.length}
+
+未支付订单详情:
+${unpaidOrders.map(order => 
+`订单ID: ${order.id} | 订单号: ${order.orderNumber}
+订单状态: ${order.status} | 支付状态: ${order.paymentStatus}
+---`).join('\n')}
+
+${unpaidOrders.length === 0 ? 
+'✅ 没有未支付订单，说明REFUNDED订单没有被错误识别' : 
+'⚠️ 有未支付订单，请检查是否包含REFUNDED状态的订单'}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `❌ 获取未支付订单失败: ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `❌ 获取未支付订单异常: ${error.message}`;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        function testFrontendLogic() {
+            const resultDiv = document.getElementById('frontendLogicResult');
+            
+            if (orders.length === 0) {
+                resultDiv.className = 'result warning';
+                resultDiv.innerHTML = '⚠️ 请先获取订单列表';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            // 测试修复前后的逻辑差异
+            const testResults = orders.map(order => {
+                const oldLogic = order.status === 'COMPLETED' && order.paymentStatus !== 'PAID';
+                const newLogic = order.status === 'COMPLETED' && order.paymentStatus === 'UNPAID';
+                
+                return {
+                    id: order.id,
+                    orderNumber: order.orderNumber,
+                    status: order.status,
+                    paymentStatus: order.paymentStatus,
+                    oldLogicResult: oldLogic,
+                    newLogicResult: newLogic,
+                    isFixed: oldLogic !== newLogic
+                };
+            });
+            
+            const fixedOrders = testResults.filter(result => result.isFixed);
+            
+            resultDiv.className = 'result success';
+            resultDiv.innerHTML = `✅ 前端逻辑测试完成！
+
+测试订单数: ${orders.length}
+修复影响的订单数: ${fixedOrders.length}
+
+逻辑对比:
+${testResults.map(result => 
+`订单ID: ${result.id} | 支付状态: ${result.paymentStatus}
+修复前逻辑 (paymentStatus !== 'PAID'): ${result.oldLogicResult ? '未支付' : '非未支付'}
+修复后逻辑 (paymentStatus === 'UNPAID'): ${result.newLogicResult ? '未支付' : '非未支付'}
+${result.isFixed ? '🔧 已修复' : '✅ 无变化'}
+---`).join('\n')}
+
+${fixedOrders.length > 0 ? 
+`✅ 修复成功！${fixedOrders.length}个订单的显示逻辑得到修复` : 
+'ℹ️ 没有需要修复的订单'}`;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // 辅助函数
+        function isUnpaidOrder(order) {
+            // 修复后的逻辑：只有真正的UNPAID状态才被认为是未支付
+            return order.status === 'COMPLETED' && order.paymentStatus === 'UNPAID';
+        }
+
+        function getPaymentStatusText(status) {
+            const statusMap = {
+                'UNPAID': '未支付',
+                'PAID': '已支付',
+                'REFUNDED': '已退款'
+            };
+            return statusMap[status] || status;
+        }
+
+        function getStatusClass(status) {
+            const classMap = {
+                'UNPAID': 'status-unpaid',
+                'PAID': 'status-paid',
+                'REFUNDED': 'status-refunded'
+            };
+            return classMap[status] || '';
+        }
+
+        // 页面加载时的初始化
+        window.onload = function() {
+            console.log('支付状态显示测试页面已加载');
+        };
+    </script>
+</body>
+</html>

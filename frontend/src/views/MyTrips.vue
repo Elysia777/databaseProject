@@ -281,6 +281,14 @@
               </el-button>
             </div>
             
+            <div v-else-if="order.paymentStatus === 'REFUNDED'" class="payment-status refunded">
+              <el-icon><RefreshLeft /></el-icon>
+              <span>已退款</span>
+              <span v-if="order.refundAmount && order.refundAmount > 0" class="refund-amount">
+                (¥{{ order.refundAmount.toFixed(2) }})
+              </span>
+            </div>
+            
             <div v-else class="payment-status other">
               <span>{{ getPaymentStatusText(order.paymentStatus) }}</span>
             </div>
@@ -412,6 +420,7 @@ import {
   DocumentRemove, 
   SuccessFilled, 
   WarningFilled, 
+  RefreshLeft,
   User,
   Star,
   StarFilled,
@@ -593,7 +602,7 @@ const checkReviewStatus = async () => {
 
 // 判断订单是否未支付
 const isUnpaid = (order) => {
-  return order.status === 'COMPLETED' && order.paymentStatus !== 'PAID'
+  return order.status === 'COMPLETED' && order.paymentStatus === 'UNPAID'
 }
 
 // 获取状态样式类
@@ -1216,6 +1225,19 @@ const handleCurrentChange = (page) => {
 
 .payment-status.paid .el-icon {
   color: #28a745;
+}
+
+.payment-status.refunded {
+  color: #17a2b8;
+}
+
+.payment-status.refunded .el-icon {
+  color: #17a2b8;
+}
+
+.refund-amount {
+  font-weight: 600;
+  color: #e6a23c;
 }
 
 .payment-actions {

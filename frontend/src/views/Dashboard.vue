@@ -40,6 +40,11 @@
           <el-icon><Van /></el-icon>
           <span>车辆管理</span>
         </el-menu-item>
+        
+        <el-menu-item index="/dashboard/complaint-management">
+          <el-icon><Warning /></el-icon>
+          <span>投诉管理</span>
+        </el-menu-item>
 
         </template>
         
@@ -53,6 +58,11 @@
           <el-menu-item index="/dashboard/my-trips">
             <el-icon><Document /></el-icon>
             <span>我的行程</span>
+          </el-menu-item>
+          
+          <el-menu-item index="/dashboard/my-complaints">
+            <el-icon><Warning /></el-icon>
+            <span>我的投诉</span>
           </el-menu-item>
         </template>
         
@@ -77,6 +87,11 @@
             <el-icon><Van /></el-icon>
             <span>我的车辆</span>
           </el-menu-item>
+          
+          <!-- <el-menu-item index="/dashboard/driver-complaints">
+            <el-icon><Warning /></el-icon>
+            <span>我的投诉</span>
+          </el-menu-item> -->
         </template>
         
         <!-- 通用菜单 -->
@@ -130,6 +145,19 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { 
+  Monitor, 
+  User, 
+  List, 
+  Star, 
+  Van, 
+  Warning, 
+  Setting, 
+  Location, 
+  Odometer, 
+  TrendCharts,
+  Document
+} from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -144,12 +172,14 @@ const pageTitleMap = computed(() => {
       '/dashboard/order-management': '订单管理',
       '/dashboard/review-management': '评价管理',
       '/dashboard/vehicle-management': '车辆管理',
+      '/dashboard/complaint-management': '投诉管理',
       '/dashboard/profile': '个人设置'
     }
   } else if (userStore.isPassenger) {
     return {
       '/dashboard/passenger-map': '叫车',
       '/dashboard/my-trips': '我的行程',
+      '/dashboard/my-complaints': '我的投诉',
       '/dashboard/profile': '个人设置'
     }
   } else if (userStore.isDriver) {
@@ -158,6 +188,7 @@ const pageTitleMap = computed(() => {
       '/dashboard/orders': '我的订单',
       '/dashboard/earnings': '收入统计',
       '/dashboard/vehicles': '我的车辆',
+      '/dashboard/driver-complaints': '我的投诉',
       '/dashboard/profile': '个人设置'
     }
   }

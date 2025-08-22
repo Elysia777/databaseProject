@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉菜单测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 16px;
+        }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            transition: background-color 0.3s;
+        }
+        .menu-item:hover {
+            background: #e9ecef;
+        }
+        .menu-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .warning { color: #e6a23c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>投诉功能菜单测试</h1>
+        
+        <div class="test-section">
+            <div class="test-title">📋 菜单配置验证</div>
+            <p>以下是已添加到系统中的投诉相关菜单项：</p>
+            
+            <h3>管理员菜单</h3>
+            <a href="/dashboard/complaint-management" class="menu-item" target="_blank">
+                <span class="menu-icon">⚠️</span>
+                <span>投诉管理</span>
+            </a>
+            
+            <h3>乘客菜单</h3>
+            <a href="/dashboard/my-complaints" class="menu-item" target="_blank">
+                <span class="menu-icon">⚠️</span>
+                <span>我的投诉</span>
+            </a>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">🔗 路由配置验证</div>
+            <p>验证路由是否正确配置：</p>
+            
+            <div class="menu-item">
+                <span class="menu-icon success">✅</span>
+                <span>/dashboard/complaint-management → ComplaintManagement.vue</span>
+            </div>
+            
+            <div class="menu-item">
+                <span class="menu-icon success">✅</span>
+                <span>/dashboard/my-complaints → PassengerComplaints.vue</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">🧪 功能测试步骤</div>
+            <ol>
+                <li><strong>管理员测试：</strong>
+                    <ul>
+                        <li>以管理员身份登录系统</li>
+                        <li>在左侧菜单中查看是否有"投诉管理"菜单项</li>
+                        <li>点击"投诉管理"进入投诉管理页面</li>
+                        <li>验证页面功能是否正常</li>
+                    </ul>
+                </li>
+                <li><strong>乘客测试：</strong>
+                    <ul>
+                        <li>以乘客身份登录系统</li>
+                        <li>在左侧菜单中查看是否有"我的投诉"菜单项</li>
+                        <li>点击"我的投诉"进入投诉页面</li>
+                        <li>验证投诉提交和查看功能</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">📝 已更新的文件</div>
+            <ul>
+                <li><code>frontend/src/router/index.js</code> - 添加了投诉相关路由</li>
+                <li><code>frontend/src/views/Dashboard.vue</code> - 添加了菜单项和页面标题</li>
+                <li><code>frontend/src/views/ComplaintManagement.vue</code> - 管理员投诉管理页面</li>
+                <li><code>frontend/src/views/PassengerComplaints.vue</code> - 乘客投诉页面</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">⚠️ 注意事项</div>
+            <div class="menu-item">
+                <span class="menu-icon warning">⚠️</span>
+                <span>确保后端服务已启动并且投诉相关API可用</span>
+            </div>
+            <div class="menu-item">
+                <span class="menu-icon warning">⚠️</span>
+                <span>确保数据库中的complaints表已创建</span>
+            </div>
+            <div class="menu-item">
+                <span class="menu-icon info">ℹ️</span>
+                <span>如果菜单不显示，请检查用户权限和登录状态</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">🚀 快速访问</div>
+            <p>点击以下链接直接访问投诉功能页面：</p>
+            
+            <a href="/dashboard/complaint-management" class="menu-item" target="_blank">
+                <span class="menu-icon">🔗</span>
+                <span>打开投诉管理页面（管理员）</span>
+            </a>
+            
+            <a href="/dashboard/my-complaints" class="menu-item" target="_blank">
+                <span class="menu-icon">🔗</span>
+                <span>打开我的投诉页面（乘客）</span>
+            </a>
+        </div>
+    </div>
+</body>
+</html>

@@ -44,8 +44,12 @@
       <!-- 订单类型选择 -->
       <div class="booking-type-selector">
         <el-radio-group v-model="bookingType" @change="handleBookingTypeChange">
-          <el-radio-button label="immediate" :disabled="hasActiveOrder">立即叫车</el-radio-button>
-          <el-radio-button label="scheduled" :disabled="hasActiveOrder">预约用车</el-radio-button>
+          <el-radio-button label="immediate" :disabled="hasActiveOrder"
+            >立即叫车</el-radio-button
+          >
+          <el-radio-button label="scheduled" :disabled="hasActiveOrder"
+            >预约用车</el-radio-button
+          >
         </el-radio-group>
       </div>
 
@@ -53,31 +57,44 @@
       <div v-if="bookingType === 'scheduled'" class="scheduled-time-selector">
         <div class="time-picker-container">
           <div class="time-display">
-            <span v-if="scheduledTime">{{ formatDisplayTime(scheduledTime) }}</span>
+            <span v-if="scheduledTime">{{
+              formatDisplayTime(scheduledTime)
+            }}</span>
             <span v-else class="placeholder">请选择预约时间</span>
           </div>
-          <button type="button" class="time-picker-btn" @click="showTimePicker = true">
+          <button
+            type="button"
+            class="time-picker-btn"
+            @click="showTimePicker = true"
+          >
             选择时间
           </button>
         </div>
 
         <!-- 自定义滚轮时间选择器 -->
-        <div v-if="showTimePicker" class="time-picker-overlay" @click="closeTimePicker">
+        <div
+          v-if="showTimePicker"
+          class="time-picker-overlay"
+          @click="closeTimePicker"
+        >
           <div class="time-picker-modal" @click.stop>
             <div class="time-picker-header">
               <h3>选择预约时间</h3>
               <button class="close-btn" @click="closeTimePicker">×</button>
             </div>
-            
+
             <div class="time-picker-wheels">
               <!-- 日期选择 -->
               <div class="wheel-container">
                 <div class="wheel-label">日期</div>
                 <div class="wheel" ref="dateWheel">
-                  <div 
-                    v-for="(date, index) in availableDates" 
+                  <div
+                    v-for="(date, index) in availableDates"
                     :key="index"
-                    :class="['wheel-item', { active: selectedDateIndex === index }]"
+                    :class="[
+                      'wheel-item',
+                      { active: selectedDateIndex === index },
+                    ]"
                     @click="selectDate(index)"
                   >
                     {{ date.label }}
@@ -89,13 +106,13 @@
               <div class="wheel-container">
                 <div class="wheel-label">小时</div>
                 <div class="wheel" ref="hourWheel">
-                  <div 
-                    v-for="hour in availableHours" 
+                  <div
+                    v-for="hour in availableHours"
                     :key="hour"
                     :class="['wheel-item', { active: selectedHour === hour }]"
                     @click="selectHour(hour)"
                   >
-                    {{ String(hour).padStart(2, '0') }}
+                    {{ String(hour).padStart(2, "0") }}
                   </div>
                 </div>
               </div>
@@ -104,13 +121,16 @@
               <div class="wheel-container">
                 <div class="wheel-label">分钟</div>
                 <div class="wheel" ref="minuteWheel">
-                  <div 
-                    v-for="minute in availableMinutes" 
+                  <div
+                    v-for="minute in availableMinutes"
                     :key="minute"
-                    :class="['wheel-item', { active: selectedMinute === minute }]"
+                    :class="[
+                      'wheel-item',
+                      { active: selectedMinute === minute },
+                    ]"
                     @click="selectMinute(minute)"
                   >
-                    {{ String(minute).padStart(2, '0') }}
+                    {{ String(minute).padStart(2, "0") }}
                   </div>
                 </div>
               </div>
@@ -142,7 +162,9 @@
             active: selectedCarType === 'economy',
             disabled: currentOrder !== null || hasActiveOrder,
           }"
-          @click="(currentOrder || hasActiveOrder) ? null : selectCarType('economy')"
+          @click="
+            currentOrder || hasActiveOrder ? null : selectCarType('economy')
+          "
         >
           <div class="car-icon">🚗</div>
           <div class="car-info">
@@ -155,7 +177,13 @@
       <el-button
         type="primary"
         class="call-car-btn"
-        :disabled="!canOrder || currentOrder !== null || hasUnpaidOrders || hasActiveOrder || (bookingType === 'scheduled' && !scheduledTime)"
+        :disabled="
+          !canOrder ||
+          currentOrder !== null ||
+          hasUnpaidOrders ||
+          hasActiveOrder ||
+          (bookingType === 'scheduled' && !scheduledTime)
+        "
         @click="hasUnpaidOrders ? goToMyTrips() : handleCallCar()"
         size="large"
       >
@@ -164,29 +192,46 @@
     </div>
 
     <!-- 紧凑的司机信息条 -->
-    <div 
-      v-if="currentOrder && driverInfo && (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP' || orderStatus === 'IN_PROGRESS')" 
+    <div
+      v-if="
+        currentOrder &&
+        driverInfo &&
+        (orderStatus === 'ASSIGNED' ||
+          orderStatus === 'PICKUP' ||
+          orderStatus === 'IN_PROGRESS')
+      "
       class="driver-info-bar"
       @click="toggleDriverDetails"
     >
       <div class="driver-bar-content">
         <div class="driver-avatar-small">
-          <img 
-            :src="buildAvatarUrl(driverInfo.avatar) || getDefaultAvatar(driverInfo.name)" 
+          <img
+            :src="
+              buildAvatarUrl(driverInfo.avatar) ||
+              getDefaultAvatar(driverInfo.name)
+            "
             :alt="driverInfo.name"
             @error="handleAvatarError"
           />
         </div>
         <div class="driver-basic-info">
           <div class="driver-name-small">{{ driverInfo.name }}</div>
-          <div class="vehicle-brief">{{ driverInfo.plateNumber || '暂无车牌' }} · {{ driverInfo.vehicleBrand || '未知' }} {{ driverInfo.vehicleModel || '' }}</div>
+          <div class="vehicle-brief">
+            {{ driverInfo.plateNumber || "暂无车牌" }} ·
+            {{ driverInfo.vehicleBrand || "未知" }}
+            {{ driverInfo.vehicleModel || "" }}
+          </div>
         </div>
         <div class="driver-rating-small" v-if="driverInfo.rating">
-          <span class="rating-score-small">{{ driverInfo.rating.toFixed(1) }}</span>
+          <span class="rating-score-small">{{
+            driverInfo.rating.toFixed(1)
+          }}</span>
           <span class="star-small">★</span>
         </div>
         <div class="expand-icon">
-          <el-icon><ArrowDown v-if="!showDriverDetails" /><ArrowUp v-else /></el-icon>
+          <el-icon
+            ><ArrowDown v-if="!showDriverDetails" /><ArrowUp v-else
+          /></el-icon>
         </div>
       </div>
     </div>
@@ -212,8 +257,15 @@
     </div>
 
     <!-- 可滚动的司机详细信息面板 -->
-    <div 
-      v-if="currentOrder && driverInfo && showDriverDetails && (orderStatus === 'ASSIGNED' || orderStatus === 'PICKUP' || orderStatus === 'IN_PROGRESS')" 
+    <div
+      v-if="
+        currentOrder &&
+        driverInfo &&
+        showDriverDetails &&
+        (orderStatus === 'ASSIGNED' ||
+          orderStatus === 'PICKUP' ||
+          orderStatus === 'IN_PROGRESS')
+      "
       class="driver-details-panel"
     >
       <div class="panel-header">
@@ -222,24 +274,35 @@
           <el-icon><Close /></el-icon>
         </el-button>
       </div>
-      
+
       <div class="panel-content">
         <div class="driver-profile">
           <div class="driver-avatar-large">
-            <img 
-              :src="buildAvatarUrl(driverInfo.avatar) || getDefaultAvatar(driverInfo.name)" 
+            <img
+              :src="
+                buildAvatarUrl(driverInfo.avatar) ||
+                getDefaultAvatar(driverInfo.name)
+              "
               :alt="driverInfo.name"
               @error="handleAvatarError"
             />
           </div>
-          
+
           <div class="driver-info">
             <div class="driver-name-large">{{ driverInfo.name }}</div>
             <div class="driver-rating-large" v-if="driverInfo.rating">
               <span class="rating-stars">
-                <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= Math.floor(driverInfo.rating) }">★</span>
+                <span
+                  v-for="i in 5"
+                  :key="i"
+                  class="star"
+                  :class="{ filled: i <= Math.floor(driverInfo.rating) }"
+                  >★</span
+                >
               </span>
-              <span class="rating-score">{{ driverInfo.rating.toFixed(1) }}分</span>
+              <span class="rating-score"
+                >{{ driverInfo.rating.toFixed(1) }}分</span
+              >
             </div>
             <div class="driver-phone">{{ driverInfo.phone }}</div>
           </div>
@@ -250,30 +313,37 @@
           <div class="vehicle-details-grid">
             <div class="detail-item">
               <span class="label">车牌号</span>
-              <span class="value plate-number-compact">{{ driverInfo.plateNumber || '暂无' }}</span>
+              <span class="value plate-number-compact">{{
+                driverInfo.plateNumber || "暂无"
+              }}</span>
             </div>
             <div class="detail-item">
               <span class="label">车型</span>
-              <span class="value">{{ driverInfo.vehicleBrand || '未知' }} {{ driverInfo.vehicleModel || '' }}</span>
+              <span class="value"
+                >{{ driverInfo.vehicleBrand || "未知" }}
+                {{ driverInfo.vehicleModel || "" }}</span
+              >
             </div>
             <div class="detail-item">
               <span class="label">颜色</span>
-              <span class="value">{{ driverInfo.vehicleColor || '未知' }}</span>
+              <span class="value">{{ driverInfo.vehicleColor || "未知" }}</span>
             </div>
             <div class="detail-item">
               <span class="label">类型</span>
-              <span class="value">{{ getVehicleTypeText(driverInfo.vehicleType) }}</span>
+              <span class="value">{{
+                getVehicleTypeText(driverInfo.vehicleType)
+              }}</span>
             </div>
           </div>
         </div>
 
         <div class="action-buttons">
-          <el-button 
-            type="primary" 
+          <el-button
+            type="primary"
             @click="callDriver"
             :icon="Phone"
             size="large"
-            style="width: 100%;"
+            style="width: 100%"
           >
             拨打司机电话
           </el-button>
@@ -284,9 +354,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, onUnmounted, onActivated, onDeactivated, watch } from "vue";
+import {
+  ref,
+  onMounted,
+  computed,
+  onUnmounted,
+  onActivated,
+  onDeactivated,
+  watch,
+} from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Location, Phone, ArrowDown, ArrowUp, Close } from "@element-plus/icons-vue";
+import {
+  Location,
+  Phone,
+  ArrowDown,
+  ArrowUp,
+  Close,
+} from "@element-plus/icons-vue";
 import { useUserStore } from "@/stores/user";
 import { useOrderStore } from "@/stores/order";
 import {
@@ -336,7 +420,7 @@ const availableMinutes = ref([]);
 const cancelLoading = ref(false);
 const showPaymentDialog = ref(false);
 const completedOrder = ref(null);
-const selectedPaymentMethod = ref('');
+const selectedPaymentMethod = ref("");
 
 // 司机详情面板控制
 const showDriverDetails = ref(false);
@@ -349,12 +433,16 @@ const hasUnpaidOrders = computed(() => orderStore.hasUnpaidOrders);
 const canCancelOrder = computed(() => orderStore.canCancelOrder);
 
 // 监听订单状态变化，自动更新拖拽状态
-watch([currentOrder, orderStatus], () => {
-  console.log('📊 订单状态变化，更新拖拽状态');
-  setTimeout(() => {
-    updatePickupMarkerDraggable();
-  }, 100);
-}, { immediate: false });
+watch(
+  [currentOrder, orderStatus],
+  () => {
+    console.log("📊 订单状态变化，更新拖拽状态");
+    setTimeout(() => {
+      updatePickupMarkerDraggable();
+    }, 100);
+  },
+  { immediate: false }
+);
 
 // WebSocket现在由全局store管理
 
@@ -378,7 +466,7 @@ const getDrivingConfig = () => ({
 
 onUnmounted(() => {
   stopDriverTracking();
-  
+
   // 清理全局函数
   if (window.handleMapOrderUpdate) {
     delete window.handleMapOrderUpdate;
@@ -408,16 +496,17 @@ const callCarText = computed(() => {
   if (currentOrder.value) return "订单进行中";
   if (hasActiveOrder.value) return "您已有进行中的订单";
   if (isCalling.value) {
-    return bookingType.value === "scheduled" ? "正在创建预约单..." : "正在叫车...";
+    return bookingType.value === "scheduled"
+      ? "正在创建预约单..."
+      : "正在叫车...";
   }
   if (!canOrder.value) return "请选择目的地";
-  if (bookingType.value === "scheduled" && !scheduledTime.value) return "请选择预约时间";
+  if (bookingType.value === "scheduled" && !scheduledTime.value)
+    return "请选择预约时间";
   return bookingType.value === "scheduled" ? "创建预约单" : "立即叫车";
 });
 
 // getStatusText 方法已移至 orderStore 中统一管理
-
-
 
 // 取消订单
 const handleCancelOrder = async () => {
@@ -440,12 +529,13 @@ const handleCancelOrder = async () => {
     console.log("🆔 订单ID:", currentOrder.value.id);
     console.log("📋 订单类型:", currentOrder.value.orderType);
     console.log("👨‍✈️ 司机ID:", currentOrder.value.driverId);
-    
+
     // 根据订单类型选择不同的取消接口
-    const cancelUrl = currentOrder.value.orderType === "RESERVATION" 
-      ? `/api/orders/${currentOrder.value.id}/cancel-scheduled`
-      : `/api/orders/${currentOrder.value.id}/cancel`;
-    
+    const cancelUrl =
+      currentOrder.value.orderType === "RESERVATION"
+        ? `/api/orders/${currentOrder.value.id}/cancel-scheduled`
+        : `/api/orders/${currentOrder.value.id}/cancel`;
+
     console.log("📞 请求URL:", cancelUrl);
 
     const response = await fetch(cancelUrl, {
@@ -461,24 +551,24 @@ const handleCancelOrder = async () => {
 
     if (response.ok && result.code === 200) {
       console.log("✅ 订单取消成功，后端已通知司机");
-      
+
       // 立即清理乘客端的订单状态和地图元素
       resetOrderState();
-      
+
       // 清理地图上的司机相关元素
       clearAllDriverRoutes();
-      
+
       // 恢复乘客路径为蓝色
       if (routeLine && routeLine.setOptions) {
         routeLine.setOptions({
-          strokeColor: '#1890ff',
+          strokeColor: "#1890ff",
           strokeWeight: 6,
-          strokeOpacity: 0.8
+          strokeOpacity: 0.8,
         });
       }
-      
+
       ElMessage.success("订单已取消，司机已收到通知");
-      
+
       // 刷新活跃订单状态，确保UI正确更新
       await checkActiveOrder();
     } else {
@@ -501,25 +591,28 @@ const checkActiveOrder = async () => {
     const passengerId = userStore.user?.passengerId || userStore.user?.id;
     if (!passengerId) return;
 
-    const response = await fetch(`/api/orders/passenger/${passengerId}/has-active`, {
-      headers: {
-        'Authorization': `Bearer ${userStore.token}`
+    const response = await fetch(
+      `/api/orders/passenger/${passengerId}/has-active`,
+      {
+        headers: {
+          Authorization: `Bearer ${userStore.token}`,
+        },
       }
-    });
+    );
 
     if (response.ok) {
       const result = await response.json();
       hasActiveOrder.value = result.data || false;
     }
   } catch (error) {
-    console.error('检查活跃订单失败:', error);
+    console.error("检查活跃订单失败:", error);
   }
 };
 
 // 处理订单类型切换
 const handleBookingTypeChange = (type) => {
-  console.log('订单类型切换:', type);
-  if (type === 'scheduled') {
+  console.log("订单类型切换:", type);
+  if (type === "scheduled") {
     scheduledTime.value = null;
     initializeTimePicker();
   }
@@ -528,29 +621,29 @@ const handleBookingTypeChange = (type) => {
 // 初始化时间选择器
 const initializeTimePicker = () => {
   const now = new Date();
-  
+
   // 生成可选日期（今天和未来6天）
   availableDates.value = [];
   for (let i = 0; i < 7; i++) {
     const date = new Date(now);
     date.setDate(date.getDate() + i);
-    
+
     let label;
     if (i === 0) {
-      label = '今天';
+      label = "今天";
     } else if (i === 1) {
-      label = '明天';
+      label = "明天";
     } else {
       label = `${date.getMonth() + 1}月${date.getDate()}日`;
     }
-    
+
     availableDates.value.push({
       date: date,
       label: label,
-      isToday: i === 0
+      isToday: i === 0,
     });
   }
-  
+
   // 默认选择今天
   selectedDateIndex.value = 0;
   updateAvailableHours();
@@ -560,18 +653,18 @@ const initializeTimePicker = () => {
 const updateAvailableHours = () => {
   const selectedDate = availableDates.value[selectedDateIndex.value];
   const now = new Date();
-  
+
   availableHours.value = [];
-  
+
   if (selectedDate.isToday) {
     // 今天：从当前时间+30分钟后开始
     const minTime = new Date(now.getTime() + 30 * 60 * 1000);
     const startHour = minTime.getHours();
-    
+
     for (let hour = startHour; hour <= 23; hour++) {
       availableHours.value.push(hour);
     }
-    
+
     // 默认选择第一个可用小时
     if (availableHours.value.length > 0) {
       selectedHour.value = availableHours.value[0];
@@ -581,11 +674,11 @@ const updateAvailableHours = () => {
     for (let hour = 0; hour <= 23; hour++) {
       availableHours.value.push(hour);
     }
-    
+
     // 默认选择9点
     selectedHour.value = 9;
   }
-  
+
   updateAvailableMinutes();
 };
 
@@ -593,14 +686,14 @@ const updateAvailableHours = () => {
 const updateAvailableMinutes = () => {
   const selectedDate = availableDates.value[selectedDateIndex.value];
   const now = new Date();
-  
+
   availableMinutes.value = [];
-  
+
   if (selectedDate.isToday && selectedHour.value === now.getHours()) {
     // 今天的当前小时：从当前分钟+30分钟后开始
     const minTime = new Date(now.getTime() + 30 * 60 * 1000);
     const startMinute = Math.ceil(minTime.getMinutes() / 15) * 15; // 向上取整到15分钟倍数
-    
+
     for (let minute = startMinute; minute <= 45; minute += 15) {
       availableMinutes.value.push(minute);
     }
@@ -610,7 +703,7 @@ const updateAvailableMinutes = () => {
       availableMinutes.value.push(minute);
     }
   }
-  
+
   // 默认选择第一个可用分钟
   if (availableMinutes.value.length > 0) {
     selectedMinute.value = availableMinutes.value[0];
@@ -639,14 +732,14 @@ const selectMinute = (minute) => {
 // 确认时间选择
 const confirmTime = () => {
   if (selectedHour.value === null || selectedMinute.value === null) {
-    ElMessage.warning('请选择完整的时间');
+    ElMessage.warning("请选择完整的时间");
     return;
   }
-  
+
   const selectedDate = availableDates.value[selectedDateIndex.value];
   const dateTime = new Date(selectedDate.date);
   dateTime.setHours(selectedHour.value, selectedMinute.value, 0, 0);
-  
+
   scheduledTime.value = dateTime;
   showTimePicker.value = false;
 };
@@ -658,138 +751,140 @@ const closeTimePicker = () => {
 
 // 格式化显示时间
 const formatDisplayTime = (date) => {
-  if (!date) return '';
-  
+  if (!date) return "";
+
   const now = new Date();
   const isToday = date.toDateString() === now.toDateString();
-  const isTomorrow = date.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
-  
+  const isTomorrow =
+    date.toDateString() ===
+    new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+
   let dateStr;
   if (isToday) {
-    dateStr = '今天';
+    dateStr = "今天";
   } else if (isTomorrow) {
-    dateStr = '明天';
+    dateStr = "明天";
   } else {
     dateStr = `${date.getMonth() + 1}月${date.getDate()}日`;
   }
-  
-  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  
+
+  const timeStr = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
   return `${dateStr} ${timeStr}`;
 };
 
 // 格式化时间给后端
 const formatDateTimeForBackend = (date) => {
-  if (!date) return '';
-  
+  if (!date) return "";
+
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
 // 旧的时间验证方法已移除，使用新的滚轮选择器
 // 初始化地图
-let isPassengerMapInitialized = false
+let isPassengerMapInitialized = false;
 
 // 统一的初始化函数
 const initializePassengerMap = async (isReactivation = false) => {
-  const logPrefix = isReactivation ? '🔄 重新激活' : '🚀 首次初始化'
-  console.log(`${logPrefix}乘客地图页面...`)
+  const logPrefix = isReactivation ? "🔄 重新激活" : "🚀 首次初始化";
+  console.log(`${logPrefix}乘客地图页面...`);
 
   // 立即注册全局函数，让store能够通知地图组件
-  window.handleMapOrderUpdate = handleOrderUpdate
-  console.log("✅ 已注册全局地图消息处理函数")
+  window.handleMapOrderUpdate = handleOrderUpdate;
+  console.log("✅ 已注册全局地图消息处理函数");
 
   // 如果是重新激活且已经初始化过，只需要重新检查状态
   if (isReactivation && isPassengerMapInitialized) {
-    console.log('🔄 页面重新激活，检查订单状态...')
-    
+    console.log("🔄 页面重新激活，检查订单状态...");
+
     // 确保用户信息完整性
     try {
-      await userStore.ensureUserInfo()
+      await userStore.ensureUserInfo();
     } catch (error) {
-      console.error('❌ 用户状态检查失败:', error.message)
-      ElMessage.error(error.message)
-      return
+      console.error("❌ 用户状态检查失败:", error.message);
+      ElMessage.error(error.message);
+      return;
     }
-    
+
     // 重新检查活跃订单
-    await checkActiveOrder()
-    
+    await checkActiveOrder();
+
     // 恢复地图标记（修复页面切换后标记消失的问题）
     setTimeout(() => {
-      restoreMapMarkers()
-    }, 500)
-    
+      restoreMapMarkers();
+    }, 500);
+
     // 重新连接WebSocket（如果需要）
     if (!orderStore.isWebSocketConnected) {
-      console.log('🔄 重新连接WebSocket...')
-      await orderStore.connectWebSocket()
+      console.log("🔄 重新连接WebSocket...");
+      await orderStore.connectWebSocket();
     }
-    
-    return
+
+    return;
   }
 
   // 完整初始化流程
   // 初始化时间选择器
-  initializeTimePicker()
+  initializeTimePicker();
 
   // 初始化订单状态（包括检查未支付订单和当前订单）
-  console.log("🔄 开始初始化订单状态...")
-  await orderStore.initOrderState()
-  console.log("✅ 订单状态初始化完成")
-  
+  console.log("🔄 开始初始化订单状态...");
+  await orderStore.initOrderState();
+  console.log("✅ 订单状态初始化完成");
+
   // 检查是否有活跃订单
-  await checkActiveOrder()
+  await checkActiveOrder();
 
   // 延迟初始化地图，确保DOM完全加载
   setTimeout(() => {
-    console.log("🗺️ 开始初始化地图...")
+    console.log("🗺️ 开始初始化地图...");
     if (window.AMap) {
-      console.log("高德地图已加载，直接初始化")
-      initMap()
+      console.log("高德地图已加载，直接初始化");
+      initMap();
     } else {
-      console.log("开始加载高德地图API...")
+      console.log("开始加载高德地图API...");
 
-      window._AMapSecurityConfig = getSecurityConfig()
+      window._AMapSecurityConfig = getSecurityConfig();
 
-      const script = document.createElement("script")
-      script.src = getMapApiUrl()
+      const script = document.createElement("script");
+      script.src = getMapApiUrl();
       script.onload = () => {
-        console.log("高德地图API加载成功")
-        setTimeout(initMap, 200)
-      }
+        console.log("高德地图API加载成功");
+        setTimeout(initMap, 200);
+      };
       script.onerror = (error) => {
-        console.error("高德地图API加载失败:", error)
-        ElMessage.error("地图加载失败，请检查网络连接")
-      }
-      document.head.appendChild(script)
+        console.error("高德地图API加载失败:", error);
+        ElMessage.error("地图加载失败，请检查网络连接");
+      };
+      document.head.appendChild(script);
     }
-  }, 500)
-  
-  isPassengerMapInitialized = true
-}
+  }, 500);
+
+  isPassengerMapInitialized = true;
+};
 
 onMounted(async () => {
-  await initializePassengerMap(false)
-})
+  await initializePassengerMap(false);
+});
 
 // 页面激活时（从其他页面切换回来）
 onActivated(async () => {
-  console.log('📱 乘客地图页面被激活')
-  await initializePassengerMap(true)
-})
+  console.log("📱 乘客地图页面被激活");
+  await initializePassengerMap(true);
+});
 
 // 页面失活时（切换到其他页面）
 onDeactivated(() => {
-  console.log('📱 乘客地图页面失活')
+  console.log("📱 乘客地图页面失活");
   // 不清理状态，保持连接
-})
+});
 
 function initMap() {
   console.log("开始创建地图实例...");
@@ -834,28 +929,53 @@ function initMap() {
         console.log("定位结果:", status, result);
         if (status === "complete") {
           const { lng, lat } = result.position;
-          currentPosition.value = { lng, lat };
+
+          // 🔑 关键修改：检查是否有进行中的订单，如果有则使用订单中的上车地点
+          let pickupLng = lng;
+          let pickupLat = lat;
+          let useOrderPickup = false;
+
+          if (
+            currentOrder.value &&
+            currentOrder.value.pickupLatitude &&
+            currentOrder.value.pickupLongitude
+          ) {
+            console.log("🎯 发现进行中的订单，使用订单中的上车地点");
+            pickupLng = currentOrder.value.pickupLongitude;
+            pickupLat = currentOrder.value.pickupLatitude;
+            useOrderPickup = true;
+            console.log("📍 订单上车地点:", pickupLat, pickupLng);
+
+            // 设置上车地址
+            if (currentOrder.value.pickupAddress) {
+              pickupAddress.value = currentOrder.value.pickupAddress;
+              console.log("📍 订单上车地址:", currentOrder.value.pickupAddress);
+            }
+          }
+
+          // 更新当前位置（如果使用订单上车点，则设置为订单位置）
+          currentPosition.value = { lng: pickupLng, lat: pickupLat };
 
           // 添加上车点标记
           pickupMarker = new window.AMap.Marker({
-            position: [lng, lat],
+            position: [pickupLng, pickupLat],
             map,
             draggable: true,
             cursor: "move",
             icon: new window.AMap.Icon({
-              size: new window.AMap.Size(26, 13),
-              image: "https://webapi.amap.com/images/car.png",
-              imageSize: new window.AMap.Size(26, 13)
-            }),
+        image: "https://webapi.amap.com/theme/v1.3/markers/n/start.png",
+        size: new window.AMap.Size(25, 34),
+        imageSize: new window.AMap.Size(25, 34),
+      }),
             offset: new AMap.Pixel(0, 0), // 相对于基点的偏移位置
-            title: "拖拽调整上车位置",
+            title: useOrderPickup ? "订单上车点" : "拖拽调整上车位置",
           });
 
           // 延迟更新拖拽状态，确保地图完全初始化
           setTimeout(() => {
             updatePickupMarkerDraggable();
           }, 500);
-          
+
           // 也在地图完全加载后再次更新
           setTimeout(() => {
             updatePickupMarkerDraggable();
@@ -885,21 +1005,84 @@ function initMap() {
             await snapToNearestPOI(dragPosition.lng, dragPosition.lat);
           });
 
-          map.setCenter([lng, lat]);
-          console.log("定位成功，当前位置:", lng, lat);
+          // 设置地图中心点
+          if (useOrderPickup) {
+            // 如果使用订单上车点，将地图中心设置为订单位置
+            map.setCenter([pickupLng, pickupLat]);
+            console.log("🎯 地图中心设置为订单上车点:", pickupLat, pickupLng);
+          } else {
+            // 否则使用当前定位
+            map.setCenter([lng, lat]);
+            console.log("📍 地图中心设置为当前定位:", lat, lng);
+          }
 
-          // 初始定位时也使用智能吸附功能
-          snapToNearestPOI(lng, lat);
+          // 如果没有使用订单上车点，则进行智能吸附
+          if (!useOrderPickup) {
+            console.log("🧲 使用当前定位，进行智能吸附...");
+            snapToNearestPOI(lng, lat);
+          }
+
           initAutocomplete();
-          
+
           // 🔑 关键：恢复订单相关的地图元素
           restoreOrderMapElements();
         } else {
           console.error("定位失败:", status);
-          ElMessage.error("定位失败，请检查浏览器权限");
-          pickupAddress.value = "定位失败";
+
+          // 🔑 关键修改：即使定位失败，也要检查是否有订单的上车地点
+          let hasOrderPickup = false;
+
+          if (
+            currentOrder.value &&
+            currentOrder.value.pickupLatitude &&
+            currentOrder.value.pickupLongitude
+          ) {
+            console.log("🎯 定位失败但发现订单上车地点，使用订单位置");
+            const pickupLng = currentOrder.value.pickupLongitude;
+            const pickupLat = currentOrder.value.pickupLatitude;
+
+            // 设置当前位置为订单上车点
+            currentPosition.value = { lng: pickupLng, lat: pickupLat };
+
+            // 设置上车地址
+            if (currentOrder.value.pickupAddress) {
+              pickupAddress.value = currentOrder.value.pickupAddress;
+              console.log(
+                "📍 使用订单上车地址:",
+                currentOrder.value.pickupAddress
+              );
+            } else {
+              pickupAddress.value = `订单上车点 (${pickupLat.toFixed(6)}, ${pickupLng.toFixed(6)})`;
+            }
+
+            // 添加上车点标记
+            pickupMarker = new window.AMap.Marker({
+              position: [pickupLng, pickupLat],
+              map,
+              draggable: false, // 订单状态下不允许拖拽
+              cursor: "default",
+              icon: new window.AMap.Icon({
+        image: "https://webapi.amap.com/theme/v1.3/markers/n/start.png",
+        size: new window.AMap.Size(25, 34),
+        imageSize: new window.AMap.Size(25, 34),
+      }),
+              offset: new AMap.Pixel(0, 0),
+              title: "订单上车点",
+            });
+
+            // 设置地图中心为订单上车点
+            map.setCenter([pickupLng, pickupLat]);
+            console.log("🎯 地图中心设置为订单上车点:", pickupLat, pickupLng);
+
+            hasOrderPickup = true;
+          } else {
+            // 没有订单上车点，显示定位失败信息
+            ElMessage.error("定位失败，请检查浏览器权限");
+            pickupAddress.value = "定位失败";
+          }
+
           initAutocomplete();
-          
+
           // 即使定位失败，也尝试恢复订单地图元素
           restoreOrderMapElements();
         }
@@ -981,18 +1164,18 @@ const getAddressFromLocation = async (lng, lat) => {
     // 创建逆地理编码实例
     const geocoder = new window.AMap.Geocoder({
       radius: 100, // 搜索半径100米
-      extensions: "base" // 返回基础信息即可
+      extensions: "base", // 返回基础信息即可
     });
 
     // 执行逆地理编码
     geocoder.getAddress([lng, lat], (status, result) => {
       console.log("地址解析结果:", status, result);
 
-      if (status === 'complete' && result.info === 'OK' && result.regeocode) {
+      if (status === "complete" && result.info === "OK" && result.regeocode) {
         const address = result.regeocode.formattedAddress;
         pickupAddress.value = address;
         console.log("获取到地址:", address);
-        
+
         // 更新标记标题
         if (pickupMarker) {
           pickupMarker.setTitle(`上车点: ${address}`);
@@ -1002,7 +1185,6 @@ const getAddressFromLocation = async (lng, lat) => {
         pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
       }
     });
-
   } catch (error) {
     console.error("地址获取异常:", error);
     pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
@@ -1025,86 +1207,97 @@ const snapToNearestPOI = async (lng, lat) => {
     // 创建逆地理编码实例
     const geocoder = new window.AMap.Geocoder({
       radius: 200, // 搜索半径200米
-      extensions: "all" // 返回详细信息
+      extensions: "all", // 返回详细信息
     });
 
     // 执行逆地理编码
     geocoder.getAddress([lng, lat], (status, result) => {
       console.log("🔍 POI搜索结果:", status, result);
 
-      if (status === 'complete' && result.info === 'OK' && result.regeocode) {
+      if (status === "complete" && result.info === "OK" && result.regeocode) {
         const regeocode = result.regeocode;
-        
+
         // 检查是否有POI信息
         if (regeocode.pois && regeocode.pois.length > 0) {
           // 找到最近的POI
           const nearestPoi = regeocode.pois[0];
           const poiDistance = parseFloat(nearestPoi.distance);
-          
-          console.log("📍 找到最近POI:", nearestPoi.name, "距离:", poiDistance + "米");
-          
+
+          console.log(
+            "📍 找到最近POI:",
+            nearestPoi.name,
+            "距离:",
+            poiDistance + "米"
+          );
+
           // 如果POI距离小于100米，则吸附到该POI
           if (poiDistance < 100) {
             const poiLocation = nearestPoi.location;
             const poiLng = poiLocation.lng;
             const poiLat = poiLocation.lat;
-            
-            console.log("🎯 吸附到POI:", nearestPoi.name, "坐标:", poiLng, poiLat);
-            
+
+            console.log(
+              "🎯 吸附到POI:",
+              nearestPoi.name,
+              "坐标:",
+              poiLng,
+              poiLat
+            );
+
             // 更新位置到POI的精确坐标
             currentPosition.value = { lng: poiLng, lat: poiLat };
-            
+
             // 移动地图中心到POI位置
             if (map) {
               map.setCenter([poiLng, poiLat]);
               console.log("📍 地图中心已移动到POI位置");
             }
-            
+
             // 移动标记到POI位置
             if (pickupMarker) {
               pickupMarker.setPosition([poiLng, poiLat]);
               pickupMarker.setTitle(`上车点: ${nearestPoi.name}`);
             }
-            
+
             // 更新地址显示为POI名称
             pickupAddress.value = nearestPoi.name;
-            
+
             // 显示吸附成功消息
             ElMessage.success(`已自动匹配到: ${nearestPoi.name}`);
-            
+
             // 如果有目的地，重新规划路线
             if (destination.value) {
               showRoute();
             }
-            
+
             return; // 成功吸附，直接返回
           }
         }
-        
+
         // 如果没有找到合适的POI，使用格式化地址
         console.log("📍 未找到合适的POI，使用格式化地址");
         currentPosition.value = { lng, lat };
-        
+
         if (pickupMarker) {
           pickupMarker.setPosition([lng, lat]);
         }
-        
+
         // 使用逆地理编码的格式化地址
-        pickupAddress.value = regeocode.formattedAddress || `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
-        
+        pickupAddress.value =
+          regeocode.formattedAddress ||
+          `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
+
         // 如果有目的地，重新规划路线
         if (destination.value) {
           showRoute();
         }
-        
+
         ElMessage.info("已更新到拖拽位置");
-        
       } else {
         console.error("❌ 逆地理编码失败:", status, result);
         fallbackToOriginalPosition(lng, lat);
       }
     });
-    
   } catch (error) {
     console.error("❌ 智能吸附失败:", error);
     fallbackToOriginalPosition(lng, lat);
@@ -1114,20 +1307,20 @@ const snapToNearestPOI = async (lng, lat) => {
 // 回退到原始位置的处理函数
 const fallbackToOriginalPosition = (lng, lat) => {
   console.log("📍 回退到原始位置处理");
-  
+
   currentPosition.value = { lng, lat };
-  
+
   if (pickupMarker) {
     pickupMarker.setPosition([lng, lat]);
   }
-  
+
   // 使用简单的地址格式
   pickupAddress.value = `位置 (${lat.toFixed(6)}, ${lng.toFixed(6)})`;
-  
+
   if (destination.value) {
     showRoute();
   }
-  
+
   ElMessage.warning("智能匹配失败，已使用拖拽位置");
 };
 
@@ -1137,25 +1330,25 @@ const handlePickupClick = () => {
     console.log("⚠️ 订单已发起，不允许修改上车点");
     return;
   }
-  
+
   console.log("📍 重新定位上车点");
   ElMessage.info("正在重新定位...");
-  
+
   // 重新获取当前位置
   if (map && window.AMap) {
     const geolocation = new window.AMap.Geolocation({
       enableHighAccuracy: true,
       timeout: 10000,
     });
-    
+
     geolocation.getCurrentPosition(async (status, result) => {
       if (status === "complete") {
         const { lng, lat } = result.position;
         console.log("🎯 重新定位成功:", lng, lat);
-        
+
         // 使用智能吸附功能
         await snapToNearestPOI(lng, lat);
-        
+
         ElMessage.success("定位更新成功");
       } else {
         console.error("❌ 重新定位失败:", status);
@@ -1257,29 +1450,33 @@ const stopDriverTracking = () => {
 const updatePickupMarkerDraggable = () => {
   if (pickupMarker) {
     // 只有在订单真正进行中时才禁用拖拽（司机已接单或更进一步的状态）
-    const isOrderInProgress = currentOrder.value && 
-                             ['ASSIGNED', 'PICKUP', 'IN_PROGRESS'].includes(orderStatus.value);
+    const isOrderInProgress =
+      currentOrder.value &&
+      ["ASSIGNED", "PICKUP", "IN_PROGRESS"].includes(orderStatus.value);
     const isDraggable = !isOrderInProgress;
-    
-    console.log('🔧 更新上车点拖拽状态:', {
+
+    console.log("🔧 更新上车点拖拽状态:", {
       hasOrder: !!currentOrder.value,
       orderStatus: orderStatus.value,
       isOrderInProgress: isOrderInProgress,
       isDraggable: isDraggable,
-      markerExists: !!pickupMarker
+      markerExists: !!pickupMarker,
     });
-    
+
     try {
       pickupMarker.setDraggable(isDraggable);
       pickupMarker.setCursor(isDraggable ? "move" : "default");
       pickupMarker.setTitle(isDraggable ? "拖拽调整上车位置" : "上车点");
-      
-      console.log('✅ 上车点拖拽状态更新成功:', isDraggable ? '可拖拽' : '不可拖拽');
+
+      console.log(
+        "✅ 上车点拖拽状态更新成功:",
+        isDraggable ? "可拖拽" : "不可拖拽"
+      );
     } catch (error) {
-      console.error('❌ 更新上车点拖拽状态失败:', error);
+      console.error("❌ 更新上车点拖拽状态失败:", error);
     }
   } else {
-    console.warn('⚠️ 上车点标记不存在，无法更新拖拽状态');
+    console.warn("⚠️ 上车点标记不存在，无法更新拖拽状态");
   }
 };
 
@@ -1371,7 +1568,7 @@ const showRoute = async () => {
             // if (pickupMarker) elements.push(pickupMarker);
             // if (destMarker) elements.push(destMarker);
             // if (routeLine) elements.push(routeLine);
-            
+
             // if (elements.length > 0) {
             //   map.setFitView(elements, false, [50, 50, 50, 50]);
             // }
@@ -1426,7 +1623,7 @@ const handleRoutePlanningFallback = (destLng, destLat) => {
   if (pickupMarker) elements.push(pickupMarker);
   if (destMarker) elements.push(destMarker);
   if (routeLine) elements.push(routeLine);
-  
+
   if (elements.length > 0) {
     map.setFitView(elements, false, [50, 50, 50, 50]);
   }
@@ -1442,7 +1639,7 @@ const handleCallCar = async () => {
   }
 
   // 预约单需要选择时间
-  if (bookingType.value === 'scheduled' && !scheduledTime.value) {
+  if (bookingType.value === "scheduled" && !scheduledTime.value) {
     ElMessage.warning("请选择预约时间");
     return;
   }
@@ -1464,22 +1661,22 @@ const handleCallCar = async () => {
 
     // 确保用户信息完整性
     try {
-      await userStore.ensureUserInfo()
+      await userStore.ensureUserInfo();
     } catch (error) {
-      console.error('❌ 用户状态检查失败:', error)
-      ElMessage.error(error.message)
-      return
+      console.error("❌ 用户状态检查失败:", error);
+      ElMessage.error(error.message);
+      return;
     }
 
-    const passengerId = userStore.user.passengerId || userStore.user.id
+    const passengerId = userStore.user.passengerId || userStore.user.id;
     if (!passengerId) {
-      console.error('❌ 无法获取乘客ID，用户数据:', userStore.user)
-      ElMessage.error('用户数据异常，请重新登录')
-      return
+      console.error("❌ 无法获取乘客ID，用户数据:", userStore.user);
+      ElMessage.error("用户数据异常，请重新登录");
+      return;
     }
 
-    console.log('🆔 使用乘客ID:', passengerId)
-    console.log('👤 用户信息:', userStore.user)
+    console.log("🆔 使用乘客ID:", passengerId);
+    console.log("👤 用户信息:", userStore.user);
 
     const orderData = {
       passengerId: passengerId,
@@ -1489,17 +1686,21 @@ const handleCallCar = async () => {
       destinationAddress: destination.value.name,
       destinationLatitude: destLat,
       destinationLongitude: destLng,
-      estimatedDistance: routeInfo.value ? parseFloat((routeInfo.value.distance / 1000).toFixed(2)) : 0, // 添加距离信息（公里），默认0
-      estimatedDuration: routeInfo.value ? Math.round(routeInfo.value.duration / 60) : 0, // 添加预估时长（分钟），默认0
+      estimatedDistance: routeInfo.value
+        ? parseFloat((routeInfo.value.distance / 1000).toFixed(2))
+        : 0, // 添加距离信息（公里），默认0
+      estimatedDuration: routeInfo.value
+        ? Math.round(routeInfo.value.duration / 60)
+        : 0, // 添加预估时长（分钟），默认0
       estimatedFare: getPrice(selectedCarType.value),
     };
 
     let response, result;
 
-    if (bookingType.value === 'scheduled') {
+    if (bookingType.value === "scheduled") {
       // 创建预约单
       orderData.scheduledTime = formatDateTimeForBackend(scheduledTime.value);
-      
+
       console.log("发送预约单数据:", orderData);
 
       response = await fetch("/api/orders/scheduled", {
@@ -1514,7 +1715,7 @@ const handleCallCar = async () => {
       // 创建实时单
       orderData.orderType = "REAL_TIME";
       orderData.carType = selectedCarType.value;
-      
+
       console.log("发送实时单数据:", orderData);
 
       response = await fetch("/api/orders/create", {
@@ -1530,22 +1731,23 @@ const handleCallCar = async () => {
     result = await response.json();
 
     if (response.ok && result.code === 200) {
-      if (bookingType.value === 'scheduled') {
+      if (bookingType.value === "scheduled") {
         // 预约单创建成功
         const scheduledOrder = result.data;
-        
-        ElMessage.success(`预约单创建成功！预约时间：${new Date(scheduledTime.value).toLocaleString()}`);
-        
+
+        ElMessage.success(
+          `预约单创建成功！预约时间：${new Date(scheduledTime.value).toLocaleString()}`
+        );
+
         // 设置为当前订单
         orderStore.setCurrentOrder(scheduledOrder);
-        
+
         // 重置表单
-        bookingType.value = 'immediate';
+        bookingType.value = "immediate";
         scheduledTime.value = null;
-        
+
         // 刷新活跃订单状态
         await checkActiveOrder();
-        
       } else {
         // 实时单创建成功
         const newOrder = {
@@ -1557,8 +1759,12 @@ const handleCallCar = async () => {
           pickupLongitude: currentPosition.value.lng,
           destinationLatitude: destLat,
           destinationLongitude: destLng,
-          estimatedDistance: routeInfo.value ? parseFloat((routeInfo.value.distance / 1000).toFixed(2)) : 0, // 添加距离信息，默认0
-          estimatedDuration: routeInfo.value ? Math.round(routeInfo.value.duration / 60) : 0, // 添加预估时长，默认0
+          estimatedDistance: routeInfo.value
+            ? parseFloat((routeInfo.value.distance / 1000).toFixed(2))
+            : 0, // 添加距离信息，默认0
+          estimatedDuration: routeInfo.value
+            ? Math.round(routeInfo.value.duration / 60)
+            : 0, // 添加预估时长，默认0
           estimatedFare: getPrice(selectedCarType.value),
           carType: selectedCarType.value,
           status: "PENDING",
@@ -1574,16 +1780,23 @@ const handleCallCar = async () => {
         canOrder.value = false;
         updatePickupMarkerDraggable();
       }
-      
+
       isCalling.value = false;
-      
     } else {
-      ElMessage.error((bookingType.value === 'scheduled' ? "创建预约单失败: " : "下单失败: ") + (result.message || "未知错误"));
+      ElMessage.error(
+        (bookingType.value === "scheduled"
+          ? "创建预约单失败: "
+          : "下单失败: ") + (result.message || "未知错误")
+      );
       isCalling.value = false;
     }
   } catch (error) {
     console.error("下单错误:", error);
-    ElMessage.error(bookingType.value === 'scheduled' ? "创建预约单失败，请重试" : "叫车失败，请重试");
+    ElMessage.error(
+      bookingType.value === "scheduled"
+        ? "创建预约单失败，请重试"
+        : "叫车失败，请重试"
+    );
     isCalling.value = false;
   }
 };
@@ -1642,8 +1855,13 @@ const handleOrderAssigned = (data) => {
       vehicleType: data.driver.vehicleType || "ECONOMY",
       vehicleSeats: data.driver.vehicleSeats || 5,
       vehicleYear: data.driver.vehicleYear,
-      vehicleInfo: data.driver.vehicleInfo || data.driver.carModel || `${data.driver.vehicleBrand || '未知'} ${data.driver.vehicleModel || ''} ${data.driver.plateNumber || ''}`.trim(),
-      carModel: data.driver.carModel || `${data.driver.vehicleBrand || '未知'} ${data.driver.vehicleModel || ''}`.trim(),
+      vehicleInfo:
+        data.driver.vehicleInfo ||
+        data.driver.carModel ||
+        `${data.driver.vehicleBrand || "未知"} ${data.driver.vehicleModel || ""} ${data.driver.plateNumber || ""}`.trim(),
+      carModel:
+        data.driver.carModel ||
+        `${data.driver.vehicleBrand || "未知"} ${data.driver.vehicleModel || ""}`.trim(),
       latitude: data.driver.latitude,
       longitude: data.driver.longitude,
     };
@@ -1678,11 +1896,12 @@ const showDriverOnMap = (lat, lng) => {
     position: [lng, lat],
     map,
     icon: new window.AMap.Icon({
-      size: new window.AMap.Size(40, 40),
-      image: createDriverIcon(),
-      imageOffset: new window.AMap.Pixel(-20, -20),
-    }),
+              size: new window.AMap.Size(26, 13),
+              image: "https://webapi.amap.com/images/car.png",
+              imageSize: new window.AMap.Size(26, 13),
+            }),
     title: `司机 ${driverInfo.value?.name || ""}`,
+    offset: new window.AMap.Pixel(0, 0),
     zIndex: 100,
     animation: "AMAP_ANIMATION_DROP",
   });
@@ -1741,10 +1960,10 @@ const updateDriverRoute = async (driverLat, driverLng) => {
       map.remove(window.driverRouteLine);
       window.driverRouteLine = null;
     }
-    if(routeLine){
+    if (routeLine) {
       map.remove(routeLine);
     }
-    if(currentDriving){
+    if (currentDriving) {
       map.remove(currentDriving);
     }
     // 使用高德地图路线规划API
@@ -1866,7 +2085,7 @@ const updateDriverLocation = (data) => {
   if (data.driverId === driverInfo.value?.id) {
     // 先清理所有旧的司机路径（修复司机位置更新后旧路径没有清除的问题）
     clearAllDriverRoutes();
-    
+
     // 通过store更新司机位置信息，不要直接修改computed属性
     if (driverInfo.value) {
       const updatedDriver = {
@@ -1975,46 +2194,49 @@ const handleStatusChange = (data) => {
 
 // 恢复地图标记（修复页面切换后标记消失的问题）
 const restoreMapMarkers = () => {
-  console.log('🔄 恢复地图标记...');
-  
+  console.log("🔄 恢复地图标记...");
+
   if (!map) {
-    console.log('⚠️ 地图未初始化，跳过标记恢复');
+    console.log("⚠️ 地图未初始化，跳过标记恢复");
     return;
   }
-  
+
   // 恢复上车点标记
   if (currentPosition.value && !pickupMarker) {
-    console.log('📍 恢复上车点标记');
+    console.log("📍 恢复上车点标记");
     pickupMarker = new window.AMap.Marker({
       position: [currentPosition.value.lng, currentPosition.value.lat],
       map,
       icon: new window.AMap.Icon({
-        image: 'https://webapi.amap.com/theme/v1.3/markers/n/start.png',
+        image: "https://webapi.amap.com/theme/v1.3/markers/n/start.png",
         size: new window.AMap.Size(25, 34),
-        imageSize: new window.AMap.Size(25, 34)
+        imageSize: new window.AMap.Size(25, 34),
       }),
-      title: '上车点',
-      draggable: !currentOrder.value
+      title: "上车点",
+      draggable: !currentOrder.value,
     });
-    
+
     // 重新绑定拖拽事件
     pickupMarker.on("dragend", async (e) => {
       if (currentOrder.value) {
         console.log("⚠️ 订单已发起，不允许修改上车点");
-        pickupMarker.setPosition([currentPosition.value.lng, currentPosition.value.lat]);
+        pickupMarker.setPosition([
+          currentPosition.value.lng,
+          currentPosition.value.lat,
+        ]);
         return;
       }
-      
+
       const newPos = e.lnglat;
       console.log("📍 上车点被拖拽到新位置:", newPos.lng, newPos.lat);
-      
+
       currentPosition.value = { lng: newPos.lng, lat: newPos.lat };
-      
+
       try {
         const address = await reverseGeocode(newPos.lng, newPos.lat);
         pickupAddress.value = address;
         pickupMarker.setTitle(`上车点: ${address}`);
-        
+
         if (destination.value) {
           showRoute();
         }
@@ -2023,84 +2245,95 @@ const restoreMapMarkers = () => {
       }
     });
   }
-  
+
   // 恢复目的地标记
   if (destination.value && destination.value.location && !destMarker) {
-    console.log('🎯 恢复目的地标记');
-    
+    console.log("🎯 恢复目的地标记");
+
     let destLng, destLat;
     if (typeof destination.value.location === "string") {
       [destLng, destLat] = destination.value.location.split(",").map(Number);
-    } else if (destination.value.location.lng && destination.value.location.lat) {
+    } else if (
+      destination.value.location.lng &&
+      destination.value.location.lat
+    ) {
       destLng = destination.value.location.lng;
       destLat = destination.value.location.lat;
     }
-    
+
     if (destLng && destLat) {
       destMarker = new window.AMap.Marker({
         position: [destLng, destLat],
         map,
         icon: new window.AMap.Icon({
-          image: 'https://webapi.amap.com/theme/v1.3/markers/n/end.png',
+          image: "https://webapi.amap.com/theme/v1.3/markers/n/end.png",
           size: new window.AMap.Size(25, 34),
-          imageSize: new window.AMap.Size(25, 34)
+          imageSize: new window.AMap.Size(25, 34),
         }),
-        title: destination.value.name || '目的地'
+        title: destination.value.name || "目的地",
       });
     }
-  } else if (currentOrder.value && currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude && !destMarker) {
+  } else if (
+    currentOrder.value &&
+    currentOrder.value.destinationLatitude &&
+    currentOrder.value.destinationLongitude &&
+    !destMarker
+  ) {
     // 如果destination.value不存在，但是currentOrder中有目的地信息，使用订单中的目的地
-    console.log('🎯 从订单信息恢复目的地标记');
+    console.log("🎯 从订单信息恢复目的地标记");
     destMarker = new window.AMap.Marker({
-      position: [currentOrder.value.destinationLongitude, currentOrder.value.destinationLatitude],
+      position: [
+        currentOrder.value.destinationLongitude,
+        currentOrder.value.destinationLatitude,
+      ],
       map,
       icon: new window.AMap.Icon({
-        image: 'https://webapi.amap.com/theme/v1.3/markers/n/end.png',
+        image: "https://webapi.amap.com/theme/v1.3/markers/n/end.png",
         size: new window.AMap.Size(25, 34),
-        imageSize: new window.AMap.Size(25, 34)
+        imageSize: new window.AMap.Size(25, 34),
       }),
-      title: currentOrder.value.destinationAddress || '目的地'
+      title: currentOrder.value.destinationAddress || "目的地",
     });
   }
-  
+
   // 恢复司机标记（如果有当前订单）
   if (currentOrder.value && driverInfo.value && !driverMarker) {
-    console.log('🚗 恢复司机标记');
+    console.log("🚗 恢复司机标记");
     driverMarker = new window.AMap.Marker({
       position: [driverInfo.value.longitude, driverInfo.value.latitude],
       map,
-      icon: new window.AMap.Icon({
-        image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
-        size: new window.AMap.Size(25, 34),
-        imageSize: new window.AMap.Size(25, 34)
-      }),
-      title: '司机位置'
+    icon: new window.AMap.Icon({
+              size: new window.AMap.Size(26, 13),
+              image: "https://webapi.amap.com/images/car.png",
+              imageSize: new window.AMap.Size(26, 13),
+            }),
+      title: "司机位置",
     });
   }
-  
-  console.log('✅ 地图标记恢复完成');
+
+  console.log("✅ 地图标记恢复完成");
 };
 
 // 清理所有司机路径（修复司机位置更新后旧路径没有清除的问题）
 const clearAllDriverRoutes = () => {
-  console.log('🧹 清理所有司机路径...');
-  
+  console.log("🧹 清理所有司机路径...");
+
   // 清理全局司机路径变量
   if (window.driverRouteLine) {
     map.remove(window.driverRouteLine);
     window.driverRouteLine = null;
-    console.log('🗑️ 清理了全局司机路径变量');
+    console.log("🗑️ 清理了全局司机路径变量");
   }
-  
+
   // 清理所有红色路径（司机路径）
   const allOverlays = map.getAllOverlays();
   let cleanedCount = 0;
-  
-  allOverlays.forEach(overlay => {
-    if (overlay.CLASS_NAME === 'AMap.Polyline') {
+
+  allOverlays.forEach((overlay) => {
+    if (overlay.CLASS_NAME === "AMap.Polyline") {
       try {
         const options = overlay.getOptions();
-        if (options && options.strokeColor === '#FF6B6B') {
+        if (options && options.strokeColor === "#FF6B6B") {
           map.remove(overlay);
           cleanedCount++;
         }
@@ -2109,7 +2342,7 @@ const clearAllDriverRoutes = () => {
       }
     }
   });
-  
+
   console.log(`🗑️ 清理了 ${cleanedCount} 条红色司机路径`);
 };
 
@@ -2124,7 +2357,7 @@ const resetOrderState = () => {
   if (driverMarker) {
     map.remove(driverMarker);
     driverMarker = null;
-    console.log('🗑️ 已清理司机标记');
+    console.log("🗑️ 已清理司机标记");
   }
 
   // 清理所有司机路径
@@ -2137,7 +2370,7 @@ const resetOrderState = () => {
       strokeWeight: 6,
       strokeOpacity: 0.8,
     });
-    console.log('🔄 乘客路径已恢复为蓝色');
+    console.log("🔄 乘客路径已恢复为蓝色");
   }
 
   // 重置路线初始化标记
@@ -2150,90 +2383,108 @@ const resetOrderState = () => {
 
   // 重新检查未支付订单
   orderStore.checkUnpaidOrders();
-  
-  console.log('✅ 订单状态重置完成');
+
+  console.log("✅ 订单状态重置完成");
 };
-
-
 
 // 恢复订单相关的地图元素
 const restoreOrderMapElements = () => {
-  console.log('🔄 恢复订单相关的地图元素...');
-  
+  console.log("🔄 恢复订单相关的地图元素...");
+
   // 检查地图是否已初始化
   if (!map) {
-    console.log('⚠️ 地图未初始化，延迟恢复地图元素');
+    console.log("⚠️ 地图未初始化，延迟恢复地图元素");
     setTimeout(restoreOrderMapElements, 1000);
     return;
   }
-  
+
   // 检查是否有当前订单
   if (!currentOrder.value) {
-    console.log('✅ 没有当前订单，无需恢复地图元素');
+    console.log("✅ 没有当前订单，无需恢复地图元素");
     return;
   }
-  
+
   // 🔑 关键修复：首先设置目的地信息，然后恢复标记
-  if (currentOrder.value.destinationLatitude && currentOrder.value.destinationLongitude) {
-    console.log('🎯 设置目的地信息');
+  if (
+    currentOrder.value.destinationLatitude &&
+    currentOrder.value.destinationLongitude
+  ) {
+    console.log("🎯 设置目的地信息");
     destination.value = {
       name: currentOrder.value.destinationAddress,
       location: {
         lng: currentOrder.value.destinationLongitude,
-        lat: currentOrder.value.destinationLatitude
-      }
+        lat: currentOrder.value.destinationLatitude,
+      },
     };
     destinationKeyword.value = currentOrder.value.destinationAddress;
   }
-  
+
   // 然后恢复地图标记
   restoreMapMarkers();
-  
-  console.log('📋 当前订单状态:', orderStatus.value);
-  console.log('🚗 司机信息:', driverInfo.value);
-  
+
+  console.log("📋 当前订单状态:", orderStatus.value);
+  console.log("🚗 司机信息:", driverInfo.value);
+
   // 如果有司机信息，在地图上显示司机位置
-  if (driverInfo.value && driverInfo.value.latitude && driverInfo.value.longitude && 
-      (orderStatus.value === 'ASSIGNED' || orderStatus.value === 'PICKUP' || orderStatus.value === 'IN_PROGRESS')) {
-    console.log('🚗 恢复司机位置标记:', driverInfo.value.latitude, driverInfo.value.longitude);
-    
+  if (
+    driverInfo.value &&
+    driverInfo.value.latitude &&
+    driverInfo.value.longitude &&
+    (orderStatus.value === "ASSIGNED" ||
+      orderStatus.value === "PICKUP" ||
+      orderStatus.value === "IN_PROGRESS")
+  ) {
+    console.log(
+      "🚗 恢复司机位置标记:",
+      driverInfo.value.latitude,
+      driverInfo.value.longitude
+    );
+
     try {
       showDriverOnMap(driverInfo.value.latitude, driverInfo.value.longitude);
-      
+
       // 开始追踪司机位置
       startDriverTracking();
     } catch (error) {
-      console.error('❌ 恢复司机位置失败:', error);
+      console.error("❌ 恢复司机位置失败:", error);
     }
   }
-  
+
   // 重新规划路线（目的地信息已在上面设置）
   if (destination.value) {
-    console.log('🗺️ 恢复路线规划');
+    console.log("🗺️ 恢复路线规划");
     setTimeout(() => {
       try {
         showRoute();
       } catch (error) {
-        console.error('❌ 恢复路线规划失败:', error);
+        console.error("❌ 恢复路线规划失败:", error);
       }
     }, 1500);
   }
-  
+
   // 根据订单状态调整地图视图
   setTimeout(() => {
     try {
-      if (orderStatus.value === 'IN_PROGRESS' && driverInfo.value) {
+      if (orderStatus.value === "IN_PROGRESS" && driverInfo.value) {
         // 行程中，显示当前位置到目的地的路线
-        console.log('🛣️ 行程进行中，调整地图视图');
+        console.log("🛣️ 行程进行中，调整地图视图");
         updateSharedMapView(true);
-      } else if ((orderStatus.value === 'ASSIGNED' || orderStatus.value === 'PICKUP') && driverInfo.value && 
-                 driverInfo.value.latitude && driverInfo.value.longitude) {
+      } else if (
+        (orderStatus.value === "ASSIGNED" || orderStatus.value === "PICKUP") &&
+        driverInfo.value &&
+        driverInfo.value.latitude &&
+        driverInfo.value.longitude
+      ) {
         // 司机前往上车点，显示司机到上车点的路线
-        console.log('🚕 司机前往上车点，显示相关路线');
-        updateDriverRoute(driverInfo.value.latitude, driverInfo.value.longitude);
+        console.log("🚕 司机前往上车点，显示相关路线");
+        updateDriverRoute(
+          driverInfo.value.latitude,
+          driverInfo.value.longitude
+        );
       }
     } catch (error) {
-      console.error('❌ 调整地图视图失败:', error);
+      console.error("❌ 调整地图视图失败:", error);
     }
   }, 2000);
 };
@@ -2261,7 +2512,7 @@ const goToMyTrips = () => {
 // 构建完整的头像URL
 const buildAvatarUrl = (avatarPath) => {
   if (!avatarPath) return null;
-  if (avatarPath.startsWith('http')) return avatarPath;
+  if (avatarPath.startsWith("http")) return avatarPath;
   // 添加服务器前缀
   return `http://localhost:8080${avatarPath}`;
 };
@@ -2269,11 +2520,19 @@ const buildAvatarUrl = (avatarPath) => {
 // 获取默认头像
 const getDefaultAvatar = (name) => {
   // 根据姓名生成默认头像
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+  const colors = [
+    "#FF6B6B",
+    "#4ECDC4",
+    "#45B7D1",
+    "#96CEB4",
+    "#FFEAA7",
+    "#DDA0DD",
+    "#98D8C8",
+  ];
   const colorIndex = name ? name.charCodeAt(0) % colors.length : 0;
   const backgroundColor = colors[colorIndex];
-  const firstChar = name ? name.charAt(0).toUpperCase() : '司';
-  
+  const firstChar = name ? name.charAt(0).toUpperCase() : "司";
+
   // 创建SVG头像
   const svg = `
     <svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
@@ -2281,33 +2540,37 @@ const getDefaultAvatar = (name) => {
       <text x="20" y="26" text-anchor="middle" fill="white" font-size="16" font-weight="bold">${firstChar}</text>
     </svg>
   `;
-  
+
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 };
 
 // 处理头像加载错误
 const handleAvatarError = (event) => {
   const img = event.target;
-  const name = driverInfo.value?.name || '司机';
+  const name = driverInfo.value?.name || "司机";
   img.src = getDefaultAvatar(name);
 };
 
 // 获取车辆类型文本
 const getVehicleTypeText = (type) => {
   const typeMap = {
-    'ECONOMY': '经济型',
-    'COMFORT': '舒适型',
-    'PREMIUM': '高级型',
-    'LUXURY': '豪华型'
+    ECONOMY: "经济型",
+    COMFORT: "舒适型",
+    PREMIUM: "高级型",
+    LUXURY: "豪华型",
   };
-  return typeMap[type] || '经济型';
+  return typeMap[type] || "经济型";
 };
 
 // 拨打司机电话
 const callDriver = () => {
   if (driverInfo.value?.phone) {
     // 在移动设备上直接拨打电话
-    if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    if (
+      /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      )
+    ) {
       window.location.href = `tel:${driverInfo.value.phone}`;
     } else {
       // 在桌面设备上显示电话号码
@@ -2315,7 +2578,7 @@ const callDriver = () => {
       // 复制到剪贴板
       if (navigator.clipboard) {
         navigator.clipboard.writeText(driverInfo.value.phone).then(() => {
-          ElMessage.success('电话号码已复制到剪贴板');
+          ElMessage.success("电话号码已复制到剪贴板");
         });
       }
     }
@@ -2813,7 +3076,7 @@ const toggleDriverDetails = () => {
 }
 
 .plate-number-compact {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   background: #f8f9fa;
   padding: 4px 8px;
   border-radius: 6px;
@@ -2976,7 +3239,8 @@ const toggleDriverDetails = () => {
   border-top: 1px solid #eee;
 }
 
-.cancel-btn, .confirm-btn {
+.cancel-btn,
+.confirm-btn {
   padding: 10px 20px;
   border: none;
   border-radius: 6px;

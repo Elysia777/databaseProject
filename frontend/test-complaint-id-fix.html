@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投诉功能ID修复验证</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 16px;
+        }
+        .test-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .test-result {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .warning { color: #e6a23c; }
+        .fix-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #67c23a;
+        }
+        .fix-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>投诉功能ID修复验证</h1>
+            
+            <div class="test-section">
+                <div class="test-title">🐛 修复的问题</div>
+                
+                <div class="fix-item">
+                    <span class="fix-icon success">✅</span>
+                    <div>
+                        <strong>用户ID与乘客ID混淆问题</strong><br>
+                        修复了前端传递用户ID但后端期望乘客ID的问题
+                    </div>
+                </div>
+                
+                <div class="fix-item">
+                    <span class="fix-icon success">✅</span>
+                    <div>
+                        <strong>订单查询API优化</strong><br>
+                        修改了获取乘客历史订单的API，支持通过用户ID查询
+                    </div>
+                </div>
+                
+                <div class="fix-item">
+                    <span class="fix-icon success">✅</span>
+                    <div>
+                        <strong>投诉创建逻辑优化</strong><br>
+                        修复了创建投诉时司机用户ID的正确获取
+                    </div>
+                </div>
+            </div>
+
+            <!-- API测试 -->
+            <div class="test-section">
+                <div class="test-title">1. 乘客历史订单API测试</div>
+                <div class="test-controls">
+                    <el-input v-model="userId" placeholder="用户ID" style="width: 120px;"></el-input>
+                    <el-button @click="testPassengerOrders" type="primary">测试获取订单</el-button>
+                </div>
+                <div class="test-result">{{ orderTestResult }}</div>
+            </div>
+
+            <!-- 投诉API测试 -->
+            <div class="test-section">
+                <div class="test-title">2. 投诉功能API测试</div>
+                <div class="test-controls">
+                    <el-button @click="testUserComplaints" type="success">获取用户投诉</el-button>
+                    <el-button @click="testCreateComplaint" type="warning">测试创建投诉</el-button>
+                </div>
+                <div class="test-result">{{ complaintTestResult }}</div>
+            </div>
+
+            <!-- 数据库关系验证 -->
+            <div class="test-section">
+                <div class="test-title">3. 数据库关系验证</div>
+                <p>验证用户ID、乘客ID、司机ID之间的关系：</p>
+                <div class="test-controls">
+                    <el-button @click="testDatabaseRelations" type="info">验证数据关系</el-button>
+                </div>
+                <div class="test-result">{{ dbTestResult }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script>
+        const { createApp, ref } = Vue;
+        
+        createApp({
+            setup() {
+                // 测试数据
+                const userId = ref('3');
+                
+                // 测试结果
+                const orderTestResult = ref('等待测试...');
+                const complaintTestResult = ref('等待测试...');
+                const dbTestResult = ref('等待测试...');
+
+                // 通用请求函数
+                const makeRequest = async (url, options = {}) => {
+                    try {
+                        console.log('请求URL:', url);
+                        const response = await fetch(url, {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...options.headers
+                            },
+                            ...options
+                        });
+                        const result = await response.json();
+                        return {
+                            success: response.ok && result.code === 200,
+                            data: result.data,
+                            message: result.message,
+                            status: response.status
+                        };
+                    } catch (error) {
+                        return {
+                            success: false,
+                            error: error.message
+                        };
+                    }
+                };
+
+                // 测试乘客订单查询
+                const testPassengerOrders = async () => {
+                    orderTestResult.value = '🔄 正在测试乘客订单查询...';
+                    
+                    const result = await makeRequest(`/api/orders/passenger/${userId.value}/history`);
+
+                    if (result.success) {
+                        const orders = result.data || [];
+                        orderTestResult.value = `✅ 乘客订单查询成功\n用户ID: ${userId.value}\n订单数量: ${orders.length}\n`;
+                        
+                        if (orders.length > 0) {
+                            orderTestResult.value += `\n📋 订单列表:\n`;
+                            orders.slice(0, 3).forEach((order, index) => {
+                                orderTestResult.value += `${index + 1}. 订单号: ${order.orderNumber}\n`;
+                                orderTestResult.value += `   状态: ${order.status}\n`;
+                                orderTestResult.value += `   乘客ID: ${order.passengerId}\n`;
+                                orderTestResult.value += `   司机ID: ${order.driverId || '未分配'}\n\n`;
+                            });
+                        } else {
+                            orderTestResult.value += '\n📝 提示: 该用户暂无订单记录，这可能是正常的';
+                        }
+                    } else {
+                        orderTestResult.value = `❌ 乘客订单查询失败: ${result.error || result.message}\n状态码: ${result.status}`;
+                    }
+                };
+
+                // 测试用户投诉查询
+                const testUserComplaints = async () => {
+                    complaintTestResult.value = '🔄 正在测试用户投诉查询...';
+                    
+                    const result = await makeRequest(`/api/complaints/user/${userId.value}?page=1&size=10`);
+
+                    if (result.success) {
+                        const complaints = result.data || [];
+                        complaintTestResult.value = `✅ 用户投诉查询成功\n用户ID: ${userId.value}\n投诉数量: ${complaints.length}\n`;
+                        
+                        if (complaints.length > 0) {
+                            complaintTestResult.value += `\n📋 投诉列表:\n`;
+                            complaints.forEach((complaint, index) => {
+                                complaintTestResult.value += `${index + 1}. 投诉标题: ${complaint.title}\n`;
+                                complaintTestResult.value += `   状态: ${complaint.status}\n`;
+                                complaintTestResult.value += `   投诉人ID: ${complaint.complainantId}\n`;
+                                complaintTestResult.value += `   被投诉人ID: ${complaint.defendantId}\n\n`;
+                            });
+                        } else {
+                            complaintTestResult.value += '\n📝 提示: 该用户暂无投诉记录';
+                        }
+                    } else {
+                        complaintTestResult.value = `❌ 用户投诉查询失败: ${result.error || result.message}`;
+                    }
+                };
+
+                // 测试创建投诉
+                const testCreateComplaint = async () => {
+                    complaintTestResult.value = '🔄 正在测试创建投诉...';
+                    
+                    const complaintData = {
+                        orderId: null, // 不关联订单的投诉
+                        defendantId: 2, // 假设被投诉人用户ID为2
+                        complaintType: 'SERVICE',
+                        title: '测试投诉标题',
+                        description: '这是一个测试投诉，用于验证投诉创建功能是否正常工作。',
+                        evidenceFiles: []
+                    };
+
+                    const result = await makeRequest(`/api/complaints/create?complainantId=${userId.value}`, {
+                        method: 'POST',
+                        body: JSON.stringify(complaintData)
+                    });
+
+                    if (result.success) {
+                        complaintTestResult.value += `\n✅ 创建投诉成功\n投诉ID: ${result.data}\n投诉人用户ID: ${userId.value}\n被投诉人用户ID: ${complaintData.defendantId}`;
+                    } else {
+                        complaintTestResult.value += `\n❌ 创建投诉失败: ${result.error || result.message}`;
+                    }
+                };
+
+                // 测试数据库关系
+                const testDatabaseRelations = () => {
+                    dbTestResult.value = `📊 数据库关系说明\n\n`;
+                    dbTestResult.value += `🔗 表关系结构:\n`;
+                    dbTestResult.value += `1. users 表 - 存储用户基本信息\n`;
+                    dbTestResult.value += `   └─ id (用户ID)\n\n`;
+                    dbTestResult.value += `2. passengers 表 - 存储乘客信息\n`;
+                    dbTestResult.value += `   ├─ id (乘客ID)\n`;
+                    dbTestResult.value += `   └─ user_id (关联用户ID)\n\n`;
+                    dbTestResult.value += `3. drivers 表 - 存储司机信息\n`;
+                    dbTestResult.value += `   ├─ id (司机ID)\n`;
+                    dbTestResult.value += `   └─ user_id (关联用户ID)\n\n`;
+                    dbTestResult.value += `4. orders 表 - 存储订单信息\n`;
+                    dbTestResult.value += `   ├─ passenger_id (关联乘客ID)\n`;
+                    dbTestResult.value += `   └─ driver_id (关联司机ID)\n\n`;
+                    dbTestResult.value += `5. complaints 表 - 存储投诉信息\n`;
+                    dbTestResult.value += `   ├─ complainant_id (投诉人用户ID)\n`;
+                    dbTestResult.value += `   └─ defendant_id (被投诉人用户ID)\n\n`;
+                    dbTestResult.value += `✅ 修复后的查询逻辑:\n`;
+                    dbTestResult.value += `- 前端传递用户ID\n`;
+                    dbTestResult.value += `- 后端通过用户ID查找乘客ID\n`;
+                    dbTestResult.value += `- 使用乘客ID查询订单\n`;
+                    dbTestResult.value += `- 投诉表直接使用用户ID`;
+                };
+
+                return {
+                    userId,
+                    orderTestResult,
+                    complaintTestResult,
+                    dbTestResult,
+                    testPassengerOrders,
+                    testUserComplaints,
+                    testCreateComplaint,
+                    testDatabaseRelations
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

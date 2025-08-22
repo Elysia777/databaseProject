@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单API修复验证</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e4e7ed;
+            border-radius: 8px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+            margin-bottom: 16px;
+        }
+        .test-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .test-result {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #67c23a; }
+        .error { color: #f56c6c; }
+        .info { color: #409eff; }
+        .api-item {
+            background: #f0f9ff;
+            border: 1px solid #b3d8ff;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <h1>订单API修复验证</h1>
+            
+            <div class="test-section">
+                <div class="test-title">🔧 修复说明</div>
+                <p>为了不影响现有的历史订单查询功能，我创建了新的API来支持投诉功能：</p>
+                
+                <div class="api-item">
+                    <strong>原有API（保持不变）:</strong><br>
+                    GET /api/orders/passenger/{passengerId}/history<br>
+                    <em>用于现有的历史订单查询，参数是乘客ID</em>
+                </div>
+                
+                <div class="api-item">
+                    <strong>新增API（用于投诉）:</strong><br>
+                    GET /api/orders/user/{userId}/orders<br>
+                    <em>用于投诉功能，参数是用户ID，内部转换为乘客ID</em>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">1. 原有历史订单API测试</div>
+                <div class="test-controls">
+                    <el-input v-model="passengerId" placeholder="乘客ID" style="width: 120px;"></el-input>
+                    <el-button @click="testOriginalAPI" type="primary">测试原有API</el-button>
+                </div>
+                <div class="test-result">{{ originalResult }}</div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">2. 新增用户订单API测试</div>
+                <div class="test-controls">
+                    <el-input v-model="userId" placeholder="用户ID" style="width: 120px;"></el-input>
+                    <el-button @click="testNewAPI" type="success">测试新API</el-button>
+                </div>
+                <div class="test-result">{{ newResult }}</div>
+            </div>
+
+            <div class="test-section">
+                <div class="test-title">3. 投诉功能测试</div>
+                <div class="test-controls">
+                    <el-button @click="testComplaintAPI" type="warning">测试投诉查询</el-button>
+                </div>
+                <div class="test-result">{{ complaintResult }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script>
+        const { createApp, ref } = Vue;
+        
+        createApp({
+            setup() {
+                const passengerId = ref('1');
+                const userId = ref('1');
+                const originalResult = ref('等待测试...');
+                const newResult = ref('等待测试...');
+                const complaintResult = ref('等待测试...');
+
+                const makeRequest = async (url) => {
+                    try {
+                        const response = await fetch(url);
+                        const result = await response.json();
+                        return {
+                            success: result.code === 200,
+                            data: result.data,
+                            message: result.message
+                        };
+                    } catch (error) {
+                        return {
+                            success: false,
+                            error: error.message
+                        };
+                    }
+                };
+
+                const testOriginalAPI = async () => {
+                    originalResult.value = '🔄 测试原有API...';
+                    const result = await makeRequest(`/api/orders/passenger/${passengerId.value}/history`);
+                    
+                    if (result.success) {
+                        originalResult.value = `✅ 原有API正常\n乘客ID: ${passengerId.value}\n订单数: ${result.data.length}`;
+                    } else {
+                        originalResult.value = `❌ 原有API失败: ${result.error || result.message}`;
+                    }
+                };
+
+                const testNewAPI = async () => {
+                    newResult.value = '🔄 测试新API...';
+                    const result = await makeRequest(`/api/orders/user/${userId.value}/orders`);
+                    
+                    if (result.success) {
+                        newResult.value = `✅ 新API正常\n用户ID: ${userId.value}\n订单数: ${result.data.length}`;
+                    } else {
+                        newResult.value = `❌ 新API失败: ${result.error || result.message}`;
+                    }
+                };
+
+                const testComplaintAPI = async () => {
+                    complaintResult.value = '🔄 测试投诉API...';
+                    const result = await makeRequest(`/api/complaints/user/${userId.value}?page=1&size=10`);
+                    
+                    if (result.success) {
+                        complaintResult.value = `✅ 投诉API正常\n用户ID: ${userId.value}\n投诉数: ${result.data.length}`;
+                    } else {
+                        complaintResult.value = `❌ 投诉API失败: ${result.error || result.message}`;
+                    }
+                };
+
+                return {
+                    passengerId,
+                    userId,
+                    originalResult,
+                    newResult,
+                    complaintResult,
+                    testOriginalAPI,
+                    testNewAPI,
+                    testComplaintAPI
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>
