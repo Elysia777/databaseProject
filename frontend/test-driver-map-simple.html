@@ -30,14 +30,14 @@
     <script>
         // 设置安全密钥
         window._AMapSecurityConfig = {
-            securityJsCode: '8b011259082e987043911232b625e2ca'
+            securityJsCode: 'e78a59e4a55e6634055068f28955d282'
         };
         
         const status = document.getElementById('status');
         
         // 加载高德地图API
         const script = document.createElement('script');
-        script.src = 'https://webapi.amap.com/maps?v=1.4.15&key=de2d5b3782511b03e23a18685faccead&plugin=AMap.Geolocation';
+        script.src = 'https://webapi.amap.com/maps?v=1.4.15&key=b8568193f0510e07a52f8d5f79fb0223&plugin=AMap.Geolocation';
         
         script.onload = () => {
             status.textContent = '✅ 高德地图API加载成功，正在初始化地图...';

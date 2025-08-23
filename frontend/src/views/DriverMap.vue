@@ -1834,7 +1834,7 @@ const planRouteWithWebAPI = async (origin, destination, instruction) => {
   try {
     console.log('🌐 使用高德Web服务API进行路线规划')
     
-    const apiKey = 'de2d5b3782511b03e23a18685faccead' // 高德地图API Key
+    const apiKey = 'b8568193f0510e07a52f8d5f79fb0223' // 高德地图API Key
     const originStr = `${origin[0]},${origin[1]}`
     const destinationStr = `${destination[0]},${destination[1]}`
     

@@ -100,7 +100,7 @@ public class ScheduledOrderService {
      * 安排预约单激活任务
      */
     public void scheduleOrderActivation(Order scheduledOrder) {
-        LocalDateTime activationTime = scheduledOrder.getScheduledTime().minusMinutes(45);
+        LocalDateTime activationTime = scheduledOrder.getScheduledTime().minusMinutes(30);
         LocalDateTime now = LocalDateTime.now();
         
         if (activationTime.isBefore(now)) {

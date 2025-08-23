@@ -1,9 +1,10 @@
 package com.taxi.service;
 
-import com.taxi.entity.Order;
 import com.taxi.entity.Driver;
+import com.taxi.entity.Order;
 import com.taxi.mapper.DriverMapper;
 import com.taxi.mapper.OrderMapper;
+import lombok.Data;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 司机动态监听服务
  * 管理司机对订单队列的监听
  */
+@Data
 @Service
 public class DriverListenerService {
 

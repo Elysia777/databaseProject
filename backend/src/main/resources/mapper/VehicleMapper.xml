@@ -77,22 +77,24 @@
     <!-- 根据ID更新车辆 -->
     <update id="updateById" parameterType="com.taxi.entity.Vehicle">
         UPDATE vehicles
-        SET driver_id = #{driverId},
-            plate_number = #{plateNumber},
-            brand = #{brand},
-            model = #{model},
-            color = #{color},
-            year = #{year},
-            seats = #{seats},
-            vehicle_type = #{vehicleType},
-            fuel_type = #{fuelType},
-            insurance_number = #{insuranceNumber},
-            insurance_expiry = #{insuranceExpiry},
-            inspection_expiry = #{inspectionExpiry},
-            status = #{status},
-            vehicle_image = #{vehicleImage},
-            is_active = #{isActive},
-            updated_at = #{updatedAt}
+        <set>
+            <if test="driverId != null">driver_id = #{driverId},</if>
+            <if test="plateNumber != null">plate_number = #{plateNumber},</if>
+            <if test="brand != null">brand = #{brand},</if>
+            <if test="model != null">model = #{model},</if>
+            <if test="color != null">color = #{color},</if>
+            <if test="year != null">year = #{year},</if>
+            <if test="seats != null">seats = #{seats},</if>
+            <if test="vehicleType != null">vehicle_type = #{vehicleType},</if>
+            <if test="fuelType != null">fuel_type = #{fuelType},</if>
+            <if test="insuranceNumber != null">insurance_number = #{insuranceNumber},</if>
+            <if test="insuranceExpiry != null">insurance_expiry = #{insuranceExpiry},</if>
+            <if test="inspectionExpiry != null">inspection_expiry = #{inspectionExpiry},</if>
+            <if test="vehicleImage != null">vehicle_image = #{vehicleImage},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
         WHERE id = #{id}
     </update>
 

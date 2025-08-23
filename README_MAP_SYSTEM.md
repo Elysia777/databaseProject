@@ -161,8 +161,8 @@ Vue项目将在 http://localhost:5173 启动
 
 ```yaml
 amap:
-  key: 8b011259082e987043911232b625e2ca  # Web端API Key
-  security-key: de2d5b3782511b03e23a18685faccead  # 安全密钥
+  key: e78a59e4a55e6634055068f28955d282  # Web端API Key
+  security-key: b8568193f0510e07a52f8d5f79fb0223  # 安全密钥
   base-url: https://restapi.amap.com/v3
 ```
 
