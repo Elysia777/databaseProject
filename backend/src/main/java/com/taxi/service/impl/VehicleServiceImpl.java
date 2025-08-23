@@ -71,13 +71,26 @@ public class VehicleServiceImpl implements VehicleService {
 
     @Override
     public Vehicle updateVehicle(Vehicle vehicle) {
-        // 检查车牌号是否被其他车辆使用
-        Vehicle existing = vehicleMapper.selectByPlateNumber(vehicle.getPlateNumber());
-        if (existing != null && !existing.getId().equals(vehicle.getId())) {
-            throw new RuntimeException("车牌号已被其他车辆使用");
+        // 先获取原有车辆信息
+        Vehicle existing = vehicleMapper.selectById(vehicle.getId());
+        if (existing == null) {
+            throw new RuntimeException("车辆不存在");
         }
-
+        
+        // 检查车牌号是否被其他车辆使用
+        if (!existing.getPlateNumber().equals(vehicle.getPlateNumber())) {
+            Vehicle plateNumberExists = vehicleMapper.selectByPlateNumber(vehicle.getPlateNumber());
+            if (plateNumberExists != null && !plateNumberExists.getId().equals(vehicle.getId())) {
+                throw new RuntimeException("车牌号已被其他车辆使用");
+            }
+        }
+        
+        // 编辑车辆信息后，重新进入审核状态
+        vehicle.setStatus("PENDING"); // 重新进入审核状态
+        vehicle.setIsActive(false); // 取消激活状态
+        vehicle.setCreatedAt(existing.getCreatedAt()); // 保持原有创建时间
         vehicle.setUpdatedAt(LocalDateTime.now());
+        
         vehicleMapper.updateById(vehicle);
         return vehicle;
     }
@@ -112,8 +125,24 @@ public class VehicleServiceImpl implements VehicleService {
         if (vehicle == null || !vehicle.getDriverId().equals(driverId)) {
             throw new RuntimeException("车辆不存在或不属于该司机");
         }
+        
+        // 检查车辆状态，只有ACTIVE状态的车辆才能被激活
+        if (!"ACTIVE".equals(vehicle.getStatus())) {
+            throw new RuntimeException("车辆状态为" + getStatusText(vehicle.getStatus()) + "，无法激活使用");
+        }
 
         return vehicleMapper.setActiveVehicle(driverId, vehicleId) > 0;
+    }
+    
+    // 获取状态文本
+    private String getStatusText(String status) {
+        switch (status) {
+            case "PENDING": return "待审核";
+            case "REJECTED": return "已拒绝";
+            case "INACTIVE": return "已停用";
+            case "ACTIVE": return "活跃";
+            default: return "未知状态";
+        }
     }
 
     @Override

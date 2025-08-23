@@ -1,11 +1,11 @@
  package com.taxi.entity;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+ import lombok.Data;
+ import lombok.EqualsAndHashCode;
 
-import java.time.LocalDateTime;
+ import java.time.LocalDateTime;
 
-/**
+ /**
  * 用户实体类
  */
 @Data

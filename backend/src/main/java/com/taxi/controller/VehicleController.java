@@ -65,6 +65,7 @@ public class VehicleController {
     public Result<Vehicle> updateVehicle(@PathVariable Long id, @RequestBody Vehicle vehicle) {
         try {
             vehicle.setId(id);
+            // 编辑车辆信息后，重新进入审核状态
             Vehicle updatedVehicle = vehicleService.updateVehicle(vehicle);
             return Result.success(updatedVehicle);
         } catch (Exception e) {

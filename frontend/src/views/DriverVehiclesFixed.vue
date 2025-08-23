@@ -39,10 +39,32 @@
           <!-- 车辆头部 -->
           <div class="vehicle-header">
             <div class="plate-number">{{ vehicle.plateNumber }}</div>
-            <el-tag v-if="vehicle.isActive" type="success" size="small">
-              <el-icon><Check /></el-icon>
-              当前使用
-            </el-tag>
+            <div class="status-tags">
+              <!-- 状态标签 -->
+              <el-tag 
+                :type="getStatusTagType(vehicle.status)" 
+                size="small"
+                class="status-tag"
+              >
+                {{ getStatusText(vehicle.status) }}
+              </el-tag>
+              <!-- 激活状态标签 -->
+              <el-tag v-if="vehicle.isActive" type="success" size="small">
+                <el-icon><Check /></el-icon>
+                当前使用
+              </el-tag>
+            </div>
+          </div>
+          
+          <!-- 状态说明 -->
+          <div class="status-description" v-if="vehicle.status !== 'ACTIVE'">
+            <el-alert
+              :title="getStatusDescription(vehicle.status)"
+              :type="getStatusAlertType(vehicle.status)"
+              :closable="false"
+              show-icon
+              size="small"
+            />
           </div>
           
           <!-- 车辆信息 -->
@@ -67,32 +89,63 @@
 
           <!-- 操作按钮 -->
           <div class="vehicle-actions">
-            <el-button 
-              v-if="!vehicle.isActive" 
-              type="primary" 
-              size="small" 
-              @click="setActiveVehicle(vehicle.id)"
-              :loading="actionLoading === vehicle.id"
-            >
-              设为当前
-            </el-button>
-            <el-button 
-              type="primary" 
-              size="small" 
-              @click="editVehicle(vehicle)"
-              plain
-            >
-              编辑
-            </el-button>
-            <el-button 
-              type="danger" 
-              size="small" 
-              @click="deleteVehicle(vehicle.id)" 
-              :disabled="vehicle.isActive"
-              plain
-            >
-              删除
-            </el-button>
+            <!-- 主要操作按钮 -->
+            <div class="primary-actions">
+              <el-button 
+                v-if="!vehicle.isActive && vehicle.status === 'ACTIVE'" 
+                type="primary" 
+                size="small" 
+                @click="setActiveVehicle(vehicle.id)"
+                :loading="actionLoading === vehicle.id"
+              >
+                <el-icon><Check /></el-icon>
+                设为当前
+              </el-button>
+              
+              <el-button 
+                v-if="vehicle.status === 'PENDING'"
+                type="warning" 
+                size="small" 
+                disabled
+              >
+                <el-icon><Clock /></el-icon>
+                等待审核
+              </el-button>
+              
+              <el-button 
+                v-if="vehicle.status === 'REJECTED'"
+                type="danger" 
+                size="small" 
+                disabled
+              >
+                <el-icon><CircleClose /></el-icon>
+                审核未通过
+              </el-button>
+            </div>
+            
+            <!-- 次要操作按钮 -->
+            <div class="secondary-actions">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="editVehicle(vehicle)"
+                plain
+              >
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+              
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="deleteVehicle(vehicle.id)" 
+                :disabled="vehicle.isActive"
+                plain
+              >
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -195,7 +248,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Loading, Check } from '@element-plus/icons-vue'
+import { Plus, Refresh, Loading, Check, Clock, CircleClose, Edit, Delete } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 
 // 使用用户store
@@ -449,7 +502,11 @@ const submitForm = async () => {
     console.log('提交响应:', result)
     
     if (result.code === 200) {
-      ElMessage.success(isEdit.value ? '车辆更新成功' : '车辆添加成功')
+      if (isEdit.value) {
+        ElMessage.success('车辆更新成功，已重新进入审核状态')
+      } else {
+        ElMessage.success('车辆添加成功')
+      }
       dialogVisible.value = false
       await loadVehicles()
     } else {
@@ -566,6 +623,50 @@ const getVehicleTypeText = (type) => {
   return typeMap[type] || '经济型'
 }
 
+// 获取状态文本
+const getStatusText = (status) => {
+  const statusMap = {
+    'ACTIVE': '已激活',
+    'PENDING': '待审核',
+    'REJECTED': '已拒绝',
+    'INACTIVE': '已停用'
+  }
+  return statusMap[status] || '未知状态'
+}
+
+// 获取状态标签类型
+const getStatusTagType = (status) => {
+  const typeMap = {
+    'ACTIVE': 'success',
+    'PENDING': 'warning',
+    'REJECTED': 'danger',
+    'INACTIVE': 'info'
+  }
+  return typeMap[status] || 'info'
+}
+
+// 获取状态说明
+const getStatusDescription = (status) => {
+  const descriptionMap = {
+    'PENDING': '车辆信息已提交，等待管理员审核',
+    'REJECTED': '车辆信息审核未通过，请修改后重新提交',
+    'INACTIVE': '车辆已被停用，请联系管理员',
+    'ACTIVE': ''
+  }
+  return descriptionMap[status] || '状态未知'
+}
+
+// 获取状态提示类型
+const getStatusAlertType = (status) => {
+  const alertTypeMap = {
+    'PENDING': 'warning',
+    'REJECTED': 'error',
+    'INACTIVE': 'info',
+    'ACTIVE': 'success'
+  }
+  return alertTypeMap[status] || 'info'
+}
+
 // 页面加载时获取车辆列表
 onMounted(async () => {
   console.log('页面加载，用户信息:', userStore.user)
@@ -660,6 +761,16 @@ onMounted(async () => {
   border-bottom: 1px solid #f3f4f6;
 }
 
+.status-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-tag {
+  margin-left: 8px;
+}
+
 .plate-number {
   font-weight: 700;
   color: #1f2937;
@@ -700,9 +811,29 @@ onMounted(async () => {
 
 .vehicle-actions {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.primary-actions {
+  display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: center;
   flex-wrap: wrap;
+}
+
+.secondary-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 12px;
+}
+
+.status-description {
+  margin-bottom: 16px;
 }
 
 .dialog-footer {

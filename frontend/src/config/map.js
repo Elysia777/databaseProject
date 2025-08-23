@@ -2,14 +2,14 @@
 export const mapConfig = {
   // 高德地图Web端JS API密钥 - 用于地图显示、Autocomplete等
   // 注意：这个密钥必须申请Web端JS API服务
-  apiKey: 'de2d5b3782511b03e23a18685faccead',
+  apiKey: 'b8568193f0510e07a52f8d5f79fb0223',
   
   // REST API密钥 - 用于搜索、路径规划等REST API调用
   // 注意：这个密钥必须申请REST API服务
-  restApiKey: 'de2d5b3782511b03e23a18685faccead',
+  restApiKey: 'b8568193f0510e07a52f8d5f79fb0223',
   
   // 安全密钥 - 用于Web端JS API的安全验证
-  securityJsCode: '8b011259082e987043911232b625e2ca',
+  securityJsCode: 'e78a59e4a55e6634055068f28955d282',
   
   // API版本
   version: '1.4.15',
