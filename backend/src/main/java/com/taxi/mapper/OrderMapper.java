@@ -119,4 +119,44 @@ public interface OrderMapper {
     /** 获取司机每周收入图表数据 */
     List<java.util.Map<String, Object>> selectDriverWeeklyEarnings(@Param("driverId") Long driverId,
                                                                    @Param("month") String month);
+
+    /** 高级筛选：综合条件查询司机订单（分页） */
+    List<Order> selectDriverOrdersAdvanced(@Param("driverId") Long driverId,
+                                           @Param("status") String status,
+                                           @Param("paymentStatus") String paymentStatus,
+                                           @Param("orderType") String orderType,
+                                           @Param("startDate") String startDate,
+                                           @Param("endDate") String endDate,
+                                           @Param("minFare") Double minFare,
+                                           @Param("maxFare") Double maxFare,
+                                           @Param("pickupKeyword") String pickupKeyword,
+                                           @Param("destinationKeyword") String destinationKeyword,
+                                           @Param("keyword") String keyword,
+                                           @Param("offset") int offset,
+                                           @Param("size") int size);
+
+        /** 统计高级筛选的司机订单数量 */
+    int countDriverOrdersAdvanced(@Param("driverId") Long driverId,
+                                   @Param("status") String status,
+                                   @Param("paymentStatus") String paymentStatus,
+                                   @Param("orderType") String orderType,
+                                   @Param("startDate") String startDate,
+                                   @Param("endDate") String endDate,
+                                   @Param("minFare") Double minFare,
+                                   @Param("maxFare") Double maxFare,
+                                   @Param("pickupKeyword") String pickupKeyword,
+                                   @Param("destinationKeyword") String destinationKeyword,
+                                   @Param("keyword") String keyword);
+
+    /** 获取司机已完成且未退款的订单（用于收入统计） */
+    List<Order> selectDriverCompletedNonRefundedOrders(@Param("driverId") Long driverId,
+                                                        @Param("startDate") String startDate,
+                                                        @Param("endDate") String endDate,
+                                                        @Param("offset") int offset,
+                                                        @Param("size") int size);
+
+    /** 统计司机已完成且未退款的订单数量 */
+    int countDriverCompletedNonRefundedOrders(@Param("driverId") Long driverId,
+                                              @Param("startDate") String startDate,
+                                              @Param("endDate") String endDate);
 }

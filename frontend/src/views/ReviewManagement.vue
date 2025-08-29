@@ -521,13 +521,39 @@ const deleteReview = async (review) => {
         type: 'warning',
       }
     )
-    
-    // 这里应该调用删除API
-    ElMessage.success('评价已删除')
-    detailDialogVisible.value = false
-    loadReviews()
-  } catch {
-    // 用户取消删除
+
+    if (!review || !review.id) {
+      ElMessage.error('无效的评价信息，无法删除')
+      return
+    }
+
+    const resp = await fetch(`/api/reviews/${review.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`)
+    }
+
+    const data = await resp.json()
+    const isSuccess = data.success === true || data.code === 200
+    if (isSuccess) {
+      ElMessage.success('评价已删除')
+      detailDialogVisible.value = false
+      await loadReviews()
+    } else {
+      ElMessage.error(data.message || '删除失败')
+    }
+  } catch (e) {
+    if (e && e.message) {
+      // 只有在不是用户取消的情况下提示错误
+      if (!/cancel/i.test(e.message)) {
+        ElMessage.error(`删除失败: ${e.message}`)
+      }
+    }
   }
 }
 

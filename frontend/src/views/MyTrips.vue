@@ -297,7 +297,10 @@
           <!-- 司机信息 (如果有) -->
           <div v-if="order.driverId" class="driver-info">
             <el-icon><User /></el-icon>
-            <span>司机ID: {{ order.driverId }}</span>
+            <div class="driver-details">
+              <span v-if="order.driverName">司机：{{ order.driverName }}</span>
+              <span v-if="order.driverPhone">电话：{{ order.driverPhone }}</span>
+            </div>
           </div>
 
           <!-- 评价功能 -->

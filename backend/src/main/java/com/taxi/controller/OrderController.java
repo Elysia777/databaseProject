@@ -3,6 +3,7 @@ package com.taxi.controller;
 import com.taxi.common.Result;
 import com.taxi.dto.CreateOrderRequest;
 import com.taxi.dto.OrderWithRefundInfo;
+import com.taxi.dto.OrderWithDriverInfo;
 import com.taxi.entity.Order;
 import com.taxi.entity.Driver;
 import com.taxi.entity.Passenger;
@@ -363,19 +364,44 @@ public class OrderController {
 
     /** 获取乘客的历史订单 */
     @GetMapping("/passenger/{passengerId}/history")
-    public Result<List<Order>> getPassengerOrderHistory(@PathVariable Long passengerId) {
+    public Result<List<OrderWithDriverInfo>> getPassengerOrderHistory(@PathVariable Long passengerId) {
         try {
             System.out.println("=== 获取乘客历史订单 ===");
             System.out.println("乘客ID: " + passengerId);
 
             List<Order> orders = orderMapper.selectByPassengerId(passengerId);
 
+            // 转换为包含司机信息的DTO
+            List<OrderWithDriverInfo> ordersWithDriverInfo = new java.util.ArrayList<>();
+            
+            for (Order order : orders) {
+                OrderWithDriverInfo orderWithDriverInfo = new OrderWithDriverInfo(order);
+                
+                // 如果订单有司机，获取司机基本信息
+                if (order.getDriverId() != null) {
+                    try {
+                        Driver driver = driverMapper.selectById(order.getDriverId());
+                        if (driver != null) {
+                            // 只设置司机基本信息：姓名和电话
+                            orderWithDriverInfo.setDriverName(driver.getName());
+                            orderWithDriverInfo.setDriverPhone(driver.getPhone());
+                            
+                            System.out.println("为订单 " + order.getId() + " 添加司机信息: " + driver.getName() + ", 电话: " + driver.getPhone());
+                        }
+                    } catch (Exception e) {
+                        System.err.println("获取订单 " + order.getId() + " 的司机信息失败: " + e.getMessage());
+                    }
+                }
+                
+                ordersWithDriverInfo.add(orderWithDriverInfo);
+            }
+
             // 按创建时间倒序排列
-            orders.sort((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()));
+            ordersWithDriverInfo.sort((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()));
 
-            System.out.println("✅ 找到 " + orders.size() + " 个历史订单");
+            System.out.println("✅ 找到 " + ordersWithDriverInfo.size() + " 个历史订单");
 
-            return Result.success(orders);
+            return Result.success(ordersWithDriverInfo);
         } catch (Exception e) {
             System.err.println("❌ 获取历史订单失败: " + e.getMessage());
             return Result.error("获取历史订单失败: " + e.getMessage());

@@ -124,6 +124,7 @@
         SELECT <include refid="Base_Column_List"/>
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         ORDER BY created_at DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -131,7 +132,9 @@
     <select id="selectDriverOrdersByStatus" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM orders
-        WHERE driver_id = #{driverId} AND status = #{status}
+        WHERE driver_id = #{driverId} 
+        AND driver_id IS NOT NULL
+        AND status = #{status}
         ORDER BY created_at DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -140,6 +143,7 @@
         SELECT <include refid="Base_Column_List"/>
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
         ORDER BY completion_time DESC
         LIMIT #{size} OFFSET #{offset}
@@ -149,6 +153,7 @@
         SELECT <include refid="Base_Column_List"/>
         FROM orders
         WHERE driver_id = #{driverId} 
+        AND driver_id IS NOT NULL
         AND status = #{status}
         AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
         ORDER BY completion_time DESC
@@ -225,9 +230,58 @@
         SELECT COUNT(*)
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         <if test="status != null and status != ''">
             AND status = #{status}
         </if>
+    </select>
+
+    <!-- 高级筛选：综合条件查询司机订单（分页） -->
+    <select id="selectDriverOrdersAdvanced" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="paymentStatus != null and paymentStatus != ''">
+            <choose>
+                <when test="paymentStatus == 'NOT_REFUNDED'">
+                    AND (payment_status IS NULL OR payment_status != 'REFUNDED')
+                </when>
+                <otherwise>
+                    AND payment_status = #{paymentStatus}
+                </otherwise>
+            </choose>
+        </if>
+        <if test="orderType != null and orderType != ''">
+            AND order_type = #{orderType}
+        </if>
+        <if test="startDate != null and endDate != null">
+            AND DATE(COALESCE(completion_time, pickup_time, created_at)) BETWEEN #{startDate} AND #{endDate}
+        </if>
+        <if test="minFare != null">
+            AND COALESCE(actual_fare, estimated_fare, 0) &gt;= #{minFare}
+        </if>
+        <if test="maxFare != null">
+            AND COALESCE(actual_fare, estimated_fare, 0) &lt;= #{maxFare}
+        </if>
+        <if test="pickupKeyword != null and pickupKeyword != ''">
+            AND pickup_address LIKE CONCAT('%', #{pickupKeyword}, '%')
+        </if>
+        <if test="destinationKeyword != null and destinationKeyword != ''">
+            AND destination_address LIKE CONCAT('%', #{destinationKeyword}, '%')
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (
+                order_number LIKE CONCAT('%', #{keyword}, '%')
+                OR pickup_address LIKE CONCAT('%', #{keyword}, '%')
+                OR destination_address LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        ORDER BY COALESCE(completion_time, pickup_time, created_at) DESC
+        LIMIT #{size} OFFSET #{offset}
     </select>
 
     <select id="selectDriverMonthlySummary" resultType="map">
@@ -238,7 +292,9 @@
             COALESCE(SUM(actual_distance), 0) as totalDistance
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
@@ -250,7 +306,9 @@
             COALESCE(SUM(actual_distance), 0) as totalDistance
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
@@ -263,7 +321,9 @@
             COALESCE(AVG(total_fare), 0) as averageEarnings
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
         GROUP BY DATE(completion_time)
         ORDER BY DATE(completion_time) DESC
@@ -274,7 +334,9 @@
         SELECT COUNT(DISTINCT DATE(completion_time))
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
     </select>
 
@@ -285,7 +347,9 @@
             COUNT(*) as orderCount
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
         GROUP BY DATE(completion_time)
         ORDER BY DATE(completion_time) ASC
@@ -298,7 +362,9 @@
             COUNT(*) as orderCount
         FROM orders
         WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
         AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
         AND DATE_FORMAT(completion_time, '%Y-%m') = #{month}
         GROUP BY WEEK(completion_time, 1)
         ORDER BY WEEK(completion_time, 1) ASC
@@ -336,6 +402,34 @@
         LEFT JOIN drivers d ON o.driver_id = d.id
         LEFT JOIN users du ON d.user_id = du.id
         ORDER BY o.created_at DESC
+    </select>
+
+    <!-- 获取司机已完成且未退款的订单（用于收入统计） -->
+    <select id="selectDriverCompletedNonRefundedOrders" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
+        AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
+        <if test="startDate != null and endDate != null">
+            AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
+        </if>
+        ORDER BY completion_time DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 统计司机已完成且未退款的订单数量 -->
+    <select id="countDriverCompletedNonRefundedOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM orders
+        WHERE driver_id = #{driverId}
+        AND driver_id IS NOT NULL
+        AND status = 'COMPLETED'
+        AND (payment_status IS NULL OR payment_status != 'REFUNDED')
+        <if test="startDate != null and endDate != null">
+            AND DATE(completion_time) BETWEEN #{startDate} AND #{endDate}
+        </if>
     </select>
 
 </mapper>

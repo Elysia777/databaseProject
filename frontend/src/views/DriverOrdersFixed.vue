@@ -16,6 +16,7 @@
         <el-select v-model="statusFilter" placeholder="筛选状态" clearable @change="loadOrders" style="width: 150px;">
           <el-option label="全部" value="" />
           <el-option label="已完成" value="COMPLETED" />
+          <el-option label="已退款" value="COMPLETED_REFUNDED" />
           <el-option label="已取消" value="CANCELLED" />
           <el-option label="进行中" value="IN_PROGRESS" />
           <el-option label="已接单" value="ASSIGNED" />
@@ -43,25 +44,29 @@
       </div>
     </div>
 
-    <!-- 统计信息栏 -->
-    <div class="stats-bar" v-if="!loading && orders.length > 0">
-      <div class="stat-item">
-        <span class="stat-label">本页订单:</span>
-        <span class="stat-value">{{ orders.length }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">已完成:</span>
-        <span class="stat-value">{{ completedCount }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">本页收入:</span>
-        <span class="stat-value">¥{{ totalEarnings.toFixed(2) }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">平均收入:</span>
-        <span class="stat-value">¥{{ averageEarnings.toFixed(2) }}</span>
-      </div>
-    </div>
+         <!-- 统计信息栏 -->
+     <div class="stats-bar" v-if="!loading && orders.length > 0">
+       <div class="stat-item">
+         <span class="stat-label">本页订单:</span>
+         <span class="stat-value">{{ orders.length }}</span>
+       </div>
+       <div class="stat-item">
+         <span class="stat-label">已完成:</span>
+         <span class="stat-value">{{ completedCount }}</span>
+       </div>
+       <div class="stat-item">
+         <span class="stat-label">已退款:</span>
+         <span class="stat-value">{{ refundedCount }}</span>
+       </div>
+       <div class="stat-item">
+         <span class="stat-label">本页收入:</span>
+         <span class="stat-value">¥{{ totalEarnings.toFixed(2) }}</span>
+       </div>
+       <div class="stat-item">
+         <span class="stat-label">平均收入:</span>
+         <span class="stat-value">¥{{ averageEarnings.toFixed(2) }}</span>
+       </div>
+     </div>
 
     <div class="orders-container">
       <el-card v-if="loading" class="loading-card">
@@ -80,14 +85,14 @@
           <div class="order-header">
             <div class="order-info">
               <span class="order-number">#{{ order.orderNumber || order.id }}</span>
-              <el-tag :type="getStatusTagType(order.status)" size="small">
-                {{ getStatusText(order.status) }}
-              </el-tag>
+                             <el-tag :type="getStatusTagType(order.status, order.paymentStatus)" size="small">
+                 {{ getStatusText(order.status, order.paymentStatus) }}
+               </el-tag>
               <el-tag v-if="order.orderType === 'RESERVATION'" type="warning" size="small">
                 预约单
               </el-tag>
-              <el-tag v-else-if="order.orderType === 'IMMEDIATE'" type="primary" size="small">
-                即时单
+              <el-tag v-else-if="order.orderType === 'REAL_TIME'" type="primary" size="small">
+                实时单
               </el-tag>
             </div>
             <div class="order-time">
@@ -157,7 +162,7 @@
             <el-form-item label="订单类型">
               <el-select v-model="advancedFilters.orderType" placeholder="选择类型" clearable>
                 <el-option label="全部" value="" />
-                <el-option label="即时订单" value="IMMEDIATE" />
+                <el-option label="实时订单" value="REAL_TIME" />
                 <el-option label="预约订单" value="RESERVATION" />
               </el-select>
             </el-form-item>
@@ -191,14 +196,15 @@
       <div v-if="selectedOrder" class="order-detail">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="订单号">{{ selectedOrder.orderNumber || selectedOrder.id }}</el-descriptions-item>
-          <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusTagType(selectedOrder.status)">
-              {{ getStatusText(selectedOrder.status) }}
-            </el-tag>
-          </el-descriptions-item>
+                     <el-descriptions-item label="订单状态">
+             <el-tag :type="getStatusTagType(selectedOrder.status, selectedOrder.paymentStatus)">
+               {{ getStatusText(selectedOrder.status, selectedOrder.paymentStatus) }}
+             </el-tag>
+           </el-descriptions-item>
           <el-descriptions-item label="订单类型">
             <el-tag v-if="selectedOrder.orderType === 'RESERVATION'" type="warning">预约单</el-tag>
-            <el-tag v-else type="primary">即时单</el-tag>
+            <el-tag v-else-if="selectedOrder.orderType === 'REAL_TIME'" type="primary">实时单</el-tag>
+            <el-tag v-else type="info">未知类型</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDateTime(selectedOrder.createdAt) }}</el-descriptions-item>
           <el-descriptions-item label="起点地址" :span="2">{{ selectedOrder.pickupAddress || '未知' }}</el-descriptions-item>
@@ -230,9 +236,21 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Loading, LocationFilled, Location, Search, Filter } from '@element-plus/icons-vue'
 
-// 模拟用户store，避免依赖问题
+// 从localStorage获取用户信息
+const getUserInfo = () => {
+  try {
+    const userInfo = localStorage.getItem('user')
+    if (userInfo) {
+      return JSON.parse(userInfo)
+    }
+  } catch (error) {
+    console.error('解析用户信息失败:', error)
+  }
+  return null
+}
+
 const mockUserStore = {
-  user: { id: 1, driverId: 1 },
+  user: getUserInfo() || { id: 1, driverId: 1 },
   token: localStorage.getItem('token') || ''
 }
 
@@ -261,17 +279,31 @@ const advancedFilters = ref({
 })
 
 // 计算属性
-const driverId = computed(() => mockUserStore.user?.driverId || mockUserStore.user?.id || 1)
+const driverId = computed(() => {
+  const id = mockUserStore.user?.driverId || mockUserStore.user?.id || 1
+  console.log('当前用户信息:', mockUserStore.user)
+  console.log('使用的driverId:', id)
+  return id
+})
 
 // 统计信息
 const completedCount = computed(() => {
-  return orders.value.filter(order => order.status === 'COMPLETED').length
+  return orders.value.filter(order => 
+    order.status === 'COMPLETED' && order.paymentStatus !== 'REFUNDED'
+  ).length
 })
 
 const totalEarnings = computed(() => {
   return orders.value
-    .filter(order => order.status === 'COMPLETED')
+    .filter(order => order.status === 'COMPLETED' && order.paymentStatus !== 'REFUNDED')
     .reduce((sum, order) => sum + (parseFloat(order.actualFare || order.estimatedFare || 0)), 0)
+})
+
+// 添加退款订单统计
+const refundedCount = computed(() => {
+  return orders.value.filter(order => 
+    order.status === 'COMPLETED' && order.paymentStatus === 'REFUNDED'
+  ).length
 })
 
 const averageEarnings = computed(() => {
@@ -288,9 +320,19 @@ const loadOrders = async () => {
       size: pageSize.value.toString()
     })
     
-    if (statusFilter.value) {
-      params.append('status', statusFilter.value)
-    }
+         if (statusFilter.value) {
+       if (statusFilter.value === 'COMPLETED_REFUNDED') {
+         // 已退款状态：订单状态为已完成，支付状态为已退款
+         params.append('status', 'COMPLETED')
+         params.append('paymentStatus', 'REFUNDED')
+       } else if (statusFilter.value === 'COMPLETED') {
+         // 已完成状态：订单状态为已完成，支付状态不为已退款
+         params.append('status', 'COMPLETED')
+         params.append('paymentStatus', 'NOT_REFUNDED')
+       } else {
+         params.append('status', statusFilter.value)
+       }
+     }
 
     // 添加日期范围筛选
     if (dateRange.value && dateRange.value.length === 2) {
@@ -391,6 +433,28 @@ const loadOrders = async () => {
       return
     }
 
+    // 添加高级筛选参数
+    if (searchKeyword.value) {
+      params.append('keyword', searchKeyword.value)
+    }
+    
+         const filters = advancedFilters.value
+     if (filters.orderType) {
+       params.append('orderType', filters.orderType)
+     }
+     if (filters.minFare != null && filters.minFare > 0) {
+       params.append('minFare', filters.minFare.toString())
+     }
+     if (filters.maxFare != null && filters.maxFare > 0) {
+       params.append('maxFare', filters.maxFare.toString())
+     }
+     if (filters.pickupAddress) {
+       params.append('pickupKeyword', filters.pickupAddress)
+     }
+     if (filters.destinationAddress) {
+       params.append('destinationKeyword', filters.destinationAddress)
+     }
+
     const response = await fetch(`/api/drivers/${driverId.value}/orders?${params}`, {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -435,11 +499,10 @@ const showOrderDetails = (order) => {
 
 // 应用高级筛选
 const applyAdvancedFilters = () => {
-  // 这里可以添加高级筛选的逻辑
-  // 目前简化处理，只关闭对话框
   showAdvancedSearch.value = false
   currentPage.value = 1
   loadOrders()
+  ElMessage.success('高级筛选已应用')
 }
 
 // 重置高级筛选
@@ -454,8 +517,14 @@ const resetAdvancedFilters = () => {
 }
 
 // 获取状态标签类型
-const getStatusTagType = (status) => {
+const getStatusTagType = (status, paymentStatus) => {
   if (!status) return 'info'
+  
+  // 如果订单已完成但已退款，显示退款标签
+  if (status === 'COMPLETED' && paymentStatus === 'REFUNDED') {
+    return 'warning'
+  }
+  
   const statusMap = {
     'COMPLETED': 'success',
     'CANCELLED': 'danger',
@@ -469,7 +538,12 @@ const getStatusTagType = (status) => {
 }
 
 // 获取状态文本
-const getStatusText = (status) => {
+const getStatusText = (status, paymentStatus) => {
+  // 如果订单已完成但已退款，显示退款状态
+  if (status === 'COMPLETED' && paymentStatus === 'REFUNDED') {
+    return '已退款'
+  }
+  
   const statusMap = {
     'SCHEDULED': '已预约',
     'PENDING': '待接单',

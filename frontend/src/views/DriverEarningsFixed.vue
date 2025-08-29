@@ -173,9 +173,21 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Money, Document, TrendCharts, Location, LocationFilled } from '@element-plus/icons-vue'
 
-// 模拟用户store，避免依赖问题
+// 从localStorage获取用户信息
+const getUserInfo = () => {
+  try {
+    const userInfo = localStorage.getItem('user')
+    if (userInfo) {
+      return JSON.parse(userInfo)
+    }
+  } catch (error) {
+    console.error('解析用户信息失败:', error)
+  }
+  return null
+}
+
 const mockUserStore = {
-  user: { id: 1, driverId: 1 },
+  user: getUserInfo() || { id: 1, driverId: 1 },
   token: localStorage.getItem('token') || ''
 }
 
@@ -197,7 +209,12 @@ const earningsData = reactive({
 const ordersList = ref([])
 
 // 计算属性
-const driverId = computed(() => mockUserStore.user?.driverId || mockUserStore.user?.id || 1)
+const driverId = computed(() => {
+  const id = mockUserStore.user?.driverId || mockUserStore.user?.id || 1
+  console.log('当前用户信息:', mockUserStore.user)
+  console.log('使用的driverId:', id)
+  return id
+})
 
 // 加载收入数据
 const loadEarningsData = async () => {
@@ -293,7 +310,8 @@ const loadOrdersList = async () => {
   const params = new URLSearchParams({
     page: currentPage.value.toString(),
     size: pageSize.value.toString(),
-    status: 'COMPLETED' // 只显示已完成的订单
+    status: 'COMPLETED', // 只显示已完成且未退款的订单
+    paymentStatus: 'NOT_REFUNDED' // 明确指定不包含退款订单
   })
   
   if (selectedDate.value) {
@@ -333,23 +351,40 @@ const loadOrdersList = async () => {
 
 // 计算收入统计数据
 const calculateEarningsData = (orders) => {
-  const completedOrders = orders.filter(order => order.status === 'COMPLETED')
+  // 只统计已完成且未退款的订单
+  const validOrders = orders.filter(order => 
+    order.status === 'COMPLETED' && order.paymentStatus !== 'REFUNDED'
+  )
   
-  const totalEarnings = completedOrders.reduce((sum, order) => {
+  // 统计退款订单数量（用于显示）
+  const refundedOrders = orders.filter(order => 
+    order.status === 'COMPLETED' && order.paymentStatus === 'REFUNDED'
+  )
+  
+  const totalEarnings = validOrders.reduce((sum, order) => {
     return sum + (parseFloat(order.actualFare) || parseFloat(order.estimatedFare) || 0)
   }, 0)
   
-  const totalDistance = completedOrders.reduce((sum, order) => {
+  const totalDistance = validOrders.reduce((sum, order) => {
     return sum + (parseFloat(order.estimatedDistance) || 0)
   }, 0)
   
-  const averageEarnings = completedOrders.length > 0 ? totalEarnings / completedOrders.length : 0
+  const averageEarnings = validOrders.length > 0 ? totalEarnings / validOrders.length : 0
+  
+  console.log('订单统计:', {
+    totalOrders: orders.length,
+    validOrders: validOrders.length,
+    refundedOrders: refundedOrders.length,
+    totalEarnings,
+    totalDistance
+  })
   
   Object.assign(earningsData, {
     totalEarnings,
-    totalOrders: completedOrders.length,
+    totalOrders: validOrders.length,
     averageEarnings,
-    totalDistance
+    totalDistance,
+    refundedOrders: refundedOrders.length
   })
 }
 

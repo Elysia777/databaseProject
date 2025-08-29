@@ -26,6 +26,7 @@
             <el-option label="待接单" value="PENDING" />
             <el-option label="进行中" value="IN_PROGRESS" />
             <el-option label="已完成" value="COMPLETED" />
+            <el-option label="已退款" value="COMPLETED_REFUNDED" />
             <el-option label="已取消" value="CANCELLED" />
           </el-select>
           
@@ -55,7 +56,7 @@
     
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
+      <el-col :span="4">
         <el-card class="stats-card">
           <div class="stats-content">
             <div class="stats-number">{{ orderStats.total }}</div>
@@ -63,7 +64,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
         <el-card class="stats-card">
           <div class="stats-content">
             <div class="stats-number">{{ orderStats.completed }}</div>
@@ -71,7 +72,15 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
+        <el-card class="stats-card">
+          <div class="stats-content">
+            <div class="stats-number">{{ orderStats.refunded }}</div>
+            <div class="stats-label">已退款</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
         <el-card class="stats-card">
           <div class="stats-content">
             <div class="stats-number">{{ orderStats.inProgress }}</div>
@@ -79,11 +88,19 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="4">
         <el-card class="stats-card">
           <div class="stats-content">
             <div class="stats-number">¥{{ orderStats.totalRevenue }}</div>
             <div class="stats-label">总收入</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="4">
+        <el-card class="stats-card">
+          <div class="stats-content">
+            <div class="stats-number">¥{{ orderStats.actualRevenue }}</div>
+            <div class="stats-label">实际收入</div>
           </div>
         </el-card>
       </el-col>
@@ -111,8 +128,8 @@
         <el-table-column prop="endAddress" label="终点" width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="scope">
-            <el-tag :type="getOrderStatusColor(scope.row.status)">
-              {{ getOrderStatusText(scope.row.status) }}
+            <el-tag :type="getOrderStatusColor(scope.row.status, scope.row.paymentStatus || scope.row.payment_status)">
+              {{ getOrderStatusText(scope.row.status, scope.row.paymentStatus || scope.row.payment_status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -153,8 +170,8 @@
         <el-descriptions :column="2" border>
           <el-descriptions-item label="订单号">{{ selectedOrder.id }}</el-descriptions-item>
           <el-descriptions-item label="订单状态">
-            <el-tag :type="getOrderStatusColor(selectedOrder.status)">
-              {{ getOrderStatusText(selectedOrder.status) }}
+            <el-tag :type="getOrderStatusColor(selectedOrder.status, selectedOrder.paymentStatus || selectedOrder.payment_status)">
+              {{ getOrderStatusText(selectedOrder.status, selectedOrder.paymentStatus || selectedOrder.payment_status) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="乘客">{{ selectedOrder.passengerName || '-' }}</el-descriptions-item>
@@ -179,6 +196,9 @@
           <el-descriptions-item label="接单时间">{{ getPickupTime(selectedOrder) }}</el-descriptions-item>
           <el-descriptions-item label="完成时间">{{ getCompletionTime(selectedOrder) }}</el-descriptions-item>
           <el-descriptions-item label="取消原因" v-if="selectedOrder.status === 'CANCELLED'" :span="2">{{ selectedOrder.cancelReason || selectedOrder.cancel_reason || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="退款信息" v-if="selectedOrder.status === 'COMPLETED' && (selectedOrder.paymentStatus === 'REFUNDED' || selectedOrder.payment_status === 'REFUNDED')" :span="2">
+            <el-tag type="warning">此订单已完成但已退款，不计入实际收入</el-tag>
+          </el-descriptions-item>
         </el-descriptions>
         
         <div v-if="selectedOrder.remarks" style="margin-top: 20px;">
@@ -220,8 +240,10 @@ const pageSize = ref(20)
 const orderStats = reactive({
   total: 0,
   completed: 0,
+  refunded: 0,
   inProgress: 0,
-  totalRevenue: 0
+  totalRevenue: 0,
+  actualRevenue: 0
 })
 
 // 计算属性
@@ -240,7 +262,21 @@ const filteredOrders = computed(() => {
   
   // 状态筛选
   if (statusFilter.value) {
-    filtered = filtered.filter(order => order.status === statusFilter.value)
+    if (statusFilter.value === 'COMPLETED_REFUNDED') {
+      // 已退款状态：订单状态为已完成，支付状态为已退款
+      filtered = filtered.filter(order => 
+        order.status === 'COMPLETED' && 
+        (order.paymentStatus === 'REFUNDED' || order.payment_status === 'REFUNDED')
+      )
+    } else if (statusFilter.value === 'COMPLETED') {
+      // 已完成状态：订单状态为已完成，支付状态不为已退款
+      filtered = filtered.filter(order => 
+        order.status === 'COMPLETED' && 
+        (order.paymentStatus !== 'REFUNDED' && order.payment_status !== 'REFUNDED')
+      )
+    } else {
+      filtered = filtered.filter(order => order.status === statusFilter.value)
+    }
   }
   
   // 日期筛选
@@ -342,10 +378,24 @@ const loadOrders = async () => {
 
 const updateOrderStats = () => {
   orderStats.total = orders.value.length
-  orderStats.completed = orders.value.filter(o => o.status === 'COMPLETED').length
+  
+  // 统计已完成订单（包括退款和未退款）
+  const completedOrders = orders.value.filter(o => o.status === 'COMPLETED')
+  orderStats.completed = completedOrders.length
+  
+  // 统计退款订单
+  orderStats.refunded = completedOrders.filter(o => 
+    (o.paymentStatus === 'REFUNDED' || o.payment_status === 'REFUNDED')
+  ).length
+  
   orderStats.inProgress = orders.value.filter(o => o.status === 'IN_PROGRESS').length
-  orderStats.totalRevenue = orders.value
-    .filter(o => o.status === 'COMPLETED')
+  
+  // 总收入（包括退款订单）
+  orderStats.totalRevenue = completedOrders.reduce((sum, order) => sum + (order.totalFare || 0), 0)
+  
+  // 实际收入（排除退款订单）
+  orderStats.actualRevenue = completedOrders
+    .filter(o => (o.paymentStatus !== 'REFUNDED' && o.payment_status !== 'REFUNDED'))
     .reduce((sum, order) => sum + (order.totalFare || 0), 0)
 }
 
@@ -380,7 +430,12 @@ const handleCurrentChange = (page) => {
   currentPage.value = page
 }
 
-const getOrderStatusColor = (status) => {
+const getOrderStatusColor = (status, paymentStatus) => {
+  // 如果订单已完成但已退款，显示退款标签颜色
+  if (status === 'COMPLETED' && (paymentStatus === 'REFUNDED' || paymentStatus === 'REFUNDED')) {
+    return 'warning'
+  }
+  
   const colors = {
     'PENDING': 'warning',
     'IN_PROGRESS': 'primary',
@@ -390,7 +445,12 @@ const getOrderStatusColor = (status) => {
   return colors[status] || ''
 }
 
-const getOrderStatusText = (status) => {
+const getOrderStatusText = (status, paymentStatus) => {
+  // 如果订单已完成但已退款，显示退款状态
+  if (status === 'COMPLETED' && (paymentStatus === 'REFUNDED' || paymentStatus === 'REFUNDED')) {
+    return '已退款'
+  }
+  
   const texts = {
     'PENDING': '待接单',
     'IN_PROGRESS': '进行中',

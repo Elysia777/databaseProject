@@ -181,3 +181,4 @@ const getStatusText = (status) => {
 
 // 运行测试
 testVehicleStatusFix();
+

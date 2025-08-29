@@ -532,22 +532,37 @@ public class DriverController {
                                                @RequestParam(defaultValue = "1") int page,
                                                @RequestParam(defaultValue = "20") int size,
                                                @RequestParam(required = false) String status,
+                                               @RequestParam(required = false) String paymentStatus,
                                                @RequestParam(required = false) String startDate,
-                                               @RequestParam(required = false) String endDate) {
+                                               @RequestParam(required = false) String endDate,
+                                               @RequestParam(required = false) String orderType,
+                                               @RequestParam(required = false) Double minFare,
+                                               @RequestParam(required = false) Double maxFare,
+                                               @RequestParam(required = false) String pickupKeyword,
+                                               @RequestParam(required = false) String destinationKeyword,
+                                               @RequestParam(required = false) String keyword) {
         try {
             System.out.println("=== 获取司机历史订单 ===");
             System.out.println("司机ID: " + driverId);
             System.out.println("页码: " + page + ", 大小: " + size);
             System.out.println("状态筛选: " + status);
+            System.out.println("支付状态筛选: " + paymentStatus);
             System.out.println("日期范围: " + startDate + " 到 " + endDate);
+            System.out.println("高级筛选: orderType=" + orderType + ", minFare=" + minFare + ", maxFare=" + maxFare + ", pickupKeyword=" + pickupKeyword + ", destinationKeyword=" + destinationKeyword + ", keyword=" + keyword);
 
             // 计算偏移量
             int offset = (page - 1) * size;
 
             List<Order> orders;
 
-            // 如果有日期范围参数，使用日期范围查询
-            if (startDate != null && endDate != null) {
+            // 如果有任何高级筛选参数，使用高级查询方法
+            if (paymentStatus != null || orderType != null || minFare != null || maxFare != null || 
+                pickupKeyword != null || destinationKeyword != null || keyword != null) {
+                System.out.println("使用高级筛选查询方法");
+                orders = orderMapper.selectDriverOrdersAdvanced(driverId, status, paymentStatus, orderType, 
+                    startDate, endDate, minFare, maxFare, pickupKeyword, destinationKeyword, keyword, offset, size);
+            } else if (startDate != null && endDate != null) {
+                // 如果有日期范围参数，使用日期范围查询
                 if (status != null && !status.isEmpty()) {
                     orders = orderMapper.selectDriverOrdersByStatusAndDateRange(driverId, status, startDate, endDate, offset, size);
                 } else {

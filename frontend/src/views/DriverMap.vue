@@ -2266,7 +2266,7 @@ const completeOrder = async () => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('❌ 完成订单网络错误:', error)
-      ElMessage.error('网络错误')
+   
     }
   }
 }

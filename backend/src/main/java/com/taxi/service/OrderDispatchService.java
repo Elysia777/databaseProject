@@ -12,9 +12,13 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.Comparator;
 
 /**
  * Redis + RabbitMQ 混合订单分配服务
@@ -75,6 +79,14 @@ public class OrderDispatchService {
     private static final double[] RETRY_RADIUS_MULTIPLIERS = {1.0, 1.5, 2.0, 3.0}; // 搜索半径倍数
     private static final int[] RETRY_MAX_DRIVERS = {3, 5, 8, 10}; // 每轮最大通知司机数
 
+    // 分层延迟（秒）
+    private static final int DELAY_HIGH_TIER_SECONDS = 0;
+    private static final int DELAY_MID_TIER_SECONDS = 5;
+    private static final int DELAY_LOW_TIER_SECONDS = 10;
+
+    // 订单 -> 已调度的定时任务列表（用于接单后立即取消未触达的通知）
+    private final Map<Long, List<ScheduledFuture<?>>> orderScheduledTasks = new ConcurrentHashMap<>();
+
     /**
      * 为新订单寻找并通知附近的司机
      */
@@ -121,14 +133,8 @@ public class OrderDispatchService {
             
             System.out.println("找到 " + nearbyDrivers.size() + " 个附近司机");
             
-            // 5. 通知当前在线的司机
-            int notifyCount = Math.min(nearbyDrivers.size(), MAX_NOTIFY_DRIVERS);
-            for (int i = 0; i < notifyCount; i++) {
-                Driver driver = nearbyDrivers.get(i);
-                notifyDriver(driver, order);
-            }
-            
-            System.out.println("已通知 " + notifyCount + " 个司机新订单");
+            // 5. 按评分分层并分批延迟推送
+            layeredNotifyDriversByRating(order, nearbyDrivers);
             
         } catch (Exception e) {
             System.err.println("分配订单失败: " + e.getMessage());
@@ -195,6 +201,9 @@ public class OrderDispatchService {
             
             // 8. 发送接单成功消息到队列（用于其他业务处理）
             sendOrderAssignedMessage(order, driverId);
+
+            // 9. 取消尚未执行的延迟推送任务，并清理去重集合（可选保留一段TTL）
+            cancelScheduledTasks(orderId);
             
             return true;
             
@@ -205,6 +214,22 @@ public class OrderDispatchService {
         } finally {
             // 9. 释放分布式锁
             driverRedisService.releaseLockOrder(orderId, driverId);
+        }
+    }
+
+    /**
+     * 取消该订单下所有已调度但未执行的通知任务
+     */
+    private void cancelScheduledTasks(Long orderId) {
+        try {
+            List<ScheduledFuture<?>> futures = orderScheduledTasks.remove(orderId);
+            if (futures != null) {
+                for (ScheduledFuture<?> f : futures) {
+                    try { if (f != null) f.cancel(false); } catch (Exception ignore) {}
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("取消延迟通知任务失败: " + e.getMessage());
         }
     }
 
@@ -238,18 +263,39 @@ public class OrderDispatchService {
      */
     private void notifyDriver(Driver driver, Order order) {
         try {
-            // 检查是否已经通知过这个司机
-            if (hasNotifiedDriver(order.getId(), driver.getId())) {
-                System.out.println("订单 " + order.getId() + " 已经通知过司机 " + driver.getId() + "，跳过重复通知");
+            // 统一去重与校验的安全通知
+            notifyDriverSafely(order, driver);
+            
+        } catch (Exception e) {
+            System.err.println("通知司机失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 统一原子去重的安全通知入口（供分层推送与扩大范围复用）
+     */
+    private void notifyDriverSafely(Order order, Driver driver) {
+        try {
+            // 订单必须仍待分配
+            if (!"PENDING".equals(order.getStatus()) && !"SCHEDULED".equals(order.getStatus())) {
                 return;
             }
-            
-            // 检查司机是否在订单黑名单中（司机之前取消过此订单）
+
+            // 黑名单过滤
             if (driverRedisService.isDriverInOrderBlacklist(order.getId(), driver.getId())) {
-                System.out.println("司机 " + driver.getId() + " 在订单 " + order.getId() + " 的黑名单中，跳过通知");
                 return;
             }
-            
+
+            // 原子去重：SADD 返回 1 才是首次
+            String key = ORDER_NOTIFIED_DRIVERS_KEY + order.getId();
+            Long added = redisTemplate.opsForSet().add(key, driver.getId().toString());
+            if (added == null || added == 0L) {
+                return;
+            }
+            // 设置过期时间（保障内存与去重）
+            redisTemplate.expire(key, 2, java.util.concurrent.TimeUnit.HOURS);
+
             // 计算距离
             double distance = calculateDistance(
                 order.getPickupLatitude().doubleValue(),
@@ -257,34 +303,27 @@ public class OrderDispatchService {
                 driver.getCurrentLatitude().doubleValue(),
                 driver.getCurrentLongitude().doubleValue()
             );
-            
-            // 1. 通过WebSocket实时通知司机
+
+            // WebSocket 推送
             webSocketNotificationService.notifyDriverNewOrder(driver.getId(), order, distance);
-            
-            // 2. 构建RabbitMQ消息（作为备用通知机制）
+
+            // 备选：发送MQ
             Map<String, Object> rabbitMessage = new HashMap<>();
             rabbitMessage.put("driverId", driver.getId());
             rabbitMessage.put("orderId", order.getId());
             rabbitMessage.put("orderNumber", order.getOrderNumber());
-            rabbitMessage.put("orderType", order.getOrderType()); // 添加订单类型
+            rabbitMessage.put("orderType", order.getOrderType());
             rabbitMessage.put("pickupAddress", order.getPickupAddress());
             rabbitMessage.put("destinationAddress", order.getDestinationAddress());
             rabbitMessage.put("distance", distance);
             rabbitMessage.put("estimatedFare", order.getEstimatedFare());
-            rabbitMessage.put("scheduledTime", order.getScheduledTime()); // 添加预约时间
+            rabbitMessage.put("scheduledTime", order.getScheduledTime());
             rabbitMessage.put("timestamp", System.currentTimeMillis());
-            
-            // 发送到司机通知队列
             rabbitTemplate.convertAndSend("driver_notification_queue", rabbitMessage);
-            
-            // 3. 记录已通知的司机
-            recordDriverNotification(order.getId(), driver.getId());
-            
-            System.out.println("已通过WebSocket和RabbitMQ通知司机 " + driver.getId() + " 新订单 " + order.getId());
-            
-        } catch (Exception e) {
-            System.err.println("通知司机失败: " + e.getMessage());
-            e.printStackTrace();
+
+            System.out.println("✅ 安全通知：司机 " + driver.getId() + " 订单 " + order.getId());
+        } catch (Exception ex) {
+            System.err.println("安全通知失败: " + ex.getMessage());
         }
     }
 
@@ -388,8 +427,9 @@ public class OrderDispatchService {
                 
                 // 如果在服务范围内，通知司机
                 if (distance <= SEARCH_RADIUS_KM * 1000) {
-                    notifyDriver(driver, order);
-                    System.out.println("已通知司机 " + driverId + " 待分配订单 " + order.getId());
+                    // 使用安全入口，避免重复
+                    notifyDriverSafely(order, driver);
+                    System.out.println("已(安全)通知司机 " + driverId + " 待分配订单 " + order.getId());
                 }
             }
             
@@ -423,12 +463,16 @@ public class OrderDispatchService {
             if (!nearbyDrivers.isEmpty()) {
                 System.out.println("扩大搜索范围后找到 " + nearbyDrivers.size() + " 个司机");
                 
-                // 通知司机
-                int notifyCount = Math.min(nearbyDrivers.size(), MAX_NOTIFY_DRIVERS);
-                for (int i = 0; i < notifyCount; i++) {
-                    Driver driver = nearbyDrivers.get(i);
-                    notifyDriver(driver, order);
+                // 过滤掉已通知过的司机
+                List<Driver> availableDrivers = new java.util.ArrayList<>();
+                for (Driver driver : nearbyDrivers) {
+                    if (!hasNotifiedDriver(orderId, driver.getId())) {
+                        availableDrivers.add(driver);
+                    }
                 }
+
+                // 统一通过分层延迟与安全通知入口
+                layeredNotifyDriversByRating(order, availableDrivers);
             } else {
                 System.out.println("扩大搜索范围后仍未找到可用司机");
                 // 可以进一步处理，比如通知乘客暂时没有司机
@@ -451,6 +495,56 @@ public class OrderDispatchService {
             System.err.println("检查司机通知记录失败: " + e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 按评分分层并分批（延迟）通知司机
+     */
+    private void layeredNotifyDriversByRating(Order order, List<Driver> candidateDrivers) {
+        if (candidateDrivers == null || candidateDrivers.isEmpty()) return;
+
+        // 限制本轮最大通知人数
+        int limit = Math.min(candidateDrivers.size(), MAX_NOTIFY_DRIVERS);
+        List<Driver> drivers = new ArrayList<>(candidateDrivers.subList(0, limit));
+
+        // 仅按评分字段排序（降序）
+        drivers.sort(Comparator.comparingDouble(d -> -getDriverRatingValue(d)));
+
+        // 分层（简单三层切分：前30% 高层，中间40% 中层，后30% 低层）
+        int n = drivers.size();
+        int highEnd = Math.max(1, (int)Math.ceil(n * 0.3));
+        int midEnd = Math.max(highEnd + 1, (int)Math.ceil(n * 0.7));
+
+        List<Driver> highTier = drivers.subList(0, highEnd);
+        List<Driver> midTier = drivers.subList(highEnd, Math.min(midEnd, n));
+        List<Driver> lowTier = drivers.subList(Math.min(midEnd, n), n);
+
+        scheduleTier(order, highTier, DELAY_HIGH_TIER_SECONDS);
+        scheduleTier(order, midTier, DELAY_MID_TIER_SECONDS);
+        scheduleTier(order, lowTier, DELAY_LOW_TIER_SECONDS);
+    }
+
+    private void scheduleTier(Order order, List<Driver> tier, int delaySeconds) {
+        if (tier == null || tier.isEmpty()) return;
+        List<ScheduledFuture<?>> futures = orderScheduledTasks.computeIfAbsent(order.getId(), k -> new ArrayList<>());
+        for (Driver d : tier) {
+            ScheduledFuture<?> f = taskScheduler.schedule(() -> {
+                try {
+                    // 订单仍需派发才推送
+                    Order latest = orderMapper.selectById(order.getId());
+                    if (latest != null && ("PENDING".equals(latest.getStatus()) || "SCHEDULED".equals(latest.getStatus()))) {
+                        notifyDriverSafely(latest, d);
+                    }
+                } catch (Exception ex) {
+                    System.err.println("分层延迟通知失败: " + ex.getMessage());
+                }
+            }, new java.util.Date(System.currentTimeMillis() + delaySeconds * 1000L));
+            futures.add(f);
+        }
+    }
+
+    private double getDriverRatingValue(Driver d) {
+        return d.getRating() != null ? d.getRating().doubleValue() : 0.0;
     }
 
     /**
@@ -534,14 +628,10 @@ public class OrderDispatchService {
                 return;
             }
             
-            // 3. 通知新的司机
-            int notifyCount = Math.min(availableDrivers.size(), MAX_NOTIFY_DRIVERS);
-            for (int i = 0; i < notifyCount; i++) {
-                Driver driver = availableDrivers.get(i);
-                notifyDriver(driver, order);
-            }
+            // 3. 分层延迟通知新的司机
+            layeredNotifyDriversByRating(order, availableDrivers);
             
-            System.out.println("重新分配订单 " + orderId + "，通知了 " + notifyCount + " 个新司机");
+            System.out.println("重新分配订单 " + orderId + "，按分层策略安排了通知");
             
         } catch (Exception e) {
             System.err.println("重新分配订单失败: " + e.getMessage());
@@ -696,14 +786,10 @@ public class OrderDispatchService {
                 return;
             }
             
-            // 6. 通知新司机
-            int notifyCount = Math.min(availableDrivers.size(), maxDrivers);
-            for (int i = 0; i < notifyCount; i++) {
-                Driver driver = availableDrivers.get(i);
-                notifyDriver(driver, order);
-            }
+            // 6. 分层通知新司机（内部会限流 MAX_NOTIFY_DRIVERS）
+            layeredNotifyDriversByRating(order, availableDrivers);
             
-            System.out.println("第 " + (retryRound + 1) + " 轮重试完成，通知了 " + notifyCount + " 个新司机");
+            System.out.println("第 " + (retryRound + 1) + " 轮重试完成，已按分层策略安排通知");
             
             // 7. 安排下一轮重试
             scheduleOrderRetry(orderId, retryRound + 1);
